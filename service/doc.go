@@ -167,5 +167,31 @@ NewRunner() takes an implementation of the Listener interface:
 The Listener allows the parent context to respond to changes that may happen
 outside of the expected Start/Halt lifecycle.
 
+
+Restarting
+
+All services can be restarted if they are stopped by default. If written
+carefully, it's also possible to start the same Service in multiple Runners.
+Maybe that's not a good idea, but who am I to judge? You might have a great
+reason.
+
+Some services may wish to explicitly block restart, in which case an atomic
+is a good way to prevent it:
+
+	type MyService struct {
+		used int32
+	}
+
+	func (m *MyService) Run(ctx service.Context) error {
+		if !atomic.CompareAndSwapInt32(&m.used, 0, 1) {
+			return errors.New("cannot reuse MyService")
+		}
+		if err := ctx.Ready(); err != nil {
+			return err
+		}
+		<-ctx.Halt()
+		return nil
+	}
+
 */
 package service
