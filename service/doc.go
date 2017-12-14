@@ -48,19 +48,23 @@ to correctly implement the Run() method.
 	}
 
 The Run() method will be run in the background by a Runner. The Run() method
-MUST do the following to be considered valid:
+MUST do the following to be considered valid. Violating any of these rules
+will result in Undefined Behaviour (uh-oh!):
 
-- ctx.Ready() MUST be called and error checked properly
-- <-ctx.Halt() MUST be included in any select {} block
-- ctx.Halted() MUST be checked more frequently than your application's halt
-  timeout if <-ctx.Halt() is not used.
-- If Run() ends before it is halted by a Runner, an error MUST be returned.
-  If there is no obvious application specific error to return in this case,
-  ErrServiceEnded MUST be returned.
+	- ctx.Ready() MUST be called and error checked properly
+
+	- <-ctx.Halt() MUST be included in any select {} block
+
+	- ctx.Halted() MUST be checked more frequently than your application's halt
+	  timeout if <-ctx.Halt() is not used.
+
+	- If Run() ends before it is halted by a Runner, an error MUST be returned.
+	  If there is no obvious application specific error to return in this case,
+	  ErrServiceEnded MUST be returned.
 
 The Run() method SHOULD do the following:
 
-- service.Sleep(ctx) should be used instead of time.Sleep()
+	- service.Sleep(ctx) should be used instead of time.Sleep()
 
 Here is an example of a Run() method which uses a select{} loop:
 
