@@ -147,7 +147,18 @@ func TestRunnerStartWaitErrorBeforeReady(t *testing.T) {
 	tt.MustOK(<-r.WhenReady(dto))
 }
 
-func TestRunnerstartFailureBeforeReady(t *testing.T) {
+func TestRunnerStartErrorBeforeReadyIsReturnedByWhenReady(t *testing.T) {
+	tt := assert.WrapTB(t)
+
+	serr := errors.New("fail")
+	s1 := &dummyService{startFailure: serr}
+	r := NewRunner(newDummyListener())
+
+	tt.MustOK(r.Start(s1))
+	tt.MustEqual(serr, <-r.WhenReady(dto))
+}
+
+func TestRunnerStartFailureBeforeReady(t *testing.T) {
 	tt := assert.WrapTB(t)
 
 	serr := errors.New("1")

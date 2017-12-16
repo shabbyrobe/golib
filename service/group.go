@@ -1,5 +1,3 @@
-// +build ignore
-
 package service
 
 import (
@@ -7,6 +5,17 @@ import (
 	"time"
 )
 
+const (
+	GroupHaltTimeout  = 10 * time.Second
+	GroupReadyTimeout = 10 * time.Second
+)
+
+// Group wraps a set of services which should all start and stop at the same
+// time. If a service Ends, all will be halted.
+//
+// If the group does not halt properly, you should panic as it is likely
+// there is no way to recover the lost resources.
+//
 type Group struct {
 	name         Name
 	services     []Service
@@ -16,8 +25,10 @@ type Group struct {
 
 func NewGroup(name Name, services []Service) *Group {
 	return &Group{
-		name:     name,
-		services: services,
+		name:         name,
+		services:     services,
+		haltTimeout:  GroupHaltTimeout,
+		readyTimeout: GroupReadyTimeout,
 	}
 }
 
@@ -48,8 +59,7 @@ func (g *Group) Run(ctx Context) error {
 	for _, s := range g.services {
 		if err := runner.Start(s); err != nil {
 			if herr := runner.HaltAll(g.haltTimeout); herr != nil {
-				// FIXME: should probably not panic
-				panic(herr)
+				return &errGroupHalt{name: g.ServiceName(), haltError: herr, cause: err}
 			}
 		}
 	}
@@ -77,11 +87,25 @@ func (g *Group) Run(ctx Context) error {
 	} else if errRet == nil {
 		return herr
 	} else {
-		for _, e := range es {
-			fmt.Println(e...)
-		}
-
-		// FIXME: should probably not panic
-		panic(fmt.Errorf("%v - %v", herr, errRet))
+		return &errGroupHalt{name: g.ServiceName(), haltError: herr, cause: errRet}
 	}
+}
+
+func IsErrGroupHalt(err error) bool {
+	_, ok := err.(*errGroupHalt)
+	return ok
+}
+
+type errGroupHalt struct {
+	name      Name
+	haltError error
+	cause     error
+}
+
+func (e *errGroupHalt) Error() string {
+	return fmt.Sprintf("group halt error in service %s: %v, caused by: %v", e.name, e.haltError, e.cause)
+}
+
+func (e *errGroupHalt) Cause() error {
+	return e.cause
 }
