@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// Runner Starts, Halts and manages Services.
 type Runner interface {
 	State(s Service) State
 	StartWait(s Service, timeout time.Duration) error
@@ -34,6 +35,11 @@ type Runner interface {
 	WhenReady(timeout time.Duration) <-chan error
 }
 
+// Listener allows you to respond to events raised by the Runner in the
+// code that owns the Runner, like premature service failure.
+//
+// Listeners should not be shared between Runners.
+//
 type Listener interface {
 	// OnServiceError should be called when an error occurs in your running service
 	// that does not cause the service to End; the service MUST continue
@@ -165,6 +171,8 @@ func (r *runner) StartWait(service Service, timeout time.Duration) (err error) {
 			if ok {
 				// this will override any timeout error if the service fails
 				// between the timeout occurring and the defer completing.
+				// even after significant fuzzing, i've still never seen it
+				// actually happen.
 				err = cerr
 			}
 		default:
@@ -289,16 +297,10 @@ func (r *runner) Halt(service Service, timeout time.Duration) error {
 	return nil
 }
 
-var call int32
-var es = make([][]interface{}, 0, 10)
-
 func (r *runner) HaltAll(timeout time.Duration) error {
 	services := r.Services(AnyState)
 
-	cur := atomic.AddInt32(&call, 1)
-
 	for _, service := range services {
-		es = append(es, []interface{}{cur, "halting", string(service.ServiceName()), r.State(service)})
 		if err := r.Halting(service); err != nil {
 			// It's OK if it has already halted - it may have ended while
 			// we were iterating.
@@ -316,8 +318,6 @@ func (r *runner) HaltAll(timeout time.Duration) error {
 		case <-after:
 			return WrapError(errHaltTimeout(0), service)
 		}
-		// fmt.Println(cur, "halted", service.ServiceName())
-		es = append(es, []interface{}{cur, "halted", string(service.ServiceName())})
 		if err := r.Halted(service); err != nil {
 			return WrapError(err, service)
 		}

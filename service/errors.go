@@ -3,6 +3,8 @@ package service
 import (
 	"errors"
 	"fmt"
+
+	"github.com/shabbyrobe/golib/errtools"
 )
 
 type (
@@ -19,24 +21,20 @@ func (errHaltTimeout) Error() string    { return "signal halt timeout" }
 func (errServiceUnknown) Error() string { return "service unknown" }
 func (errNotRestartable) Error() string { return "service not restartable" }
 
-func IsErrWaitTimeout(err error) bool    { _, ok := Cause(err).(errWaitTimeout); return ok }
-func IsErrHaltTimeout(err error) bool    { _, ok := Cause(err).(errHaltTimeout); return ok }
-func IsErrServiceUnknown(err error) bool { _, ok := Cause(err).(errServiceUnknown); return ok }
-func IsErrNotRestartable(err error) bool { _, ok := Cause(err).(errNotRestartable); return ok }
+func IsErrWaitTimeout(err error) bool    { _, ok := errtools.Cause(err).(errWaitTimeout); return ok }
+func IsErrHaltTimeout(err error) bool    { _, ok := errtools.Cause(err).(errHaltTimeout); return ok }
+func IsErrServiceUnknown(err error) bool { _, ok := errtools.Cause(err).(errServiceUnknown); return ok }
+func IsErrNotRestartable(err error) bool { _, ok := errtools.Cause(err).(errNotRestartable); return ok }
 
 func IsErrNotRunning(err error) bool {
-	serr, ok := Cause(err).(*errState)
+	serr, ok := errtools.Cause(err).(*errState)
 	return ok && !serr.Current.IsRunning()
 }
 
 type Error interface {
 	error
-	causer
+	errtools.Causer
 	Name() Name
-}
-
-type causer interface {
-	Cause() error
 }
 
 type serviceError struct {
@@ -66,15 +64,4 @@ func (e *errState) Error() string {
 	return fmt.Sprintf(
 		"state error: expected %s, found %s when transitioning to %s",
 		e.Expected, e.Current, e.To)
-}
-
-func Cause(err error) error {
-	for err != nil {
-		cause, ok := err.(causer)
-		if !ok {
-			break
-		}
-		err = cause.Cause()
-	}
-	return err
 }

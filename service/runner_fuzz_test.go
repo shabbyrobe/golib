@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/shabbyrobe/golib/assert"
+	"github.com/shabbyrobe/golib/errtools"
 )
 
 // TODO:
@@ -171,7 +172,7 @@ func (r *RunnerFuzzer) doTick() {
 			err := runner.Halt(service, r.ServiceHaltTimeout.Rand())
 			if err != nil {
 				r.Stats.AddServiceHaltFailed(1)
-				r.Stats.AddServiceHaltError(Cause(err).Error())
+				r.Stats.AddServiceHaltError(errtools.Cause(err).Error())
 			} else {
 				r.Stats.AddServiceHalted(1)
 			}
@@ -183,7 +184,7 @@ func (r *RunnerFuzzer) doTick() {
 				defer r.wg.Done()
 				if err := runner.StartWait(service, r.StartWaitTimeout.Rand()); err != nil {
 					r.Stats.AddServiceStartWaitFailed(1)
-					r.Stats.AddServiceStartWaitError(Cause(err).Error())
+					r.Stats.AddServiceStartWaitError(errtools.Cause(err).Error())
 				} else {
 					r.Stats.AddServiceStartWaited(1)
 				}
@@ -191,7 +192,7 @@ func (r *RunnerFuzzer) doTick() {
 		} else {
 			if err := runner.Start(service); err != nil {
 				r.Stats.AddServiceStartFailed(1)
-				r.Stats.AddServiceStartError(Cause(err).Error())
+				r.Stats.AddServiceStartError(errtools.Cause(err).Error())
 			} else {
 				r.Stats.AddServiceStarted(1)
 			}

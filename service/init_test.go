@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/shabbyrobe/golib/errtools"
 )
 
 const (
@@ -145,7 +147,7 @@ func (t *listenerCollector) OnServiceEnd(service Service, err Error) {
 	svc := t.services[service]
 
 	svc.ends = append(svc.ends, &listenerCollectorEnd{
-		err: Cause(err),
+		err: errtools.Cause(err),
 	})
 	if len(svc.endWaiters) > 0 {
 		for _, w := range svc.endWaiters {

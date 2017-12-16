@@ -12,6 +12,8 @@ func WrapTB(tb testing.TB) T { tb.Helper(); return T{TB: tb} }
 
 type T struct{ testing.TB }
 
+// frameDepth is the number of frames to strip off the callstack when reporting the line
+// where an error occurred.
 const frameDepth = 2
 
 func (tb T) MustFloatNear(epsilon float64, expected float64, actual float64, v ...interface{}) {
