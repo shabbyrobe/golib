@@ -4,10 +4,12 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestWaitGroup(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	for i := 0; i < 100; i++ {
 		wg := NewWaitGroup()
@@ -26,7 +28,7 @@ func TestWaitGroup(t *testing.T) {
 }
 
 func TestWaitGroupRecycle(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	wg := NewWaitGroup()
 	for i := 0; i < 100; i++ {
@@ -57,7 +59,7 @@ func TestWaitGroupIncreaseWhileWaiting(t *testing.T) {
 }
 
 func TestWaitGroupWaitOnNothing(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	wg := NewWaitGroup()
 	tm := time.Now()
@@ -66,7 +68,7 @@ func TestWaitGroupWaitOnNothing(t *testing.T) {
 }
 
 func TestWaitGroupMultipleWaiters(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	wg := NewWaitGroup()
 	for i := 0; i < 100; i++ {

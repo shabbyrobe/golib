@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/shabbyrobe/golib/assert"
 )
 
 const (
@@ -15,7 +17,7 @@ const (
 	dto = 100 * tscale
 )
 
-func mustStateError(tt T, err error, expected State, current State) {
+func mustStateError(tt assert.T, err error, expected State, current State) {
 	tt.Helper()
 	tt.MustAssert(err != nil, "state error not found")
 	serr, ok := err.(*errState)
@@ -24,7 +26,7 @@ func mustStateError(tt T, err error, expected State, current State) {
 	tt.MustEqual(current, serr.Current, serr.Error())
 }
 
-func mustRecv(tt T, waiter chan struct{}, timeout time.Duration) {
+func mustRecv(tt assert.T, waiter chan struct{}, timeout time.Duration) {
 	tt.Helper()
 	after := time.After(timeout)
 	select {
@@ -35,7 +37,7 @@ func mustRecv(tt T, waiter chan struct{}, timeout time.Duration) {
 }
 
 func TestEnsureHalt(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := (&blockingService{}).Init()
 	lc := newListenerCollector()
@@ -61,7 +63,7 @@ func TestEnsureHalt(t *testing.T) {
 }
 
 func TestRunnerStartWait(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := (&blockingService{}).Init()
 	r := NewRunner(newDummyListener())
@@ -80,7 +82,7 @@ func TestRunnerStartWait(t *testing.T) {
 }
 
 func TestRunnerStart(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := (&blockingService{startDelay: 2 * tscale}).Init()
 	r := NewRunner(newDummyListener())
@@ -94,7 +96,7 @@ func TestRunnerStart(t *testing.T) {
 }
 
 func TestRunnerSameServiceMultipleRunners(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := (&blockingService{startDelay: 2 * tscale}).Init()
 	r1 := NewRunner(newDummyListener())
@@ -115,7 +117,7 @@ func TestRunnerSameServiceMultipleRunners(t *testing.T) {
 }
 
 func TestRunnerStartMultiple(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := (&blockingService{}).Init()
 	s2 := (&blockingService{}).Init()
@@ -129,7 +131,7 @@ func TestRunnerStartMultiple(t *testing.T) {
 }
 
 func TestRunnerStartServiceEnds(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := &dummyService{} // should return immediately
 
@@ -143,7 +145,7 @@ func TestRunnerStartServiceEnds(t *testing.T) {
 }
 
 func TestRunnerStartWaitErrorBeforeReady(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	serr := errors.New("1")
 	s1 := &dummyService{startFailure: serr}
@@ -154,7 +156,7 @@ func TestRunnerStartWaitErrorBeforeReady(t *testing.T) {
 }
 
 func TestRunnerstartFailureBeforeReady(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	serr := errors.New("1")
 	s1 := &dummyService{startFailure: serr}
@@ -169,7 +171,7 @@ func TestRunnerstartFailureBeforeReady(t *testing.T) {
 }
 
 func TestRunnerStartWaitServiceEndsAfterReady(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := &dummyService{runTime: 10 * time.Millisecond} // should return immediately
 	lc := newListenerCollector()
@@ -182,7 +184,7 @@ func TestRunnerStartWaitServiceEndsAfterReady(t *testing.T) {
 }
 
 func TestRunnerStartWaitServiceEndsBeforeReady(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	e1 := errors.New("e1")
 	s1 := &dummyService{startFailure: e1} // should return immediately
@@ -193,7 +195,7 @@ func TestRunnerStartWaitServiceEndsBeforeReady(t *testing.T) {
 }
 
 func TestRunnerStartFirstThenStartSecondAfterFirstEnds(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := &dummyService{} // should return immediately
 	s2 := (&blockingService{}).Init()
@@ -216,7 +218,7 @@ func TestRunnerStartFirstThenStartSecondAfterFirstEnds(t *testing.T) {
 }
 
 func TestRunnerStartWaitFirstThenStartSecondAfterFirstEnds(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	// We need to make the dummy service run for a little while to make
 	// sure that the End happens after the Ready
@@ -242,7 +244,7 @@ func TestRunnerStartWaitFirstThenStartSecondAfterFirstEnds(t *testing.T) {
 }
 
 func TestRunnerReadyTimeout(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := (&blockingService{startDelay: 3 * tscale}).Init()
 	r := NewRunner(newDummyListener())
@@ -255,7 +257,7 @@ func TestRunnerReadyTimeout(t *testing.T) {
 }
 
 func TestRunnerStartHaltWhileInStartDelay(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := (&blockingService{startDelay: 2 * tscale}).Init()
 	r := NewRunner(newDummyListener())
@@ -266,7 +268,7 @@ func TestRunnerStartHaltWhileInStartDelay(t *testing.T) {
 }
 
 func TestRunnerStartHaltImmediately(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	r := NewRunner(newDummyListener())
 
@@ -277,7 +279,7 @@ func TestRunnerStartHaltImmediately(t *testing.T) {
 }
 
 func TestRunnerStartHaltAllImmediately(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	r := NewRunner(newDummyListener())
 
@@ -288,7 +290,7 @@ func TestRunnerStartHaltAllImmediately(t *testing.T) {
 }
 
 func TestRunnerStartDelay(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	delay := 2 * tscale
 	s1 := (&blockingService{startDelay: delay}).Init()
@@ -302,7 +304,7 @@ func TestRunnerStartDelay(t *testing.T) {
 }
 
 func TestRunnerHaltDelay(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	delay := 2 * tscale
 	s1 := (&blockingService{haltDelay: delay}).Init()
@@ -316,7 +318,7 @@ func TestRunnerHaltDelay(t *testing.T) {
 }
 
 func TestRunnerUnregister(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := (&blockingService{}).Init()
 	r := NewRunner(newDummyListener())
@@ -331,7 +333,7 @@ func TestRunnerUnregister(t *testing.T) {
 }
 
 func TestHaltableSleep(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	// We have to use MinHaltableSleep instead of tscale here
 	// to make sure we use the channel-based version of the sleep
@@ -352,7 +354,7 @@ func TestHaltableSleep(t *testing.T) {
 }
 
 func TestRunnerOnError(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	var s1StartTime, s2StartTime, runTime time.Duration = 4, 6, 10
 	var s1Tick, s2Tick time.Duration = 2, 3
@@ -394,7 +396,7 @@ func TestRunnerOnError(t *testing.T) {
 }
 
 func TestRunnerHaltAll(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := (&blockingService{}).Init()
 	s2 := (&blockingService{}).Init()
@@ -407,7 +409,7 @@ func TestRunnerHaltAll(t *testing.T) {
 }
 
 func TestRunnerServices(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 
 	s1 := (&blockingService{}).Init()
 	s2 := (&blockingService{}).Init()

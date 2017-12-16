@@ -3,10 +3,12 @@ package service
 import (
 	"errors"
 	"testing"
+
+	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestIsErrorNotRunning(t *testing.T) {
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 	tt.MustAssert(!IsErrNotRunning(errors.New("1")))
 	tt.MustAssert(!IsErrNotRunning(&serviceError{cause: errors.New("1")}))
 

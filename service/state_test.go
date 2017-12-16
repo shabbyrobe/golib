@@ -1,10 +1,11 @@
 package service
 
 import (
+	"errors"
 	"math/rand"
 	"testing"
 
-	"github.com/pkg/errors"
+	"github.com/shabbyrobe/golib/assert"
 )
 
 type changer func(then func(err error) error) (err error)
@@ -15,7 +16,7 @@ func TestStateChangerThen(t *testing.T) {
 		sentinelThen = func(err error) error { return sentinel }
 	)
 
-	tt := WrapTB(t)
+	tt := assert.WrapTB(t)
 	sc := NewStateChanger()
 
 	fns := []func(then func(err error) error) (err error){
@@ -30,7 +31,7 @@ func TestStateChangerThen(t *testing.T) {
 }
 
 func TestStateChangerErrorPassthrough(t *testing.T) {
-	var tt = WrapTB(t)
+	var tt = assert.WrapTB(t)
 
 	thenners := []func(err error) error{
 		func(err error) error { return err },
