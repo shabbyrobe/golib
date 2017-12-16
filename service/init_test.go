@@ -10,8 +10,17 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+)
+
+const (
+	// HACK FEST: This needs to be high enough so that tests that rely on
+	// timing don't fail because your computer was too slow
+	tscale = 5 * time.Millisecond
+
+	dto = 100 * tscale
 )
 
 var (
@@ -98,6 +107,7 @@ func (t *listenerCollector) ends(service Service) (out []listenerCollectorEnd) {
 }
 
 func (t *listenerCollector) endWaiter(service Service) chan struct{} {
+	// FIXME: endWaiter should have a timeout
 	t.lock.Lock()
 	if t.services[service] == nil {
 		t.services[service] = &listenerCollectorService{}
@@ -165,6 +175,12 @@ func (t *dummyListener) OnServiceError(service Service, err Error) {
 func (t *dummyListener) OnServiceEnd(service Service, err Error) {
 }
 
+type statService interface {
+	ServiceName() Name
+	Starts() int
+	Halts() int
+}
+
 type dummyService struct {
 	name         Name
 	startFailure error
@@ -173,7 +189,12 @@ type dummyService struct {
 	runTime      time.Duration
 	haltDelay    time.Duration
 	haltingSleep bool
+	starts       int32
+	halts        int32
 }
+
+func (d *dummyService) Starts() int { return int(atomic.LoadInt32(&d.starts)) }
+func (d *dummyService) Halts() int  { return int(atomic.LoadInt32(&d.halts)) }
 
 func (d *dummyService) ServiceName() Name {
 	if d.name == "" {
@@ -184,15 +205,20 @@ func (d *dummyService) ServiceName() Name {
 }
 
 func (d *dummyService) Run(ctx Context) error {
+	atomic.AddInt32(&d.starts, 1)
+
 	if d.startDelay > 0 {
 		time.Sleep(d.startDelay)
 	}
 	if d.startFailure != nil {
 		return d.startFailure
 	}
-	if err := ctx.Ready(d); err != nil {
+	if err := ctx.Ready(); err != nil {
 		return err
 	}
+
+	defer atomic.AddInt32(&d.halts, 1)
+
 	if d.runTime > 0 {
 		if d.haltingSleep {
 			Sleep(ctx, d.runTime)
@@ -247,20 +273,20 @@ func (d *errorService) Run(ctx Context) error {
 		for {
 			select {
 			case err := <-d.errc:
-				ctx.OnError(d, err)
+				ctx.OnError(err)
 			case <-after:
 				goto startDone
 			}
 		}
 	startDone:
 	}
-	if err := ctx.Ready(d); err != nil {
+	if err := ctx.Ready(); err != nil {
 		return err
 	}
 	for {
 		select {
 		case err := <-d.errc:
-			ctx.OnError(d, err)
+			ctx.OnError(err)
 		case <-ctx.Halt():
 			return nil
 		}
@@ -274,7 +300,12 @@ type blockingService struct {
 	startDelay   time.Duration
 	haltDelay    time.Duration
 	init         bool
+	starts       int32
+	halts        int32
 }
+
+func (d *blockingService) Starts() int { return int(atomic.LoadInt32(&d.starts)) }
+func (d *blockingService) Halts() int  { return int(atomic.LoadInt32(&d.halts)) }
 
 func (d *blockingService) Init() *blockingService {
 	d.init = true
@@ -293,6 +324,8 @@ func (d *blockingService) Run(ctx Context) error {
 	// defer fmt.Println("dummy ENDED", d.ServiceName())
 	// fmt.Println("RUNNING", d.ServiceName())
 
+	atomic.AddInt32(&d.starts, 1)
+
 	if !d.init {
 		panic("call Init()!")
 	}
@@ -302,7 +335,7 @@ func (d *blockingService) Run(ctx Context) error {
 	if d.startFailure != nil {
 		return d.startFailure
 	}
-	if err := ctx.Ready(d); err != nil {
+	if err := ctx.Ready(); err != nil {
 		return err
 	}
 
@@ -310,6 +343,8 @@ func (d *blockingService) Run(ctx Context) error {
 	if d.haltDelay > 0 {
 		time.Sleep(d.haltDelay)
 	}
+
+	atomic.AddInt32(&d.halts, 1)
 	return d.runFailure
 }
 

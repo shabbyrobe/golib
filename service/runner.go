@@ -34,6 +34,27 @@ type Runner interface {
 	WhenReady(timeout time.Duration) <-chan error
 }
 
+type Listener interface {
+	// OnServiceError should be called when an error occurs in your running service
+	// that does not cause the service to End; the service MUST continue
+	// running after this error occurs.
+	//
+	// This is basically where you send errors that don't have an immediately
+	// obvious method of handling, that don't terminate the service, but you
+	// don't want to swallow entirely. Essentially it defers the decision for
+	// what to do about the error to the parent context.
+	//
+	// Errors should be wrapped using service.WrapError(err, yourSvc) so
+	// context information can be applied.
+	OnServiceError(service Service, err Error)
+
+	// OnServiceEnd is called when your service ends. If the service responded
+	// because it was Halted, err will be nil, otherwise err MUST be set.
+	OnServiceEnd(service Service, err Error)
+
+	OnServiceState(service Service, state State)
+}
+
 func EnsureHalt(r Runner, s Service, timeout time.Duration) error {
 	err := r.Halt(s, timeout)
 	if err == nil {
@@ -58,27 +79,6 @@ func MustEnsureHalt(r Runner, service Service, timeout time.Duration) {
 	if err := EnsureHalt(r, service, timeout); err != nil {
 		panic(err)
 	}
-}
-
-type Listener interface {
-	// OnServiceError should be called when an error occurs in your running service
-	// that does not cause the service to End; the service MUST continue
-	// running after this error occurs.
-	//
-	// This is basically where you send errors that don't have an immediately
-	// obvious method of handling, that don't terminate the service, but you
-	// don't want to swallow entirely. Essentially it defers the decision for
-	// what to do about the error to the parent context.
-	//
-	// Errors should be wrapped using service.WrapError(err, yourSvc) so
-	// context information can be applied.
-	OnServiceError(service Service, err Error)
-
-	// OnServiceEnd is called when your service ends. If the service responded
-	// because it was Halted, err will be nil, otherwise err MUST be set.
-	OnServiceEnd(service Service, err Error)
-
-	OnServiceState(service Service, state State)
 }
 
 type runnerState struct {
@@ -172,7 +172,7 @@ func (r *runner) StartWait(service Service, timeout time.Duration) (err error) {
 	}()
 
 	rs := r.runnerState(service)
-	ctx := NewContext(r, rs.halt)
+	ctx := newContext(service, r.Ready, r.OnError, rs.halt)
 
 	go func() {
 		err := service.Run(ctx)
@@ -221,7 +221,7 @@ func (r *runner) Start(service Service) (err error) {
 	}
 
 	rs := r.runnerState(service)
-	ctx := NewContext(r, rs.halt)
+	ctx := newContext(service, r.Ready, r.OnError, rs.halt)
 
 	go func() {
 		err := service.Run(ctx)
@@ -289,10 +289,16 @@ func (r *runner) Halt(service Service, timeout time.Duration) error {
 	return nil
 }
 
+var call int32
+var es = make([][]interface{}, 0, 10)
+
 func (r *runner) HaltAll(timeout time.Duration) error {
 	services := r.Services(AnyState)
 
+	cur := atomic.AddInt32(&call, 1)
+
 	for _, service := range services {
+		es = append(es, []interface{}{cur, "halting", string(service.ServiceName()), r.State(service)})
 		if err := r.Halting(service); err != nil {
 			// It's OK if it has already halted - it may have ended while
 			// we were iterating.
@@ -310,6 +316,8 @@ func (r *runner) HaltAll(timeout time.Duration) error {
 		case <-after:
 			return WrapError(errHaltTimeout(0), service)
 		}
+		// fmt.Println(cur, "halted", service.ServiceName())
+		es = append(es, []interface{}{cur, "halted", string(service.ServiceName())})
 		if err := r.Halted(service); err != nil {
 			return WrapError(err, service)
 		}
@@ -386,19 +394,14 @@ func (r *runner) ended(service Service) error {
 	r.statesLock.Lock()
 	defer r.statesLock.Unlock()
 
-	state := r.states[service].changer.State()
-
-	if state == Started || state == Starting {
-		if err := r.states[service].changer.SetHalting(nil); err != nil {
-			return err
-		}
-		state = Halting
+	if err := r.states[service].changer.SetHalting(nil); IsErrNotRunning(err) {
+		return nil
+	} else if err != nil {
+		return err
 	}
 
-	if state == Halting {
-		if err := r.states[service].changer.SetHalted(nil); err != nil {
-			return err
-		}
+	if err := r.states[service].changer.SetHalted(nil); err != nil {
+		return err
 	}
 
 	if r.listener != nil {

@@ -7,14 +7,6 @@ import (
 	"time"
 )
 
-const (
-	// HACK FEST: This needs to be high enough so that tests that rely on
-	// timing don't fail because your computer was too slow
-	tscale = 5 * time.Millisecond
-
-	dto = 100 * tscale
-)
-
 func mustStateError(tt T, err error, expected State, current State) {
 	tt.Helper()
 	tt.MustAssert(err != nil, "state error not found")
@@ -330,6 +322,21 @@ func TestRunnerUnregister(t *testing.T) {
 	tt.MustAssert(IsErrServiceUnknown(r.Unregister(s1)))
 }
 
+func TestRunnerUnregisterWhileNotHalted(t *testing.T) {
+	tt := WrapTB(t)
+
+	s1 := (&blockingService{}).Init()
+	r := NewRunner(newDummyListener())
+
+	tt.MustOK(r.StartWait(s1, dto))
+	tt.MustAssert(r.State(s1) == Started)
+
+	err := (r.Unregister(s1))
+	mustStateError(tt, err, Halted, Started)
+
+	tt.MustOK(r.Halt(s1, dto))
+}
+
 func TestHaltableSleep(t *testing.T) {
 	tt := WrapTB(t)
 
@@ -425,4 +432,25 @@ func TestRunnerServices(t *testing.T) {
 
 	tt.MustOK(r.Unregister(s1))
 	tt.MustEqual([]Service{s2}, r.Services(AnyState))
+}
+
+func TestRunnerServiceFunc(t *testing.T) {
+	tt := WrapTB(t)
+
+	s1 := ServiceFunc("test", func(ctx Context) error {
+		if err := ctx.Ready(); err != nil {
+			return err
+		}
+		<-ctx.Halt()
+		return nil
+	})
+
+	r := NewRunner(newDummyListener())
+
+	tt.MustOK(r.Start(s1))
+	tt.MustAssert(r.State(s1) == Starting)
+	mustStateError(tt, r.Start(s1), Halted, Starting)
+
+	tt.MustOK(<-r.WhenReady(dto))
+	tt.MustOK(r.Halt(s1, dto))
 }
