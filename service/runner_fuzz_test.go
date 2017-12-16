@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/shabbyrobe/golib/assert"
 )
 
 // TODO:
@@ -85,7 +87,7 @@ func testFuzz(t *testing.T, fz *RunnerFuzzer) {
 
 	dur := time.Duration(fuzzTimeSec * float64(time.Second))
 	fz.Duration = dur
-	fz.Run(WrapTB(t))
+	fz.Run(assert.WrapTB(t))
 	if testing.Verbose() {
 		e := json.NewEncoder(os.Stdout)
 		e.SetIndent("", "  ")
@@ -199,7 +201,7 @@ func (r *RunnerFuzzer) doTick() {
 	r.Stats.AddTick()
 }
 
-func (r *RunnerFuzzer) Run(tt T) {
+func (r *RunnerFuzzer) Run(tt assert.T) {
 	tt.Helper()
 	if r.Tick < 50*time.Microsecond {
 		r.hotLoop()

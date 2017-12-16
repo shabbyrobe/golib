@@ -4,6 +4,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/shabbyrobe/golib/assert"
 )
 
 func BenchmarkRunnerStart10(b *testing.B) {
@@ -18,7 +20,7 @@ func benchmarkRunnerStartN(b *testing.B, n int) {
 	b.StopTimer()
 	b.ResetTimer()
 
-	tt := WrapTB(b)
+	tt := assert.WrapTB(b)
 	r := NewRunner(newDummyListener())
 
 	svcs := make([]Service, n)
