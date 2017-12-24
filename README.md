@@ -12,5 +12,5 @@ This is a collection of packages I use to augment the Go standard library.
 - [assert](https://github.com/shabbyrobe/golib/tree/master/assert) - Very simple assertions
   for testing.
 
-All code is available under the MIT license.
+All code is available under the MIT license or equivalent.
 
