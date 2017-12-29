@@ -19,13 +19,22 @@ func Causes(err error) (out []error) {
 }
 
 func Cause(err error) error {
+	var last error
+
 	for err != nil {
 		cause, ok := err.(Causer)
 		if !ok {
 			break
 		}
 		err = cause.Cause()
+
+		if err == last {
+			break
+		}
+
+		last = err
 	}
+
 	return err
 }
 
