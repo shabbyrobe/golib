@@ -12,6 +12,7 @@ Key features:
 
 - Start and halt backgrounded goroutines (services)
 - Check the state of services
+- Service groups (should start and halt together)
 - A WaitGroup implementation with fewer caveats (also it's a bit slower)
 
 
@@ -51,6 +52,49 @@ func main() {
     // Start a service in the background and wait for it to signal it is
     // ready:
     if err := runner.StartWait(svc, 1 * time.Second); err != nil {
+        log.Fatal(err)
+    }
+
+    // Halt a service and wait for it to signal it finished:
+    if err := runner.Halt(svc, 1 * time.Second); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+Service Group
+-------------
+
+`service.Group` implements the following rules:
+
+- All services should start at the same time
+- The group is Ready when all services are Ready
+- If one or more services fails while the service is starting, all services are halted and the
+  error is returned by StartWait or WaitReady().
+- If one or more services fails after the service is started, all services are halted and the
+  error is passed to the Listener.
+- All services are halted when the group is halted.
+
+It comes with some caveats:
+
+- If halting fails, you should probably panic as I have not yet found a good
+  way to recover resources in this case. This should be absolutely exceptional
+  for any properly written Service.
+
+
+```go
+func main() {
+    runner := service.NewRunner(l)
+
+    group := service.NewGroup([]service.Service{
+        &MyService{},
+        &MyService{},
+        &MyService{},
+    })
+
+    // Start the group in the background and wait for all of its child services
+    // to signal they are ready:
+    if err := runner.StartWait(group, 1 * time.Second); err != nil {
         log.Fatal(err)
     }
 

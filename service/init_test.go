@@ -32,14 +32,16 @@ var (
 	fuzzTickNsec  int64
 	fuzzSeed      int64
 	fuzzDebugHost string
+	fuzzMetaRolls int64
 )
 
 func TestMain(m *testing.M) {
 	flag.BoolVar(&fuzzEnabled, "service.fuzz", false, "Fuzz? Nope by default.")
 	flag.Float64Var(&fuzzTimeSec, "service.fuzztime", float64(1*time.Second)/float64(time.Second), "Run the fuzzer for this many seconds")
 	flag.Int64Var(&fuzzTickNsec, "service.fuzzticknsec", 0, "How frequently to tick in the fuzzer's loop.")
-	flag.Int64Var(&fuzzSeed, "service.fuzzseed", 0, "Randomise the fuzz tester with this seed prior to every fuzz test")
+	flag.Int64Var(&fuzzSeed, "service.fuzzseed", -1, "Randomise the fuzz tester with this non-negative seed prior to every fuzz test")
 	flag.StringVar(&fuzzDebugHost, "service.debughost", "", "Start a debug server at this host to allow expvars/pprof")
+	flag.Int64Var(&fuzzMetaRolls, "service.fuzzmetarolls", 20, "Re-roll the meta fuzz tester this many times")
 	flag.Parse()
 
 	if fuzzDebugHost != "" {
@@ -60,6 +62,17 @@ func TestMain(m *testing.M) {
 		}()
 	}
 
+	if fuzzSeed < 0 {
+		fuzzSeed = time.Now().UnixNano()
+		// I mean, this is almost certainly not going to happen, but what if you set the
+		// clock to something stupid for a legitimate test? Who am I to judge?
+		if fuzzSeed < 0 {
+			fuzzSeed = -fuzzSeed
+		}
+	}
+
+	fmt.Printf("Fuzz seed: %d\n", fuzzSeed)
+
 	beforeCount := pprof.Lookup("goroutine").Count()
 	code := m.Run()
 
@@ -79,6 +92,7 @@ func TestMain(m *testing.M) {
 			os.Exit(2)
 		}
 	}
+
 	os.Exit(code)
 }
 
