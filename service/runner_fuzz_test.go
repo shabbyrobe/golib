@@ -19,6 +19,7 @@ import (
 // TODO:
 // - should attempt to restart certain services
 // - should attempt to unregister services
+// - groups
 
 func TestRunnerFuzzHappy(t *testing.T) {
 	// Happy config: should yield no errors
@@ -128,86 +129,98 @@ var (
 	errRunFailure   = errors.New("run failure")
 )
 
-func (r *RunnerFuzzer) doTick() {
-	// maybe halt a runnner, but never if it's the last.
-	if r.Stats.GetRunnersCurrent() > 1 && should(r.RunnerHaltChance) {
-		idx := rand.Intn(r.Stats.GetRunnersCurrent())
-		runner := r.runners[idx]
+func (r *RunnerFuzzer) haltRunner() {
+	idx := rand.Intn(r.Stats.GetRunnersCurrent())
+	runner := r.runners[idx]
 
-		// delete runner before we go off and halt it so we can keep the runners
-		// list single threaded
-		last := len(r.runners) - 1
-		r.runners[idx], r.runners[last] = r.runners[last], nil
-		r.runners = r.runners[:last]
-		r.Stats.AddRunnersCurrent(-1)
+	// delete runner before we go off and halt it so we can keep the runners
+	// list single threaded
+	last := len(r.runners) - 1
+	r.runners[idx], r.runners[last] = r.runners[last], nil
+	r.runners = r.runners[:last]
+	r.Stats.AddRunnersCurrent(-1)
 
+	r.wg.Add(1)
+	go func() {
+		defer r.wg.Done()
+
+		// this can take a while so make sure it's done in a goroutine
+		runner.HaltAll(r.ServiceHaltTimeout.Rand())
+		r.Stats.AddRunnersHalted(1)
+	}()
+}
+
+func (r *RunnerFuzzer) startRunner() {
+	runner := NewRunner(r)
+	r.Stats.AddRunnersCurrent(1)
+	r.Stats.AddRunnersStarted(1)
+	r.runners = append(r.runners, runner)
+}
+
+func (r *RunnerFuzzer) createService() {
+	service := &dummyService{
+		startDelay:   r.ServiceStartTime.Rand(),
+		runTime:      r.ServiceRunTime.Rand(),
+		haltDelay:    r.ServiceHaltDelay.Rand(),
+		haltingSleep: true,
+	}
+	if should(r.ServiceStartFailureChance) {
+		service.startFailure = errStartFailure
+	} else if should(r.ServiceRunFailureChance) {
+		service.runFailure = errRunFailure
+	}
+	runner := r.runners[rand.Intn(r.Stats.GetRunnersCurrent())]
+
+	// After a while, we will halt the service, but only if it hasn't ended
+	// first.
+	r.wg.Add(1)
+	time.AfterFunc(r.ServiceHaltAfter.Rand(), func() {
+		defer r.wg.Done()
+		err := runner.Halt(service, r.ServiceHaltTimeout.Rand())
+		if err != nil {
+			r.Stats.AddServiceHaltFailed(1)
+			r.Stats.AddServiceHaltError(err)
+		} else {
+			r.Stats.AddServiceHalted(1)
+		}
+	})
+
+	if should(r.StartWaitChance) {
 		r.wg.Add(1)
 		go func() {
 			defer r.wg.Done()
-
-			// this can take a while so make sure it's done in a goroutine
-			runner.HaltAll(r.ServiceHaltTimeout.Rand())
-			r.Stats.AddRunnersHalted(1)
+			if err := runner.StartWait(service, r.StartWaitTimeout.Rand()); err != nil {
+				r.Stats.AddServiceStartWaitFailed(1)
+				r.Stats.AddServiceStartWaitError(err) // errtools.Cause(err).Error())
+			} else {
+				r.Stats.AddServiceStartWaited(1)
+			}
 		}()
+	} else {
+		if err := runner.Start(service); err != nil {
+			r.Stats.AddServiceStartFailed(1)
+			r.Stats.AddServiceStartError(err)
+		} else {
+			r.Stats.AddServiceStarted(1)
+		}
+	}
+}
+
+func (r *RunnerFuzzer) doTick() {
+	// maybe halt a runnner, but never if it's the last.
+	if r.Stats.GetRunnersCurrent() > 1 && should(r.RunnerHaltChance) {
+		r.haltRunner()
 	}
 
 	// maybe start a runner
 	if r.Stats.GetTick() == 0 || should(r.RunnerCreateChance) {
-		runner := NewRunner(r)
-		r.Stats.AddRunnersCurrent(1)
-		r.Stats.AddRunnersStarted(1)
-		r.runners = append(r.runners, runner)
+		r.startRunner()
 	}
 
 	// maybe start a service into one of the existing runners, chosen
 	// at random
 	if should(r.ServiceCreateChance) {
-		service := &dummyService{
-			startDelay:   r.ServiceStartTime.Rand(),
-			runTime:      r.ServiceRunTime.Rand(),
-			haltDelay:    r.ServiceHaltDelay.Rand(),
-			haltingSleep: true,
-		}
-		if should(r.ServiceStartFailureChance) {
-			service.startFailure = errStartFailure
-		} else if should(r.ServiceRunFailureChance) {
-			service.runFailure = errRunFailure
-		}
-		runner := r.runners[rand.Intn(r.Stats.GetRunnersCurrent())]
-
-		// After a while, we will halt the service, but only if it hasn't ended
-		// first.
-		r.wg.Add(1)
-		time.AfterFunc(r.ServiceHaltAfter.Rand(), func() {
-			defer r.wg.Done()
-			err := runner.Halt(service, r.ServiceHaltTimeout.Rand())
-			if err != nil {
-				r.Stats.AddServiceHaltFailed(1)
-				r.Stats.AddServiceHaltError(err)
-			} else {
-				r.Stats.AddServiceHalted(1)
-			}
-		})
-
-		if should(r.StartWaitChance) {
-			r.wg.Add(1)
-			go func() {
-				defer r.wg.Done()
-				if err := runner.StartWait(service, r.StartWaitTimeout.Rand()); err != nil {
-					r.Stats.AddServiceStartWaitFailed(1)
-					r.Stats.AddServiceStartWaitError(err) // errtools.Cause(err).Error())
-				} else {
-					r.Stats.AddServiceStartWaited(1)
-				}
-			}()
-		} else {
-			if err := runner.Start(service); err != nil {
-				r.Stats.AddServiceStartFailed(1)
-				r.Stats.AddServiceStartError(err)
-			} else {
-				r.Stats.AddServiceStarted(1)
-			}
-		}
+		r.createService()
 	}
 
 	r.Stats.AddTick()
