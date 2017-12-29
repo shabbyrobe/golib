@@ -64,30 +64,30 @@ func (g *Group) Run(ctx Context) error {
 		}
 	}
 
-	if err := <-runner.WhenReady(g.readyTimeout); err != nil {
-		return err
-	}
+	var err error
 
-	if err := ctx.Ready(); err != nil {
-		return err
+	if err = <-runner.WhenReady(g.readyTimeout); err != nil {
+		goto done
 	}
-
-	var errRet error
+	if err = ctx.Ready(); err != nil {
+		goto done
+	}
 
 	select {
 	case <-ctx.Halt():
-	case err := <-listener.errs:
-		ctx.OnError(WrapError(err, g))
-	case errRet = <-listener.ends:
+	case lerr := <-listener.errs:
+		ctx.OnError(WrapError(lerr, g))
+	case err = <-listener.ends:
 	}
 
+done:
 	herr := runner.HaltAll(g.haltTimeout)
 	if herr == nil {
-		return errRet
-	} else if errRet == nil {
+		return err
+	} else if err == nil {
 		return herr
 	} else {
-		return &errGroupHalt{name: g.ServiceName(), haltError: herr, cause: errRet}
+		return &errGroupHalt{name: g.ServiceName(), haltError: herr, cause: err}
 	}
 }
 

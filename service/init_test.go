@@ -2,9 +2,13 @@ package service
 
 import (
 	"bytes"
+	"expvar"
 	"flag"
 	"fmt"
+	"net/http"
+	netprof "net/http/pprof"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"sync"
 	"sync/atomic"
@@ -23,10 +27,11 @@ const (
 )
 
 var (
-	fuzzEnabled  bool
-	fuzzTimeSec  float64
-	fuzzTickNsec int64
-	fuzzSeed     int64
+	fuzzEnabled   bool
+	fuzzTimeSec   float64
+	fuzzTickNsec  int64
+	fuzzSeed      int64
+	fuzzDebugHost string
 )
 
 func TestMain(m *testing.M) {
@@ -34,6 +39,26 @@ func TestMain(m *testing.M) {
 	flag.Float64Var(&fuzzTimeSec, "service.fuzztime", float64(1*time.Second)/float64(time.Second), "Run the fuzzer for this many seconds")
 	flag.Int64Var(&fuzzTickNsec, "service.fuzzticknsec", 0, "How frequently to tick in the fuzzer's loop.")
 	flag.Int64Var(&fuzzSeed, "service.fuzzseed", 0, "Randomise the fuzz tester with this seed prior to every fuzz test")
+	flag.StringVar(&fuzzDebugHost, "service.debughost", "", "Start a debug server at this host to allow expvars/pprof")
+	flag.Parse()
+
+	if fuzzDebugHost != "" {
+		mux := http.NewServeMux()
+		mux.Handle("/debug/vars", expvar.Handler())
+		mux.Handle("/debug/pprof/", http.HandlerFunc(netprof.Index))
+		mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(netprof.Cmdline))
+		mux.Handle("/debug/pprof/profile", http.HandlerFunc(netprof.Profile))
+		mux.Handle("/debug/pprof/symbol", http.HandlerFunc(netprof.Symbol))
+		mux.Handle("/debug/pprof/trace", http.HandlerFunc(netprof.Trace))
+
+		runtime.SetMutexProfileFraction(5)
+
+		go func() {
+			if err := http.ListenAndServe(fuzzDebugHost, mux); err != nil {
+				panic(err)
+			}
+		}()
+	}
 
 	beforeCount := pprof.Lookup("goroutine").Count()
 	code := m.Run()

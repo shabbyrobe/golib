@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/shabbyrobe/golib/errtools"
 )
@@ -35,6 +36,39 @@ type Error interface {
 	error
 	errtools.Causer
 	Name() Name
+}
+
+type errorGroup interface {
+	Errors() []error
+}
+
+type serviceErrors struct {
+	errors []error
+}
+
+func (s *serviceErrors) Cause() error {
+	if len(s.errors) == 1 {
+		return s.errors[0]
+	} else {
+		return s
+	}
+}
+
+func (s *serviceErrors) Errors() []error { return s.errors }
+
+func (s *serviceErrors) Error() string {
+	if len(s.errors) == 1 {
+		return s.errors[0].Error()
+	} else {
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("%d service error(s) occurred:\n", len(s.errors)))
+		for _, e := range s.errors {
+			b.WriteString(" - ")
+			b.WriteString(e.Error())
+			b.WriteString("\n")
+		}
+		return b.String()
+	}
 }
 
 type serviceError struct {

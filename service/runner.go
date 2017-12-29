@@ -72,7 +72,7 @@ func EnsureHalt(r Runner, s Service, timeout time.Duration) error {
 	return err
 }
 
-// MustEnsureHalt allows a Runner.Halt() to be called in a defer, but only if
+// MustEnsureHalt allows Runner.Halt() to be called in a defer, but only if
 // it is acceptable to crash the server if the service does not Halt.
 // EnsureHalt is used to prevent an error if the service is already halted.
 func MustEnsureHalt(r Runner, service Service, timeout time.Duration) {
@@ -88,20 +88,20 @@ func MustEnsureHalt(r Runner, service Service, timeout time.Duration) {
 }
 
 type runnerState struct {
-	changer       *StateChanger
-	startedCalled int32
-	readyCalled   int32
-	halt          chan struct{}
-	halted        chan struct{}
+	changer        *StateChanger
+	startingCalled int32
+	readyCalled    int32
+	halt           chan struct{}
+	halted         chan struct{}
 }
 
-func (r *runnerState) StartedCalled() bool { return atomic.LoadInt32(&r.startedCalled) == 1 }
-func (r *runnerState) SetStartedCalled(v bool) {
+func (r *runnerState) StartingCalled() bool { return atomic.LoadInt32(&r.startingCalled) == 1 }
+func (r *runnerState) SetStartingCalled(v bool) {
 	var vi int32
 	if v {
 		vi = 1
 	}
-	atomic.StoreInt32(&r.startedCalled, vi)
+	atomic.StoreInt32(&r.startingCalled, vi)
 }
 
 func (r *runnerState) ReadyCalled() bool { return atomic.LoadInt32(&r.readyCalled) == 1 }
@@ -116,7 +116,7 @@ func (r *runnerState) SetReadyCalled(v bool) {
 type runner struct {
 	// sync.WaitGroup is not adequate for this job as we may call wg.Add() before
 	// all wg.Wait() calls have returned.
-	wg *CondGroup
+	wg *errQueue
 
 	listener Listener
 
@@ -128,7 +128,7 @@ func NewRunner(listener Listener) Runner {
 	return &runner{
 		listener: listener,
 		states:   make(map[Service]*runnerState),
-		wg:       NewCondGroup(),
+		wg:       newErrQueue(),
 	}
 }
 
@@ -157,67 +157,12 @@ func (r *runner) StartWait(service Service, timeout time.Duration) (err error) {
 	if timeout <= 0 {
 		return fmt.Errorf("service: start timeout must be > 0")
 	}
-	if err = r.Starting(service); err != nil {
+	if err := r.Start(service); err != nil {
 		return err
 	}
 
-	var closed int32
-	errc := make(chan error, 1)
-
-	defer func() {
-		atomic.StoreInt32(&closed, 1)
-		select {
-		case cerr, ok := <-errc:
-			if ok {
-				// this will override any timeout error if the service fails
-				// between the timeout occurring and the defer completing.
-				// even after significant fuzzing, i've still never seen it
-				// actually happen.
-				err = cerr
-			}
-		default:
-		}
-	}()
-
-	rs := r.runnerState(service)
-	ctx := newContext(service, r.Ready, r.OnError, rs.halt)
-
-	go func() {
-		err := service.Run(ctx)
-		readyCalled, startedCalled := rs.ReadyCalled(), rs.StartedCalled()
-		wasStarted := err != nil
-
-		if wasStarted {
-			if rerr := r.ended(service); rerr != nil {
-				panic(rerr)
-			}
-		}
-		close(rs.halted)
-
-		if atomic.LoadInt32(&closed) == 1 {
-			close(errc)
-			// Call in a goroutine to minimise locking issues
-			if r.listener != nil {
-				go r.listener.OnServiceEnd(service, WrapError(err, service))
-			}
-
-		} else {
-			// If this still happens, this function has not hit its defer block
-			// so the error can be returned
-			errc <- err
-		}
-
-		if !readyCalled && startedCalled {
-			// If the service ended while it was starting, Ready() will never
-			// be called and StartWait will leak a goroutine.  This MUST happen
-			// after errc is used so it hits the select block first.
-			r.wg.Done()
-		}
-	}()
-
 	select {
 	case err = <-r.WhenReady(timeout):
-	case err = <-errc:
 	}
 
 	return
@@ -233,7 +178,7 @@ func (r *runner) Start(service Service) (err error) {
 
 	go func() {
 		err := service.Run(ctx)
-		readyCalled, startedCalled := rs.ReadyCalled(), rs.StartedCalled()
+		startingCalled, readyCalled := rs.StartingCalled(), rs.ReadyCalled()
 		wasStarted := err != nil
 
 		if wasStarted {
@@ -247,10 +192,10 @@ func (r *runner) Start(service Service) (err error) {
 			go r.listener.OnServiceEnd(service, WrapError(err, service))
 		}
 
-		if !readyCalled && startedCalled {
+		if !readyCalled && startingCalled {
 			// If the service ended while it was starting, Ready() will never
 			// be called.
-			r.wg.Done()
+			r.wg.Put(&serviceError{name: service.ServiceName(), cause: err})
 		}
 	}()
 
@@ -335,14 +280,14 @@ func (r *runner) Starting(service Service) error {
 		}
 	} else {
 		r.states[service].SetReadyCalled(false)
-		r.states[service].SetStartedCalled(false)
+		r.states[service].SetStartingCalled(false)
 	}
 
 	svc := r.states[service]
 	if err := svc.changer.SetStarting(nil); err != nil {
 		return err
 	}
-	r.states[service].SetStartedCalled(true)
+	r.states[service].SetStartingCalled(true)
 	svc.halt = make(chan struct{})
 	svc.halted = make(chan struct{})
 
@@ -368,7 +313,7 @@ func (r *runner) Ready(service Service) error {
 	}
 
 	r.states[service].SetReadyCalled(true)
-	r.wg.Done()
+	r.wg.Put(nil)
 
 	var serr *errState
 	if err := r.states[service].changer.SetStarted(nil); err != nil {
@@ -477,12 +422,20 @@ func (r *runner) WhenReady(limit time.Duration) <-chan error {
 	out := make(chan error, 1)
 	var closed int32
 	go func() {
-		r.wg.Wait()
+		var err error
+
+		errs := r.wg.Wait()
+		if len(errs) == 1 {
+			err = errs[0]
+		} else if len(errs) > 1 {
+			err = &serviceErrors{errors: errs}
+		}
+
 		if atomic.CompareAndSwapInt32(&closed, 0, 1) {
 			if stop != nil {
 				close(stop)
 			}
-			out <- nil
+			out <- err
 			close(out)
 		}
 	}()

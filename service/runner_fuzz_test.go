@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	_ "expvar"
+
 	"github.com/shabbyrobe/golib/assert"
 	"github.com/shabbyrobe/golib/errtools"
 )
@@ -118,7 +120,7 @@ type RunnerFuzzer struct {
 
 	runners []Runner
 
-	wg sync.WaitGroup
+	wg *CondGroup
 }
 
 var (
@@ -131,13 +133,22 @@ func (r *RunnerFuzzer) doTick() {
 	if r.Stats.GetRunnersCurrent() > 1 && should(r.RunnerHaltChance) {
 		idx := rand.Intn(r.Stats.GetRunnersCurrent())
 		runner := r.runners[idx]
-		runner.HaltAll(r.ServiceHaltTimeout.Rand())
-		r.Stats.AddRunnersCurrent(-1)
 
-		// delete runner
+		// delete runner before we go off and halt it so we can keep the runners
+		// list single threaded
 		last := len(r.runners) - 1
 		r.runners[idx], r.runners[last] = r.runners[last], nil
 		r.runners = r.runners[:last]
+		r.Stats.AddRunnersCurrent(-1)
+
+		r.wg.Add(1)
+		go func() {
+			defer r.wg.Done()
+
+			// this can take a while so make sure it's done in a goroutine
+			runner.HaltAll(r.ServiceHaltTimeout.Rand())
+			r.Stats.AddRunnersHalted(1)
+		}()
 	}
 
 	// maybe start a runner
@@ -172,7 +183,7 @@ func (r *RunnerFuzzer) doTick() {
 			err := runner.Halt(service, r.ServiceHaltTimeout.Rand())
 			if err != nil {
 				r.Stats.AddServiceHaltFailed(1)
-				r.Stats.AddServiceHaltError(errtools.Cause(err).Error())
+				r.Stats.AddServiceHaltError(err)
 			} else {
 				r.Stats.AddServiceHalted(1)
 			}
@@ -184,7 +195,7 @@ func (r *RunnerFuzzer) doTick() {
 				defer r.wg.Done()
 				if err := runner.StartWait(service, r.StartWaitTimeout.Rand()); err != nil {
 					r.Stats.AddServiceStartWaitFailed(1)
-					r.Stats.AddServiceStartWaitError(errtools.Cause(err).Error())
+					r.Stats.AddServiceStartWaitError(err) // errtools.Cause(err).Error())
 				} else {
 					r.Stats.AddServiceStartWaited(1)
 				}
@@ -192,7 +203,7 @@ func (r *RunnerFuzzer) doTick() {
 		} else {
 			if err := runner.Start(service); err != nil {
 				r.Stats.AddServiceStartFailed(1)
-				r.Stats.AddServiceStartError(errtools.Cause(err).Error())
+				r.Stats.AddServiceStartError(err)
 			} else {
 				r.Stats.AddServiceStarted(1)
 			}
@@ -204,6 +215,8 @@ func (r *RunnerFuzzer) doTick() {
 
 func (r *RunnerFuzzer) Run(tt assert.T) {
 	tt.Helper()
+	r.wg = NewCondGroup()
+
 	if r.Tick < 50*time.Microsecond {
 		r.hotLoop()
 	} else {
@@ -225,7 +238,7 @@ func (r *RunnerFuzzer) Run(tt assert.T) {
 }
 
 func (r *RunnerFuzzer) OnServiceError(service Service, err Error) {
-	r.Stats.AddServiceError(err.Cause().Error())
+	r.Stats.AddServiceError(err)
 }
 
 func (r *RunnerFuzzer) OnServiceEnd(service Service, err Error) {
@@ -269,6 +282,7 @@ type Stats struct {
 	Tick                   int32
 	RunnersStarted         int32
 	RunnersCurrent         int32
+	RunnersHalted          int32
 	ServiceEnded           int32
 	ServiceHalted          int32
 	ServiceHaltFailed      int32
@@ -312,6 +326,9 @@ func (s *Stats) AddRunnersCurrent(n int) { atomic.AddInt32(&s.RunnersCurrent, in
 func (s *Stats) GetRunnersStarted() int  { return int(atomic.LoadInt32(&s.RunnersStarted)) }
 func (s *Stats) AddRunnersStarted(n int) { atomic.AddInt32(&s.RunnersStarted, int32(n)) }
 
+func (s *Stats) GetRunnersHalted() int  { return int(atomic.LoadInt32(&s.RunnersHalted)) }
+func (s *Stats) AddRunnersHalted(n int) { atomic.AddInt32(&s.RunnersHalted, int32(n)) }
+
 func (s *Stats) GetServiceEnded() int  { return int(atomic.LoadInt32(&s.ServiceEnded)) }
 func (s *Stats) AddServiceEnded(n int) { atomic.AddInt32(&s.ServiceEnded, int32(n)) }
 
@@ -343,27 +360,35 @@ func (s *Stats) AddServiceEnd(msg string) {
 	s.serviceEndsLock.Unlock()
 }
 
-func (s *Stats) AddServiceError(msg string) {
+func (s *Stats) AddServiceError(err error) {
 	s.serviceErrorsLock.Lock()
-	s.ServiceErrors[msg]++
+	for _, msg := range fuzzErrs(err) {
+		s.ServiceErrors[msg]++
+	}
 	s.serviceErrorsLock.Unlock()
 }
 
-func (s *Stats) AddServiceHaltError(msg string) {
+func (s *Stats) AddServiceHaltError(err error) {
 	s.serviceHaltErrorsLock.Lock()
-	s.ServiceHaltErrors[msg]++
+	for _, msg := range fuzzErrs(err) {
+		s.ServiceHaltErrors[msg]++
+	}
 	s.serviceHaltErrorsLock.Unlock()
 }
 
-func (s *Stats) AddServiceStartError(msg string) {
+func (s *Stats) AddServiceStartError(err error) {
 	s.serviceStartErrorsLock.Lock()
-	s.ServiceStartErrors[msg]++
+	for _, msg := range fuzzErrs(err) {
+		s.ServiceStartErrors[msg]++
+	}
 	s.serviceStartErrorsLock.Unlock()
 }
 
-func (s *Stats) AddServiceStartWaitError(msg string) {
+func (s *Stats) AddServiceStartWaitError(err error) {
 	s.serviceStartWaitErrorsLock.Lock()
-	s.ServiceStartWaitErrors[msg]++
+	for _, msg := range fuzzErrs(err) {
+		s.ServiceStartWaitErrors[msg]++
+	}
 	s.serviceStartWaitErrorsLock.Unlock()
 }
 
@@ -373,6 +398,7 @@ func (s *Stats) Clone() *Stats {
 	n.Tick = int32(s.GetTick())
 	n.RunnersCurrent = int32(s.GetRunnersCurrent())
 	n.RunnersStarted = int32(s.GetRunnersStarted())
+	n.RunnersHalted = int32(s.GetRunnersHalted())
 	n.ServiceEnded = int32(s.GetServiceEnded())
 	n.ServiceHalted = int32(s.GetServiceHalted())
 	n.ServiceHaltFailed = int32(s.GetServiceHaltFailed())
@@ -412,6 +438,17 @@ func (s *Stats) Clone() *Stats {
 	s.serviceStartWaitErrorsLock.Unlock()
 
 	return n
+}
+
+func fuzzErrs(err error) (out []string) {
+	if grp, ok := err.(errorGroup); ok {
+		for _, e := range grp.Errors() {
+			out = append(out, errtools.Cause(e).Error())
+		}
+	} else {
+		out = append(out, errtools.Cause(err).Error())
+	}
+	return
 }
 
 func randDuration(min, max time.Duration) time.Duration {
