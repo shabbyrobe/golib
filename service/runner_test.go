@@ -409,7 +409,13 @@ func TestHaltableSleep(t *testing.T) {
 	tt.MustOK(r.StartWait(s1, dto))
 	tm = time.Now()
 	tt.MustOK(r.Halt(s1, dto))
-	tt.MustAssert(time.Since(tm) >= MinHaltableSleep)
+	since := time.Since(tm)
+
+	// only test for 95% of the delay because the timers aren't perfect. sometimes
+	// (though very, very rarely) we see test failures like this: "sleep time
+	// 49.957051ms, expected 50ms"
+	lim := time.Duration(float64(MinHaltableSleep) * 0.95)
+	tt.MustAssert(since >= lim, "sleep time %s, expected %s", since, MinHaltableSleep)
 }
 
 func TestRunnerOnError(t *testing.T) {
@@ -447,6 +453,7 @@ func TestRunnerOnError(t *testing.T) {
 	tt.MustOK(r.Start(s1))
 	tt.MustOK(r.Start(s2))
 	tt.MustOK(<-r.WhenReady(dto))
+
 	time.Sleep(runTime * tscale) // let a few more errors accumulate
 	tt.MustOK(r.HaltAll(dto))
 	close(done)
