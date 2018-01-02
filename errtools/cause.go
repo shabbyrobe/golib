@@ -18,24 +18,31 @@ func Causes(err error) (out []error) {
 	return
 }
 
+type Causer interface {
+	Cause() error
+}
+
 func Cause(err error) error {
 	var last error
+	var rerr = err
 
-	for err != nil {
-		cause, ok := err.(Causer)
+	for rerr != nil {
+		cause, ok := rerr.(Causer)
 		if !ok {
 			break
 		}
-		err = cause.Cause()
+		rerr = cause.Cause()
 
-		if err == last {
+		if rerr == last {
 			break
 		}
 
-		last = err
+		last = rerr
 	}
-
-	return err
+	if rerr == nil {
+		rerr = err
+	}
+	return rerr
 }
 
 func ParentCause(err error) error {
