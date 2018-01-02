@@ -18,10 +18,6 @@ func Causes(err error) (out []error) {
 	return
 }
 
-type Causer interface {
-	Cause() error
-}
-
 func Cause(err error) error {
 	var last error
 	var rerr = err
