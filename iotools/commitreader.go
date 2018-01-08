@@ -10,17 +10,23 @@ import (
 // or Rewind to the position the reader was at before the last Commit or
 // Advance.
 type CommitReader struct {
-	r    io.Reader
-	buf  bytes.Buffer
-	pos  int
-	rbuf []byte
-	eof  bool
+	r     io.Reader
+	buf   bytes.Buffer
+	pos   int
+	rbuf  []byte
+	eof   bool
+	valid bool
 }
 
 func NewCommitReader(r io.Reader) *CommitReader {
+	return NewCommitReaderSize(r, 8192)
+}
+
+func NewCommitReaderSize(r io.Reader, sz int) *CommitReader {
 	return &CommitReader{
-		r:    r,
-		rbuf: make([]byte, 8192),
+		r:     r,
+		rbuf:  make([]byte, sz),
+		valid: true,
 	}
 }
 
@@ -28,7 +34,21 @@ func (c *CommitReader) Pos() int {
 	return c.pos
 }
 
+// Rest returns the remaining data as a reader. The commit reader becomes invalid.
+func (c *CommitReader) Rest() io.Reader {
+	if !c.valid {
+		panic("commit reader is not valid")
+	}
+	c.Commit()
+	c.valid = false
+	return NewLeadingReader(c.buf.Bytes(), c.r)
+}
+
 func (c *CommitReader) Read(p []byte) (n int, err error) {
+	if !c.valid {
+		panic("commit reader is not valid")
+	}
+
 	max := len(p)
 	ln := c.buf.Len()
 	left := ln - c.pos
@@ -70,6 +90,9 @@ func (c *CommitReader) Read(p []byte) (n int, err error) {
 }
 
 func (c *CommitReader) Commit() {
+	if !c.valid {
+		panic("commit reader is not valid")
+	}
 	x := c.buf.Next(c.pos)
 	if len(x) != c.pos {
 		panic(fmt.Errorf("unexpected buffer size"))
@@ -78,10 +101,16 @@ func (c *CommitReader) Commit() {
 }
 
 func (c *CommitReader) Rewind() {
+	if !c.valid {
+		panic("commit reader is not valid")
+	}
 	c.pos = 0
 }
 
 func (c *CommitReader) Advance(n int) int {
+	if !c.valid {
+		panic("commit reader is not valid")
+	}
 	x := c.buf.Next(n)
 	out := len(x)
 	c.pos = 0

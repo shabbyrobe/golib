@@ -1,7 +1,9 @@
 package iotools
 
 import (
+	"bytes"
 	"io"
+	"io/ioutil"
 	"strings"
 	"testing"
 
@@ -44,6 +46,52 @@ func TestCommitReader(t *testing.T) {
 			tt.MustEqual("34", string(into))
 			cr.Rewind()
 		}
+	}
+}
+
+func TestCommitReaderRest(t *testing.T) {
+	tt := assert.WrapTB(t)
+
+	{
+		ir := bytes.NewReader([]byte{'a', 'b', 'c'})
+		cr := NewCommitReaderSize(ir, 2)
+		x := make([]byte, 1)
+		cr.Read(x)
+		rest := cr.Rest()
+		out, err := ioutil.ReadAll(rest)
+		tt.MustOK(err)
+		tt.MustEqual([]byte{'b', 'c'}, out)
+	}
+
+	{
+		ir := bytes.NewReader([]byte{'a', 'b', 'c'})
+		cr := NewCommitReaderSize(ir, 3)
+		x := make([]byte, 1)
+		cr.Read(x)
+		rest := cr.Rest()
+		out, err := ioutil.ReadAll(rest)
+		tt.MustOK(err)
+		tt.MustEqual([]byte{'b', 'c'}, out)
+	}
+
+	{
+		ir := bytes.NewReader([]byte{'a', 'b', 'c'})
+		cr := NewCommitReaderSize(ir, 3)
+		rest := cr.Rest()
+		out, err := ioutil.ReadAll(rest)
+		tt.MustOK(err)
+		tt.MustEqual([]byte{'a', 'b', 'c'}, out)
+	}
+
+	{
+		ir := bytes.NewReader([]byte{'a', 'b', 'c'})
+		cr := NewCommitReaderSize(ir, 2)
+		x := make([]byte, 3)
+		cr.Read(x)
+		rest := cr.Rest()
+		out, err := ioutil.ReadAll(rest)
+		tt.MustOK(err)
+		tt.MustEqual([]byte{'c'}, out)
 	}
 }
 

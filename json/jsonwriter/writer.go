@@ -518,6 +518,25 @@ func (w *Writer) WriteKeyValueUint(k string, v uint) error {
 
 // }}}
 
+// {{{ List helpers
+
+func (w *Writer) WriteStrings(v []string) error {
+	if err := w.StartList(); err != nil {
+		return err
+	}
+	for _, v := range v {
+		if err := w.WriteString(v); err != nil {
+			return err
+		}
+	}
+	if err := w.EndList(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// }}}
+
 func (w *Writer) checkParent(node nodeKind, state nodeKind) error {
 	k := w.nodes[w.current].kind
 	if k&node == 0 {
