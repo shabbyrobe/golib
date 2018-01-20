@@ -69,9 +69,13 @@ func PeriodWeeksTime(p int, n int, loc *time.Location) time.Time {
 	return out
 }
 
+func TruncateMonth(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
+}
+
 func TruncateMonths(t time.Time, n int) time.Time {
 	if n == 1 {
-		return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
+		return TruncateMonth(t)
 	} else {
 		inMnth := (t.Year() * 12) + (int(t.Month()) - 1)
 
