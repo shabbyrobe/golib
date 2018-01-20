@@ -210,3 +210,39 @@ func TestAddYears(t *testing.T) {
 	tt.MustEqual(time.Date(-1, 11, 1, 10, 9, 8, 7, time.UTC),
 		AddYears(time.Date(-3, 11, 1, 10, 9, 8, 7, time.UTC), 2))
 }
+
+func TestPeriodMonths(t *testing.T) {
+	tt := assert.WrapTB(t)
+	tm := time.Date(2017, 1, 1, 0, 0, 0, 0, time.UTC)
+	tt.MustEqual(PeriodMonths(tm, 1), 564)
+	tt.MustEqual(PeriodMonths(tm, 1), PeriodMonth(tm))
+	tt.MustEqual(tm, PeriodMonthsTime(564, 1, nil))
+
+	tm = time.Date(1968, 1, 1, 0, 0, 0, 0, time.UTC)
+	tt.MustEqual(PeriodMonths(tm, 1), -24)
+	tt.MustEqual(PeriodMonths(tm, 1), PeriodMonth(tm))
+	tt.MustEqual(tm, PeriodMonthsTime(-24, 1, nil))
+}
+
+var benchPeriod int
+
+func BenchmarkPeriodMonth(b *testing.B) {
+	tm := time.Date(2017, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < b.N; i++ {
+		benchPeriod = PeriodMonth(tm)
+	}
+}
+
+func BenchmarkPeriodMonths1(b *testing.B) {
+	tm := time.Date(2017, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < b.N; i++ {
+		benchPeriod = PeriodMonths(tm, 1)
+	}
+}
+
+func BenchmarkPeriodMonths2(b *testing.B) {
+	tm := time.Date(2017, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < b.N; i++ {
+		benchPeriod = PeriodMonths(tm, 2)
+	}
+}
