@@ -1,4 +1,4 @@
-package service
+package synctools
 
 import (
 	"sync/atomic"
