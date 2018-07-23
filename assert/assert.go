@@ -16,6 +16,20 @@ type T struct{ testing.TB }
 // where an error occurred.
 const frameDepth = 2
 
+func CompareMsg(exp, act interface{}) string {
+	return fmt.Sprintf("\nexp: %+v\ngot: %+v", exp, act)
+}
+
+func CompareMsgf(exp, act interface{}, msg string, args ...interface{}) string {
+	msg = fmt.Sprintf(msg, args...)
+	return fmt.Sprintf("%v%v", msg, CompareMsg(exp, act))
+}
+
+func IsFloatNear(epsilon, expected, actual float64) bool {
+	diff := expected - actual
+	return diff == 0 || (diff < 0 && diff > -epsilon) || (diff > 0 && diff < epsilon)
+}
+
 func (tb T) MustFloatNear(epsilon float64, expected float64, actual float64, v ...interface{}) {
 	tb.Helper()
 	_ = tb.floatNear(true, epsilon, expected, actual, v...)
@@ -85,22 +99,22 @@ func (tb T) assert(fatal bool, condition bool, v ...interface{}) bool {
 	return condition
 }
 
-// MustOK errors and terminates the test at the first error found in the arguments.
+// MustOKAll errors and terminates the test at the first error found in the arguments.
 // It allows multiple return value functions to be passed in directly.
-func (tb T) MustOK(errs ...interface{}) {
+func (tb T) MustOKAll(errs ...interface{}) {
 	tb.Helper()
-	_ = tb.ok(true, errs...)
+	_ = tb.okAll(true, errs...)
 }
 
-// OK errors the test at the first error found in the arguments, but continues
+// OKAll errors the test at the first error found in the arguments, but continues
 // running the test. It allows multiple return value functions to be passed in
 // directly.
-func (tb T) OK(errs ...interface{}) bool {
+func (tb T) OKAll(errs ...interface{}) bool {
 	tb.Helper()
-	return tb.ok(false, errs...)
+	return tb.okAll(false, errs...)
 }
 
-func (tb T) ok(fatal bool, errs ...interface{}) bool {
+func (tb T) okAll(fatal bool, errs ...interface{}) bool {
 	tb.Helper()
 	for _, err := range errs {
 		if _, ok := err.(*testing.T); ok {
@@ -109,17 +123,37 @@ func (tb T) ok(fatal bool, errs ...interface{}) bool {
 			panic("unexpected testtools.T in call to OK()")
 		}
 		if err, ok := err.(error); ok && err != nil {
-			_, file, line, _ := runtime.Caller(frameDepth)
-			msg := fmt.Sprintf("\nunexpected error at %s:%d\n%s", filepath.Base(file), line, err.Error())
-			if fatal {
-				tb.Fatal(msg)
-			} else {
-				tb.Error(msg)
+			if !tb.ok(fatal, err) {
+				return false
 			}
-			return false
 		}
 	}
 	return true
+}
+
+func (tb T) MustOK(err error) {
+	tb.Helper()
+	_ = tb.ok(true, err)
+}
+
+func (tb T) OK(err error) bool {
+	tb.Helper()
+	return tb.ok(true, err)
+}
+
+func (tb T) ok(fatal bool, err error) bool {
+	tb.Helper()
+	if err == nil {
+		return true
+	}
+	_, file, line, _ := runtime.Caller(frameDepth)
+	msg := fmt.Sprintf("\nunexpected error at %s:%d\n%s", filepath.Base(file), line, err.Error())
+	if fatal {
+		tb.Fatal(msg)
+	} else {
+		tb.Error(msg)
+	}
+	return false
 }
 
 // MustExact immediately fails the test if exp is not equal to act.
@@ -187,18 +221,4 @@ func (tb T) equals(fatal bool, exp, act interface{}, v ...interface{}) bool {
 		return false
 	}
 	return true
-}
-
-func CompareMsg(exp, act interface{}) string {
-	return fmt.Sprintf("\nexp: %+v\ngot: %+v", exp, act)
-}
-
-func CompareMsgf(exp, act interface{}, msg string, args ...interface{}) string {
-	msg = fmt.Sprintf(msg, args...)
-	return fmt.Sprintf("%v%v", msg, CompareMsg(exp, act))
-}
-
-func IsFloatNear(epsilon, expected, actual float64) bool {
-	diff := expected - actual
-	return diff == 0 || (diff < 0 && diff > -epsilon) || (diff > 0 && diff < epsilon)
 }
