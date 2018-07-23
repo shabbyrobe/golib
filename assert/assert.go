@@ -35,6 +35,14 @@ func (tb T) MustFloatNear(epsilon float64, expected float64, actual float64, v .
 	_ = tb.floatNear(true, epsilon, expected, actual, v...)
 }
 
+func (tb T) MustFloatsNear(epsilon float64, expected []float64, actual []float64, v ...interface{}) {
+	tb.Helper()
+	tb.MustEqual(len(expected), len(actual), "length mismatch")
+	for i := range expected {
+		_ = tb.floatNear(true, epsilon, expected[i], actual[i], v...)
+	}
+}
+
 func (tb T) FloatNear(epsilon float64, expected float64, actual float64, v ...interface{}) bool {
 	tb.Helper()
 	return tb.floatNear(false, epsilon, expected, actual, v...)

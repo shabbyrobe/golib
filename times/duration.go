@@ -94,8 +94,12 @@ func TruncateMonths(t time.Time, n int) time.Time {
 	}
 }
 
+func PeriodMonth(t time.Time) int {
+	return ((t.Year() - 1970) * 12) + (int(t.Month()) - 1)
+}
+
 func PeriodMonths(t time.Time, n int) int {
-	inMnth := (t.Year() * 12) + (int(t.Month()) - 1)
+	inMnth := ((t.Year() - 1970) * 12) + (int(t.Month()) - 1)
 	if inMnth >= 0 {
 		return (inMnth - (inMnth % n)) / n
 	} else {
@@ -123,6 +127,8 @@ func PeriodMonthsTime(p int, n int, loc *time.Location) time.Time {
 		oy = (ms / 12) - 1
 		om = 12 - (-ms % 12) + 1
 	}
+
+	oy += 1970
 
 	return time.Date(oy, time.Month(om), 1, 0, 0, 0, 0, loc)
 }
