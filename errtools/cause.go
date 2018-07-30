@@ -6,18 +6,6 @@ type Causer interface {
 	Cause() error
 }
 
-func Causes(err error) (out []error) {
-	for err != nil {
-		out = append(out, err)
-		cause, ok := err.(Causer)
-		if !ok {
-			break
-		}
-		err = cause.Cause()
-	}
-	return
-}
-
 func Cause(err error) error {
 	var last error
 	var rerr = err
@@ -39,13 +27,4 @@ func Cause(err error) error {
 		rerr = err
 	}
 	return rerr
-}
-
-func ParentCause(err error) error {
-	cause, ok := err.(Causer)
-	if ok {
-		return cause.Cause()
-	} else {
-		return err
-	}
 }

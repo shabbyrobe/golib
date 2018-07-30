@@ -78,7 +78,7 @@ func FilepathPrefix(path, prefix string) (ok bool, matched string, left string, 
 		dn, fn = filepath.Split(path)
 	}
 
-	dir = filepath.Clean(dn)
+	dn = filepath.Clean(dn)
 	prefix = filepath.Clean(prefix)
 
 	// [1:] in the lines below eliminates empty string on *nix and volume name on Windows
