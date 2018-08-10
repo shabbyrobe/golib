@@ -1,9 +1,6 @@
 package socketsrv
 
 type Protocol interface {
-	// Version() []byte
-	// VersionCheck(in []byte)
-
 	Version() int
 	MessageLimit() uint32
 	ProtocolName() string
@@ -22,4 +19,8 @@ type Mapper interface {
 
 type Handler interface {
 	HandleIncoming(id ConnID, msg Message) (rs Message, rerr error)
+}
+
+type Negotiator interface {
+	Negotiate(Communicator) (Protocol, error)
 }

@@ -6,10 +6,12 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"expvar"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"time"
 
@@ -26,7 +28,7 @@ import (
 	"github.com/shabbyrobe/golib/socketsrv/wsocketsrv"
 )
 
-var proto AltProto
+var proto CompressingProto
 
 func main() {
 	if err := run(); err != nil {
@@ -76,12 +78,13 @@ func (cl *tcpClientCommand) Run(ctx cmdy.Context) error {
 	if err != nil {
 		return err
 	}
+	in = in[:10000]
 
 	s := time.Now()
 	rq := &TestRequest{
 		Foo: string(in),
 	}
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 1; i++ {
 		_, err := (client.Request(ctx, rq))
 		if err != nil {
 			return err
@@ -108,23 +111,42 @@ func (sc *tcpServerCommand) Flags() *cmdy.FlagSet {
 func (sc *tcpServerCommand) Run(ctx cmdy.Context) error {
 	defer profile.Start().Stop()
 
-	var config socketsrv.ServerConfig
-	ln, err := socketsrv.ListenStream("tcp", sc.host)
-	if err != nil {
-		return err
+	{
+		mux := http.NewServeMux()
+		mux.Handle("/debug/vars", expvar.Handler())
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+		hsrv := &http.Server{Addr: "localhost:14123"}
+		hsrv.Handler = mux
+		svc := service.New("", &serviceutil.HTTP{Server: hsrv})
+		if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
+			return err
+		}
 	}
 
-	handler := &ServerHandler{}
+	{
+		handler := &ServerHandler{}
 
-	srv := socketsrv.NewServer(config, ln, proto, handler)
-	ender := service.NewEndListener(1)
-	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
-	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
-		return err
+		var config socketsrv.ServerConfig
+		ln, err := socketsrv.ListenStream("tcp", sc.host)
+		if err != nil {
+			return err
+		}
+
+		srv := socketsrv.NewServer(config, ln, proto, handler)
+		ender := service.NewEndListener(1)
+		svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
+		if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
+			return err
+		}
+		fmt.Printf("listening on %s\n", sc.host)
+
+		return <-ender.Ends()
 	}
-	fmt.Printf("listening on %s\n", sc.host)
-
-	return <-ender.Ends()
 }
 
 type wsClientCommand struct {
@@ -357,7 +379,8 @@ func (p AltProto) Encode(env socketsrv.Envelope, into []byte, encData *socketsrv
 }
 
 type altProtoData struct {
-	scratch []byte
+	scratch     []byte
+	flateWriter *flate.Writer
 }
 
 func (a *altProtoData) Close() error {
@@ -446,7 +469,13 @@ func (p CompressingProto) Decode(in []byte, decData *socketsrv.ProtoData) (env s
 func (p CompressingProto) Encode(env socketsrv.Envelope, into []byte, encData *socketsrv.ProtoData) (extended []byte, rerr error) {
 	var data *altProtoData
 	if *encData == nil {
-		data = &altProtoData{}
+		fw, err := flate.NewWriter(ioutil.Discard, 9)
+		if err != nil {
+			return into, err
+		}
+		data = &altProtoData{
+			flateWriter: fw,
+		}
 		*encData = data
 	} else {
 		data = (*encData).(*altProtoData)
@@ -458,7 +487,6 @@ func (p CompressingProto) Encode(env socketsrv.Envelope, into []byte, encData *s
 	binary.BigEndian.PutUint32(into, uint32(env.ID))
 	binary.BigEndian.PutUint32(into[4:], uint32(env.ReplyTo))
 	binary.BigEndian.PutUint32(into[8:], uint32(env.Kind))
-
 	into[12] = 0
 
 	var bw bytewriter.Writer
@@ -471,7 +499,7 @@ func (p CompressingProto) Encode(env socketsrv.Envelope, into []byte, encData *s
 
 	out, ilen := bw.Take()
 
-	if ilen >= 1 {
+	if ilen >= 5000 {
 		into[12] |= 0x01
 
 		if len(data.scratch) < 13 {
@@ -480,10 +508,8 @@ func (p CompressingProto) Encode(env socketsrv.Envelope, into []byte, encData *s
 		copy(data.scratch, into[:13])
 
 		bw.Give(data.scratch[:13])
-		cw, err := flate.NewWriter(&bw, 9)
-		if err != nil {
-			return into, err
-		}
+		cw := data.flateWriter
+		cw.Reset(&bw)
 		if w, err := cw.Write(out[13:ilen]); err != nil {
 			_ = cw.Close()
 			return into, err
