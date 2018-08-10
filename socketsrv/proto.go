@@ -1,12 +1,23 @@
 package socketsrv
 
 type Protocol interface {
+	// Version() []byte
+	// VersionCheck(in []byte)
+
 	Version() int
 	MessageLimit() uint32
+	ProtocolName() string
+
+	// Mapper is cached by Conn on creation.
+	Mapper() Mapper
+
+	Decode(in []byte, decdata *ProtoData) (Envelope, error)
+	Encode(env Envelope, into []byte, encdata *ProtoData) (extended []byte, rerr error)
+}
+
+type Mapper interface {
 	Message(kind int) (Message, error)
 	MessageKind(msg Message) (int, error)
-	Decode(in []byte) (Envelope, error)
-	Encode(env Envelope, into []byte) (extended []byte, rerr error)
 }
 
 type Handler interface {

@@ -7,6 +7,7 @@ type ConnConfig struct {
 	OutgoingBuffer     int
 	ReadBufferInitial  int
 	WriteBufferInitial int
+	HeartbeatInterval  time.Duration
 	ReadTimeout        time.Duration
 	WriteTimeout       time.Duration
 	ResponseTimeout    time.Duration

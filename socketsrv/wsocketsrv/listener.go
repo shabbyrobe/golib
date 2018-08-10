@@ -2,7 +2,9 @@ package wsocketsrv
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/gorilla/websocket"
 	"github.com/shabbyrobe/golib/socketsrv"
@@ -11,12 +13,15 @@ import (
 type Listener struct {
 	comms    chan socketsrv.Communicator
 	upgrader websocket.Upgrader
+	closed   uint32
 	stop     chan struct{}
 }
 
 func NewListener(upgrader websocket.Upgrader) *Listener {
 	return &Listener{
-		comms:    make(chan socketsrv.Communicator, 1024),
+		// FIXME: buffer size
+		comms: make(chan socketsrv.Communicator, 1024),
+
 		upgrader: upgrader,
 		stop:     make(chan struct{}),
 	}
@@ -45,6 +50,9 @@ func (l *Listener) Accept() (socketsrv.Communicator, error) {
 }
 
 func (l *Listener) Close() error {
+	if !atomic.CompareAndSwapUint32(&l.closed, 0, 1) {
+		return fmt.Errorf("wsocketsrv: listener already closed")
+	}
 	close(l.stop)
 	return nil
 }

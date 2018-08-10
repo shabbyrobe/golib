@@ -34,7 +34,7 @@ func (c *Connector) NetClient(ctx context.Context, network, host string, handler
 		return nil, err
 	}
 
-	raw := &netConn{conn: conn}
+	raw := Stream(conn)
 	return c.Client(ctx, raw, handler)
 }
 

@@ -1,3 +1,13 @@
 - Tests
 - Connection callback
 - Disconnection callback
+- UDP experiment
+- Unix socket experiment
+- Compression
+- Version negotiation
+  - Should support arbitrary protocols
+- Could this be used for watchout's linewise protocol?
+- Memory leak checks
+
+- Protocol is "Mapper" and "Codec" combined; can we separate/compose?
+

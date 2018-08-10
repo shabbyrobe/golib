@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -48,11 +49,16 @@ const (
 	connComplete uint32 = 2
 )
 
+type ProtoData interface {
+	io.Closer
+}
+
 type conn struct {
 	id      ConnID
 	comm    Communicator
 	side    Side
 	proto   Protocol
+	mapper  Mapper
 	handler Handler
 	config  ConnConfig
 
@@ -61,7 +67,9 @@ type conn struct {
 	lastRecv      time.Time
 	lastSend      time.Time
 	calls         chan call
-	messageLimit  uint32
+
+	// messageLimit is captured from the protocol
+	messageLimit uint32
 
 	// number of currently active calls to Send(). this is used during shutdown
 	// so we know that all calls to Send have responded to the stop signal so we
@@ -79,12 +87,18 @@ func newConn(id ConnID, side Side, config ConnConfig, comm Communicator, proto P
 		config = DefaultConnConfig()
 	}
 
+	mapper := proto.Mapper()
+	if mapper == nil {
+		panic(fmt.Errorf("proto %q returned nil mapper", proto.ProtocolName()))
+	}
+
 	return &conn{
 		id:           id,
 		side:         side,
 		config:       config,
 		comm:         comm,
 		proto:        proto,
+		mapper:       proto.Mapper(),
 		handler:      handler,
 		messageLimit: proto.MessageLimit(),
 
@@ -108,6 +122,12 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 	// Reader thread:
 	go func() {
 		rdBuf := make([]byte, c.config.ReadBufferInitial)
+		var encData ProtoData
+		defer func() {
+			if encData != nil {
+				_ = encData.Close()
+			}
+		}()
 
 		var err error
 		for {
@@ -120,7 +140,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 				continue // heartbeats can be empty
 			}
 
-			env, err := c.proto.Decode(rdBuf)
+			env, err := c.proto.Decode(rdBuf, &encData)
 			if err != nil {
 				failer.Send(err)
 				return
@@ -138,13 +158,23 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 	// Writer thread:
 	go func() {
 		wrBuf := make([]byte, 0, c.config.WriteBufferInitial)
+		var decData ProtoData
+		defer func() {
+			if decData != nil {
+				_ = decData.Close()
+			}
+		}()
 
-		heartbeat := time.NewTicker(100 * time.Millisecond)
-		defer heartbeat.Stop()
+		var heartbeat <-chan time.Time
+		if c.config.HeartbeatInterval > 0 {
+			ht := time.NewTicker(c.config.HeartbeatInterval)
+			defer ht.Stop()
+			heartbeat = ht.C
+		}
 
 		for {
 			select {
-			case <-heartbeat.C:
+			case <-heartbeat:
 				if err := c.comm.Ping(c.config.WriteTimeout); err != nil {
 					failer.Send(err)
 					return
@@ -152,7 +182,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 
 			case env := <-c.outgoing:
 				var err error
-				wrBuf, err = c.proto.Encode(env, wrBuf)
+				wrBuf, err = c.proto.Encode(env, wrBuf, &decData)
 				if err != nil {
 					failer.Send(err)
 					return
@@ -241,7 +271,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 					return err
 				}
 				if rs != nil {
-					kind, err := c.proto.MessageKind(rs)
+					kind, err := c.mapper.MessageKind(rs)
 					if err != nil {
 						return err
 					}
@@ -296,7 +326,7 @@ func (c *conn) Send(ctx context.Context, msg Message, recv chan<- Result) (rerr 
 		return fmt.Errorf("socket: send to conn which is not running")
 	}
 
-	kind, err := c.proto.MessageKind(msg)
+	kind, err := c.mapper.MessageKind(msg)
 	if err != nil {
 		return err
 	}
@@ -311,7 +341,7 @@ func (c *conn) Send(ctx context.Context, msg Message, recv chan<- Result) (rerr 
 	}
 
 	select {
-	case c.calls <- call{env: env, rs: recv}:
+	case c.calls <- call{at: time.Now(), env: env, rs: recv}:
 		c.sendWait.Done()
 		return nil
 

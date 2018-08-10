@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"compress/flate"
 	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
@@ -22,7 +26,7 @@ import (
 	"github.com/shabbyrobe/golib/socketsrv/wsocketsrv"
 )
 
-var proto Proto
+var proto AltProto
 
 func main() {
 	if err := run(); err != nil {
@@ -68,9 +72,20 @@ func (cl *tcpClientCommand) Run(ctx cmdy.Context) error {
 		return err
 	}
 
+	in, err := ioutil.ReadFile("/Users/bl/Downloads/The Rust Programming Language.htm")
+	if err != nil {
+		return err
+	}
+
 	s := time.Now()
-	for i := 0; i < 10000; i++ {
-		(client.Request(ctx, &TestRequest{}))
+	rq := &TestRequest{
+		Foo: string(in),
+	}
+	for i := 0; i < 100; i++ {
+		_, err := (client.Request(ctx, rq))
+		if err != nil {
+			return err
+		}
 	}
 	spew.Dump(time.Since(s))
 
@@ -94,7 +109,7 @@ func (sc *tcpServerCommand) Run(ctx cmdy.Context) error {
 	defer profile.Start().Stop()
 
 	var config socketsrv.ServerConfig
-	ln, err := socketsrv.Listen("tcp", sc.host)
+	ln, err := socketsrv.ListenStream("tcp", sc.host)
 	if err != nil {
 		return err
 	}
@@ -145,9 +160,14 @@ func (cl *wsClientCommand) Run(ctx cmdy.Context) error {
 		return err
 	}
 
+	rq := &TestRequest{}
+
 	s := time.Now()
 	for i := 0; i < 10000; i++ {
-		(client.Request(ctx, &TestRequest{}))
+		_, err := (client.Request(ctx, rq))
+		if err != nil {
+			return err
+		}
 	}
 	spew.Dump(time.Since(s))
 
@@ -196,48 +216,22 @@ func (sc *wsServerCommand) Run(ctx cmdy.Context) error {
 	return <-ender.Ends()
 }
 
-type Proto struct{}
-
-func (p Proto) Version() int         { return 1 }
-func (p Proto) MessageLimit() uint32 { return 65536 }
-
-func (p Proto) Message(kind int) (socketsrv.Message, error) {
-	switch kind {
-	case 1:
-		return &TestRequest{}, nil
-	case 2:
-		return &TestResponse{}, nil
-	case 3:
-		return &TestCommand{}, nil
-	case 4:
-		return &OK{}, nil
-	default:
-		return nil, fmt.Errorf("unknown kind %d", kind)
-	}
+type Proto struct {
+	mapper Mapper
 }
 
-func (p Proto) MessageKind(msg socketsrv.Message) (int, error) {
-	switch msg.(type) {
-	case *TestRequest:
-		return 1, nil
-	case *TestResponse:
-		return 2, nil
-	case *TestCommand:
-		return 3, nil
-	case *OK:
-		return 4, nil
-	default:
-		return 0, fmt.Errorf("unknown msg %T", msg)
-	}
-}
+func (p Proto) ProtocolName() string     { return "Proto" }
+func (p Proto) Mapper() socketsrv.Mapper { return p.mapper }
+func (p Proto) Version() int             { return 1 }
+func (p Proto) MessageLimit() uint32     { return 10000000 }
 
-func (p Proto) Decode(in []byte) (env socketsrv.Envelope, rerr error) {
+func (p Proto) Decode(in []byte, decdata *socketsrv.ProtoData) (env socketsrv.Envelope, rerr error) {
 	var je JSONEnvelope
 	if err := json.Unmarshal(in, &je); err != nil {
 		return env, err
 	}
 
-	msg, err := p.Message(je.Kind)
+	msg, err := p.mapper.Message(je.Kind)
 	if err != nil {
 		return env, err
 	}
@@ -253,7 +247,7 @@ func (p Proto) Decode(in []byte) (env socketsrv.Envelope, rerr error) {
 	return env, nil
 }
 
-func (p Proto) Encode(env socketsrv.Envelope, into []byte) (extended []byte, rerr error) {
+func (p Proto) Encode(env socketsrv.Envelope, into []byte, encdata *socketsrv.ProtoData) (extended []byte, rerr error) {
 	var bw bytewriter.Writer
 	bw.Give(into[:0])
 	enc := json.NewEncoder(&bw)
@@ -312,12 +306,67 @@ type TestResponse struct {
 
 type TestCommand struct{}
 
-type AltProto struct{}
+type AltProto struct {
+	mapper Mapper
+}
 
-func (p AltProto) Version() int         { return 1 }
-func (p AltProto) MessageLimit() uint32 { return 65536 }
+func (p AltProto) ProtocolName() string     { return "AltProto" }
+func (p AltProto) Mapper() socketsrv.Mapper { return p.mapper }
+func (p AltProto) Version() int             { return 1 }
+func (p AltProto) MessageLimit() uint32     { return 10000000 }
 
-func (p AltProto) Message(kind int) (socketsrv.Message, error) {
+func (p AltProto) Decode(in []byte, decdata *socketsrv.ProtoData) (env socketsrv.Envelope, rerr error) {
+	if len(in) < 12 {
+		return env, fmt.Errorf("short message")
+	}
+
+	env.ID = socketsrv.MessageID(binary.BigEndian.Uint32(in))
+	env.ReplyTo = socketsrv.MessageID(binary.BigEndian.Uint32(in[4:]))
+	env.Kind = int(binary.BigEndian.Uint32(in[8:]))
+	env.Message, rerr = p.mapper.Message(env.Kind)
+
+	if err := json.Unmarshal(in[12:], &env.Message); err != nil {
+		return env, err
+	}
+
+	return env, nil
+}
+
+func (p AltProto) Encode(env socketsrv.Envelope, into []byte, encData *socketsrv.ProtoData) (extended []byte, rerr error) {
+	if *encData == nil {
+		*encData = &altProtoData{}
+	}
+
+	if len(into) < 12 {
+		into = make([]byte, 12)
+	}
+	binary.BigEndian.PutUint32(into, uint32(env.ID))
+	binary.BigEndian.PutUint32(into[4:], uint32(env.ReplyTo))
+	binary.BigEndian.PutUint32(into[8:], uint32(env.Kind))
+
+	var bw bytewriter.Writer
+	bw.Give(into[:12])
+
+	enc := json.NewEncoder(&bw)
+	if err := enc.Encode(env.Message); err != nil {
+		return nil, err
+	}
+
+	out, ilen := bw.Take()
+	return out[:ilen], nil
+}
+
+type altProtoData struct {
+	scratch []byte
+}
+
+func (a *altProtoData) Close() error {
+	return nil
+}
+
+type Mapper struct{}
+
+func (m Mapper) Message(kind int) (socketsrv.Message, error) {
 	switch kind {
 	case 1:
 		return &TestRequest{}, nil
@@ -332,7 +381,7 @@ func (p AltProto) Message(kind int) (socketsrv.Message, error) {
 	}
 }
 
-func (p AltProto) MessageKind(msg socketsrv.Message) (int, error) {
+func (m Mapper) MessageKind(msg socketsrv.Message) (int, error) {
 	switch msg.(type) {
 	case *TestRequest:
 		return 1, nil
@@ -347,20 +396,111 @@ func (p AltProto) MessageKind(msg socketsrv.Message) (int, error) {
 	}
 }
 
-func (p AltProto) Decode(in []byte) (env socketsrv.Envelope, rerr error) {
+type CompressingProto struct {
+	mapper Mapper
+}
+
+func (p CompressingProto) ProtocolName() string     { return "CompressingProto" }
+func (p CompressingProto) Mapper() socketsrv.Mapper { return p.mapper }
+func (p CompressingProto) Version() int             { return 1 }
+func (p CompressingProto) MessageLimit() uint32     { return 10000000 }
+
+func (p CompressingProto) Decode(in []byte, decData *socketsrv.ProtoData) (env socketsrv.Envelope, rerr error) {
+	var data *altProtoData
+	if *decData == nil {
+		data = &altProtoData{}
+		*decData = data
+	} else {
+		data = (*decData).(*altProtoData)
+	}
+
+	if len(in) < 13 {
+		return env, fmt.Errorf("short message")
+	}
 	env.ID = socketsrv.MessageID(binary.BigEndian.Uint32(in))
 	env.ReplyTo = socketsrv.MessageID(binary.BigEndian.Uint32(in[4:]))
 	env.Kind = int(binary.BigEndian.Uint32(in[8:]))
-	env.Message, rerr = p.Message(env.Kind)
-	return env, rerr
+	env.Message, rerr = p.mapper.Message(env.Kind)
+
+	compressed := in[12]&0x1 == 0x1
+	msg := in[13:]
+	if compressed {
+		dr := flate.NewReader(bytes.NewReader(msg))
+		var bw bytewriter.Writer
+		var n int
+		bw.Give(data.scratch[:0])
+		if _, err := io.Copy(&bw, dr); err != nil {
+			return env, err
+		}
+		msg, n = bw.Take()
+		msg = msg[:n]
+	}
+
+	if err := json.Unmarshal(msg, &env.Message); err != nil {
+		return env, err
+	}
+
+	return env, nil
 }
 
-func (p AltProto) Encode(env socketsrv.Envelope, into []byte) (extended []byte, rerr error) {
-	if len(into) < 12 {
-		into = make([]byte, 12)
+func (p CompressingProto) Encode(env socketsrv.Envelope, into []byte, encData *socketsrv.ProtoData) (extended []byte, rerr error) {
+	var data *altProtoData
+	if *encData == nil {
+		data = &altProtoData{}
+		*encData = data
+	} else {
+		data = (*encData).(*altProtoData)
+	}
+
+	if len(into) < 13 {
+		into = make([]byte, 13)
 	}
 	binary.BigEndian.PutUint32(into, uint32(env.ID))
 	binary.BigEndian.PutUint32(into[4:], uint32(env.ReplyTo))
 	binary.BigEndian.PutUint32(into[8:], uint32(env.Kind))
-	return into[:12], nil
+
+	into[12] = 0
+
+	var bw bytewriter.Writer
+	bw.Give(into[:13])
+
+	enc := json.NewEncoder(&bw)
+	if err := enc.Encode(env.Message); err != nil {
+		return into, err
+	}
+
+	out, ilen := bw.Take()
+
+	if ilen >= 1 {
+		into[12] |= 0x01
+
+		if len(data.scratch) < 13 {
+			data.scratch = make([]byte, 13)
+		}
+		copy(data.scratch, into[:13])
+
+		bw.Give(data.scratch[:13])
+		cw, err := flate.NewWriter(&bw, 9)
+		if err != nil {
+			return into, err
+		}
+		if w, err := cw.Write(out[13:ilen]); err != nil {
+			_ = cw.Close()
+			return into, err
+		} else if w != ilen-13 {
+			_ = cw.Close()
+			return into, fmt.Errorf("short write")
+		}
+		if err := cw.Flush(); err != nil {
+			_ = cw.Close()
+			return into, err
+		}
+		if err := cw.Close(); err != nil {
+			_ = cw.Close()
+			return into, err
+		}
+
+		out, ilen = bw.Take()
+	}
+	return out[:ilen], nil
 }
