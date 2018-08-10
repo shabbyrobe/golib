@@ -70,7 +70,7 @@ func (nc *stream) ReadMessage(into []byte, limit uint32, timeout time.Duration) 
 	return into, nil
 }
 
-func (nc *stream) WriteMessage(data []byte, limit uint32, timeout time.Duration) (rerr error) {
+func (nc *stream) WriteMessage(data []byte, timeout time.Duration) (rerr error) {
 	if timeout > 0 {
 		if err := nc.conn.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
 			return err
@@ -78,9 +78,6 @@ func (nc *stream) WriteMessage(data []byte, limit uint32, timeout time.Duration)
 	}
 
 	mlen := len(data)
-	if uint32(mlen) > limit {
-		return fmt.Errorf("socket: message of length %d exceeded limit %d", mlen, limit)
-	}
 
 	lbuf := nc.wrLenBuf[:]
 	binary.BigEndian.PutUint32(lbuf, uint32(mlen))

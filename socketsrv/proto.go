@@ -1,7 +1,8 @@
 package socketsrv
 
+import "io"
+
 type Protocol interface {
-	Version() int
 	MessageLimit() uint32
 	ProtocolName() string
 
@@ -22,5 +23,11 @@ type Handler interface {
 }
 
 type Negotiator interface {
-	Negotiate(Communicator) (Protocol, error)
+	Negotiate(Side, Communicator) (Protocol, error)
+}
+
+// ProtoData is used as a type-unsafe way for a Protocol to store shared memory
+// against a Conn object for reuse.
+type ProtoData interface {
+	io.Closer
 }

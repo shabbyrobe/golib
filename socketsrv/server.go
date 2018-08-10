@@ -11,38 +11,38 @@ import (
 )
 
 type Server struct {
-	config   ServerConfig
-	nextID   incrementer.Inc
-	runner   service.Runner
-	listener Listener
-	proto    Protocol
-	handler  Handler
+	config     ServerConfig
+	nextID     incrementer.Inc
+	runner     service.Runner
+	listener   Listener
+	handler    Handler
+	negotiator Negotiator
 
 	conns   map[ConnID]*conn
 	connsMu sync.Mutex
 	running uint32
 }
 
-func NewServer(config ServerConfig, listener Listener, proto Protocol, handler Handler) *Server {
+func NewServer(config ServerConfig, listener Listener, negotiator Negotiator, handler Handler) *Server {
 	if listener == nil {
 		panic("socket: listener must not be nil")
 	}
 	if handler == nil {
 		panic("socket: handler must not be nil")
 	}
-	if proto == nil {
-		panic("socket: proto must not be nil")
+	if negotiator == nil {
+		panic("socket: negotiator must not be nil")
 	}
 	if config.IsZero() {
 		config = DefaultServerConfig()
 	}
 
 	srv := &Server{
-		config:   config,
-		listener: listener,
-		conns:    make(map[ConnID]*conn),
-		proto:    proto,
-		handler:  handler,
+		config:     config,
+		listener:   listener,
+		conns:      make(map[ConnID]*conn),
+		handler:    handler,
+		negotiator: negotiator,
 	}
 	srv.runner = service.NewRunner(service.RunnerOnEnd(srv.onEnd))
 	return srv
@@ -91,7 +91,7 @@ func (srv *Server) Run(ctx service.Context) (rerr error) {
 			} else {
 				id := ConnID(srv.nextID.Next())
 
-				conn := newConn(id, ServerSide, srv.config.Conn, raw, srv.proto, srv.handler)
+				conn := newConn(id, ServerSide, srv.config.Conn, raw, srv.negotiator, srv.handler)
 				if err := srv.runner.Start(ctx, service.New(service.Name(id), conn)); err != nil {
 					_ = raw.Close()
 					ctx.OnError(err)

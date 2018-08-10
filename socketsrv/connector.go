@@ -9,19 +9,19 @@ import (
 )
 
 type Connector struct {
-	config  ConnectorConfig
-	clients service.Runner
-	proto   Protocol
-	nextID  incrementer.Inc
+	config     ConnectorConfig
+	clients    service.Runner
+	negotiator Negotiator
+	nextID     incrementer.Inc
 }
 
-func NewConnector(config ConnectorConfig, proto Protocol) *Connector {
+func NewConnector(config ConnectorConfig, negotiator Negotiator) *Connector {
 	if config.IsZero() {
 		config = DefaultConnectorConfig()
 	}
 	dl := &Connector{
-		config: config,
-		proto:  proto,
+		config:     config,
+		negotiator: negotiator,
 	}
 	dl.clients = service.NewRunner()
 	return dl
@@ -40,7 +40,7 @@ func (c *Connector) NetClient(ctx context.Context, network, host string, handler
 
 func (c *Connector) Client(ctx context.Context, rc Communicator, handler Handler) (*Client, error) {
 	id := ConnID(c.nextID.Next())
-	conn := newConn(id, ClientSide, c.config.Conn, rc, c.proto, handler)
+	conn := newConn(id, ClientSide, c.config.Conn, rc, c.negotiator, handler)
 	cl := &Client{
 		conn:      conn,
 		svc:       service.New(service.Name(conn.ID()), conn),

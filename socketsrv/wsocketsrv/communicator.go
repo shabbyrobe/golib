@@ -81,7 +81,7 @@ func (cm *Communicator) ReadMessage(into []byte, limit uint32, timeout time.Dura
 	return into, nil
 }
 
-func (cm *Communicator) WriteMessage(data []byte, limit uint32, timeout time.Duration) (rerr error) {
+func (cm *Communicator) WriteMessage(data []byte, timeout time.Duration) (rerr error) {
 	if timeout > 0 {
 		if err := cm.ws.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
 			return err
@@ -89,10 +89,6 @@ func (cm *Communicator) WriteMessage(data []byte, limit uint32, timeout time.Dur
 	}
 
 	mlen := len(data)
-	if uint32(mlen) > limit {
-		return fmt.Errorf("socket: message of length %d exceeded limit %d", mlen, limit)
-	}
-
 	wr, err := cm.ws.NextWriter(websocket.BinaryMessage)
 	if err != nil {
 		return err

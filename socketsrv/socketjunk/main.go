@@ -28,7 +28,9 @@ import (
 	"github.com/shabbyrobe/golib/socketsrv/wsocketsrv"
 )
 
-var proto CompressingProto
+var negotiator socketsrv.Negotiator
+
+var encoding = binary.BigEndian
 
 func main() {
 	if err := run(); err != nil {
@@ -37,6 +39,14 @@ func main() {
 }
 
 func run() error {
+	negotiator = &VersionNegotiator{
+		Protocols: map[uint32]socketsrv.Protocol{
+			1: Proto{},
+			2: AltProto{},
+			// 3: CompressingProto{},
+		},
+	}
+
 	bld := func() (cmdy.Command, error) {
 		return cmdy.NewGroup("socketjunk", cmdy.Builders{
 			"tcpclient": func() (cmdy.Command, error) { return &tcpClientCommand{}, nil },
@@ -66,7 +76,7 @@ func (cl *tcpClientCommand) Run(ctx cmdy.Context) error {
 	// defer profile.Start().Stop()
 
 	config := socketsrv.ConnectorConfig{}
-	connector := socketsrv.NewConnector(config, proto)
+	connector := socketsrv.NewConnector(config, negotiator)
 
 	h := &ServerHandler{}
 	client, err := connector.NetClient(ctx, "tcp", cl.host, h)
@@ -84,7 +94,7 @@ func (cl *tcpClientCommand) Run(ctx cmdy.Context) error {
 	rq := &TestRequest{
 		Foo: string(in),
 	}
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 10000; i++ {
 		_, err := (client.Request(ctx, rq))
 		if err != nil {
 			return err
@@ -137,7 +147,7 @@ func (sc *tcpServerCommand) Run(ctx cmdy.Context) error {
 			return err
 		}
 
-		srv := socketsrv.NewServer(config, ln, proto, handler)
+		srv := socketsrv.NewServer(config, ln, negotiator, handler)
 		ender := service.NewEndListener(1)
 		svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
 		if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
@@ -166,7 +176,7 @@ func (cl *wsClientCommand) Run(ctx cmdy.Context) error {
 	// defer profile.Start().Stop()
 
 	config := socketsrv.ConnectorConfig{}
-	connector := socketsrv.NewConnector(config, proto)
+	connector := socketsrv.NewConnector(config, negotiator)
 	handler := &ServerHandler{}
 
 	dialer := websocket.Dialer{
@@ -228,7 +238,7 @@ func (sc *wsServerCommand) Run(ctx cmdy.Context) error {
 
 	handler := &ServerHandler{}
 
-	srv := socketsrv.NewServer(config, ln, proto, handler)
+	srv := socketsrv.NewServer(config, ln, negotiator, handler)
 	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
 	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
 		return err
@@ -236,6 +246,54 @@ func (sc *wsServerCommand) Run(ctx cmdy.Context) error {
 	fmt.Printf("listening on %s\n", sc.host)
 
 	return <-ender.Ends()
+}
+
+type VersionNegotiator struct {
+	Protocols map[uint32]socketsrv.Protocol
+	Timeout   time.Duration
+}
+
+func (v *VersionNegotiator) Negotiate(side socketsrv.Side, c socketsrv.Communicator) (socketsrv.Protocol, error) {
+	timeout := v.Timeout
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+
+	var oursBuf = make([]byte, len(v.Protocols)*4)
+	i := 0
+	for v := range v.Protocols {
+		encoding.PutUint32(oursBuf[i:], v)
+		i += 4
+	}
+	if err := c.WriteMessage(oursBuf, timeout); err != nil {
+		return nil, err
+	}
+
+	msg, err := c.ReadMessage(nil, 1024, timeout)
+	if err != nil {
+		return nil, err
+	}
+	if len(msg)%4 != 0 {
+		return nil, fmt.Errorf("unexpected remote versions")
+	}
+
+	var max uint32
+	var found bool
+	for i := 0; i < len(msg); i += 4 {
+		cur := encoding.Uint32(msg[i:])
+		if _, ok := v.Protocols[cur]; ok {
+			found = true
+			if cur > max {
+				max = cur
+			}
+		}
+	}
+
+	if !found {
+		return nil, fmt.Errorf("could not negotiate protocol")
+	}
+
+	return v.Protocols[max], nil
 }
 
 type Proto struct {
@@ -342,9 +400,9 @@ func (p AltProto) Decode(in []byte, decdata *socketsrv.ProtoData) (env socketsrv
 		return env, fmt.Errorf("short message")
 	}
 
-	env.ID = socketsrv.MessageID(binary.BigEndian.Uint32(in))
-	env.ReplyTo = socketsrv.MessageID(binary.BigEndian.Uint32(in[4:]))
-	env.Kind = int(binary.BigEndian.Uint32(in[8:]))
+	env.ID = socketsrv.MessageID(encoding.Uint32(in))
+	env.ReplyTo = socketsrv.MessageID(encoding.Uint32(in[4:]))
+	env.Kind = int(encoding.Uint32(in[8:]))
 	env.Message, rerr = p.mapper.Message(env.Kind)
 
 	if err := json.Unmarshal(in[12:], &env.Message); err != nil {
@@ -362,9 +420,9 @@ func (p AltProto) Encode(env socketsrv.Envelope, into []byte, encData *socketsrv
 	if len(into) < 12 {
 		into = make([]byte, 12)
 	}
-	binary.BigEndian.PutUint32(into, uint32(env.ID))
-	binary.BigEndian.PutUint32(into[4:], uint32(env.ReplyTo))
-	binary.BigEndian.PutUint32(into[8:], uint32(env.Kind))
+	encoding.PutUint32(into, uint32(env.ID))
+	encoding.PutUint32(into[4:], uint32(env.ReplyTo))
+	encoding.PutUint32(into[8:], uint32(env.Kind))
 
 	var bw bytewriter.Writer
 	bw.Give(into[:12])
@@ -440,9 +498,9 @@ func (p CompressingProto) Decode(in []byte, decData *socketsrv.ProtoData) (env s
 	if len(in) < 13 {
 		return env, fmt.Errorf("short message")
 	}
-	env.ID = socketsrv.MessageID(binary.BigEndian.Uint32(in))
-	env.ReplyTo = socketsrv.MessageID(binary.BigEndian.Uint32(in[4:]))
-	env.Kind = int(binary.BigEndian.Uint32(in[8:]))
+	env.ID = socketsrv.MessageID(encoding.Uint32(in))
+	env.ReplyTo = socketsrv.MessageID(encoding.Uint32(in[4:]))
+	env.Kind = int(encoding.Uint32(in[8:]))
 	env.Message, rerr = p.mapper.Message(env.Kind)
 
 	compressed := in[12]&0x1 == 0x1
@@ -484,9 +542,9 @@ func (p CompressingProto) Encode(env socketsrv.Envelope, into []byte, encData *s
 	if len(into) < 13 {
 		into = make([]byte, 13)
 	}
-	binary.BigEndian.PutUint32(into, uint32(env.ID))
-	binary.BigEndian.PutUint32(into[4:], uint32(env.ReplyTo))
-	binary.BigEndian.PutUint32(into[8:], uint32(env.Kind))
+	encoding.PutUint32(into, uint32(env.ID))
+	encoding.PutUint32(into[4:], uint32(env.ReplyTo))
+	encoding.PutUint32(into[8:], uint32(env.Kind))
 	into[12] = 0
 
 	var bw bytewriter.Writer
