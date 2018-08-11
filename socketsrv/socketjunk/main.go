@@ -56,8 +56,6 @@ func run() error {
 			"tcpserver": func() (cmdy.Command, error) { return &tcpServerCommand{}, nil },
 			"pktclient": func() (cmdy.Command, error) { return &pktClientCommand{}, nil },
 			"pktserver": func() (cmdy.Command, error) { return &pktServerCommand{}, nil },
-			"udpclient": func() (cmdy.Command, error) { return &udpClientCommand{}, nil },
-			"udpserver": func() (cmdy.Command, error) { return &udpServerCommand{}, nil },
 			"wsclient":  func() (cmdy.Command, error) { return &wsClientCommand{}, nil },
 			"wsserver":  func() (cmdy.Command, error) { return &wsServerCommand{}, nil },
 		}), nil
@@ -355,111 +353,6 @@ func (sc *wsServerCommand) Run(ctx cmdy.Context) error {
 	handler := &ServerHandler{}
 
 	srv := socketsrv.NewServer(config, ln, negotiator, handler)
-	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
-	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
-		return err
-	}
-	fmt.Printf("listening on %s\n", sc.host)
-
-	return <-ender.Ends()
-}
-
-type udpClientCommand struct {
-	host string
-}
-
-func (cl *udpClientCommand) Synopsis() string     { return "udpclient" }
-func (cl *udpClientCommand) Flags() *cmdy.FlagSet { return nil }
-
-func (cl *udpClientCommand) Args() *args.ArgSet {
-	as := args.NewArgSet()
-	as.StringOptional(&cl.host, "host", ":9634", "host")
-	return as
-}
-
-func (cl *udpClientCommand) Run(ctx cmdy.Context) error {
-	// defer profile.Start().Stop()
-
-	config := socketsrv.ConnectorConfig{}
-	connector := socketsrv.NewConnector(config, negotiator)
-
-	handler := &ServerHandler{}
-	in, err := ioutil.ReadFile("/Users/bl/Downloads/The Rust Programming Language.htm")
-	if err != nil {
-		return err
-	}
-	in = in[:10000]
-	_ = in
-
-	iter := 50000
-	threads := 1
-	var wg sync.WaitGroup
-	wg.Add(threads)
-
-	s := time.Now()
-
-	for thread := 0; thread < threads; thread++ {
-		time.Sleep(1 * time.Millisecond)
-		go func(thread int) {
-			defer wg.Done()
-
-			client, err := connector.StreamClient(ctx, "udp", cl.host, handler)
-			if err != nil {
-				fmt.Println("thread", thread, "failed:", err)
-				return
-			}
-			defer client.Close()
-
-			rq := &TestRequest{
-				Foo: fmt.Sprintf("%d", thread),
-			}
-			for i := 0; i < iter; i++ {
-				rsp, err := (client.Request(ctx, rq))
-				if err != nil {
-					fmt.Println("thread", thread, "failed:", err)
-					return
-				}
-				_ = rsp
-				// fmt.Printf("%#v\n", rsp)
-			}
-		}(thread)
-	}
-
-	wg.Wait()
-
-	spew.Dump(time.Since(s))
-
-	return nil
-}
-
-type udpServerCommand struct {
-	host string
-}
-
-func (sc *udpServerCommand) Synopsis() string   { return "udpserver" }
-func (sc *udpServerCommand) Args() *args.ArgSet { return nil }
-
-func (sc *udpServerCommand) Flags() *cmdy.FlagSet {
-	fs := cmdy.NewFlagSet()
-	fs.StringVar(&sc.host, "host", ":9634", "host")
-	return fs
-}
-
-func (sc *udpServerCommand) Run(ctx cmdy.Context) error {
-	defer profile.Start(profile.MemProfile).Stop()
-
-	debugServer()
-
-	handler := &ServerHandler{}
-
-	var config socketsrv.ServerConfig
-	ln, err := socketsrv.ListenStream("udp", sc.host)
-	if err != nil {
-		return err
-	}
-
-	srv := socketsrv.NewServer(config, ln, negotiator, handler)
-	ender := service.NewEndListener(1)
 	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
 	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
 		return err
