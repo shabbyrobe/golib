@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -25,6 +27,7 @@ import (
 	"github.com/shabbyrobe/go-service/serviceutil"
 	"github.com/shabbyrobe/golib/iotools/bytewriter"
 	"github.com/shabbyrobe/golib/socketsrv"
+	"github.com/shabbyrobe/golib/socketsrv/packetsrv"
 	"github.com/shabbyrobe/golib/socketsrv/wsocketsrv"
 )
 
@@ -51,6 +54,10 @@ func run() error {
 		return cmdy.NewGroup("socketjunk", cmdy.Builders{
 			"tcpclient": func() (cmdy.Command, error) { return &tcpClientCommand{}, nil },
 			"tcpserver": func() (cmdy.Command, error) { return &tcpServerCommand{}, nil },
+			"pktclient": func() (cmdy.Command, error) { return &pktClientCommand{}, nil },
+			"pktserver": func() (cmdy.Command, error) { return &pktServerCommand{}, nil },
+			"udpclient": func() (cmdy.Command, error) { return &udpClientCommand{}, nil },
+			"udpserver": func() (cmdy.Command, error) { return &udpServerCommand{}, nil },
 			"wsclient":  func() (cmdy.Command, error) { return &wsClientCommand{}, nil },
 			"wsserver":  func() (cmdy.Command, error) { return &wsServerCommand{}, nil },
 		}), nil
@@ -78,28 +85,50 @@ func (cl *tcpClientCommand) Run(ctx cmdy.Context) error {
 	config := socketsrv.ConnectorConfig{}
 	connector := socketsrv.NewConnector(config, negotiator)
 
-	h := &ServerHandler{}
-	client, err := connector.NetClient(ctx, "tcp", cl.host, h)
-	if err != nil {
-		return err
-	}
-
+	handler := &ServerHandler{}
 	in, err := ioutil.ReadFile("/Users/bl/Downloads/The Rust Programming Language.htm")
 	if err != nil {
 		return err
 	}
 	in = in[:10000]
+	_ = in
+
+	iter := 50000
+	threads := 1
+	var wg sync.WaitGroup
+	wg.Add(threads)
 
 	s := time.Now()
-	rq := &TestRequest{
-		Foo: string(in),
+
+	for thread := 0; thread < threads; thread++ {
+		time.Sleep(1 * time.Millisecond)
+		go func(thread int) {
+			defer wg.Done()
+
+			client, err := connector.StreamClient(ctx, "tcp", cl.host, handler)
+			if err != nil {
+				fmt.Println("thread", thread, "failed:", err)
+				return
+			}
+			defer client.Close()
+
+			rq := &TestRequest{
+				Foo: fmt.Sprintf("%d", thread),
+			}
+			for i := 0; i < iter; i++ {
+				rsp, err := (client.Request(ctx, rq))
+				if err != nil {
+					fmt.Println("thread", thread, "failed:", err)
+					return
+				}
+				_ = rsp
+				// fmt.Printf("%#v\n", rsp)
+			}
+		}(thread)
 	}
-	for i := 0; i < 10000; i++ {
-		_, err := (client.Request(ctx, rq))
-		if err != nil {
-			return err
-		}
-	}
+
+	wg.Wait()
+
 	spew.Dump(time.Since(s))
 
 	return nil
@@ -119,44 +148,131 @@ func (sc *tcpServerCommand) Flags() *cmdy.FlagSet {
 }
 
 func (sc *tcpServerCommand) Run(ctx cmdy.Context) error {
+	defer profile.Start(profile.MemProfile).Stop()
+
+	debugServer()
+
+	handler := &ServerHandler{}
+
+	var config socketsrv.ServerConfig
+	ln, err := socketsrv.ListenStream("tcp", sc.host)
+	if err != nil {
+		return err
+	}
+
+	srv := socketsrv.NewServer(config, ln, negotiator, handler)
+	ender := service.NewEndListener(1)
+	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
+	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
+		return err
+	}
+	fmt.Printf("listening on %s\n", sc.host)
+
+	return <-ender.Ends()
+}
+
+type pktClientCommand struct {
+	host string
+}
+
+func (cl *pktClientCommand) Synopsis() string     { return "pktclient" }
+func (cl *pktClientCommand) Flags() *cmdy.FlagSet { return nil }
+
+func (cl *pktClientCommand) Args() *args.ArgSet {
+	as := args.NewArgSet()
+	as.StringOptional(&cl.host, "host", "localhost:9633", "host")
+	return as
+}
+
+func (cl *pktClientCommand) Run(ctx cmdy.Context) error {
+	config := socketsrv.ConnectorConfig{}
+	connector := socketsrv.NewConnector(config, negotiator)
+
+	dialer := net.Dialer{}
+	handler := &ServerHandler{}
+
+	in, err := ioutil.ReadFile("/Users/bl/Downloads/The Rust Programming Language.htm")
+	if err != nil {
+		return err
+	}
+	in = in[:50]
+	_ = in
+
+	s := time.Now()
+
+	iter := 200
+	threads := 1000
+	var wg sync.WaitGroup
+	wg.Add(threads)
+
+	for thread := 0; thread < threads; thread++ {
+		go func(thread int) {
+			defer wg.Done()
+
+			conn, err := dialer.DialContext(ctx, "udp", cl.host)
+			if err != nil {
+				panic(err)
+			}
+			client, err := connector.Client(ctx, packetsrv.ClientCommunicator(conn), handler)
+			if err != nil {
+				panic(err)
+			}
+
+			rq := &TestRequest{
+				Foo: fmt.Sprintf("%d", thread),
+			}
+			for i := 0; i < iter; i++ {
+				rsp, err := (client.Request(ctx, rq))
+				if err != nil {
+					panic(err)
+				}
+				_ = rsp
+				// fmt.Printf("%#v\n", rsp)
+			}
+		}(thread)
+	}
+
+	wg.Wait()
+	spew.Dump(time.Since(s))
+
+	return nil
+}
+
+type pktServerCommand struct {
+	host string
+}
+
+func (sc *pktServerCommand) Synopsis() string   { return "pktserver" }
+func (sc *pktServerCommand) Args() *args.ArgSet { return nil }
+
+func (sc *pktServerCommand) Flags() *cmdy.FlagSet {
+	fs := cmdy.NewFlagSet()
+	fs.StringVar(&sc.host, "host", ":9633", "host")
+	return fs
+}
+
+func (sc *pktServerCommand) Run(ctx cmdy.Context) error {
 	defer profile.Start().Stop()
 
-	{
-		mux := http.NewServeMux()
-		mux.Handle("/debug/vars", expvar.Handler())
-		mux.HandleFunc("/debug/pprof/", pprof.Index)
-		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	debugServer()
 
-		hsrv := &http.Server{Addr: "localhost:14123"}
-		hsrv.Handler = mux
-		svc := service.New("", &serviceutil.HTTP{Server: hsrv})
-		if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
-			return err
-		}
+	handler := &ServerHandler{}
+
+	var config socketsrv.ServerConfig
+	ln, err := packetsrv.Listen("udp", sc.host)
+	if err != nil {
+		return err
 	}
 
-	{
-		handler := &ServerHandler{}
-
-		var config socketsrv.ServerConfig
-		ln, err := socketsrv.ListenStream("tcp", sc.host)
-		if err != nil {
-			return err
-		}
-
-		srv := socketsrv.NewServer(config, ln, negotiator, handler)
-		ender := service.NewEndListener(1)
-		svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
-		if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
-			return err
-		}
-		fmt.Printf("listening on %s\n", sc.host)
-
-		return <-ender.Ends()
+	srv := socketsrv.NewServer(config, ln, negotiator, handler)
+	ender := service.NewEndListener(1)
+	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
+	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
+		return err
 	}
+	fmt.Printf("listening on %s\n", sc.host)
+
+	return <-ender.Ends()
 }
 
 type wsClientCommand struct {
@@ -239,6 +355,111 @@ func (sc *wsServerCommand) Run(ctx cmdy.Context) error {
 	handler := &ServerHandler{}
 
 	srv := socketsrv.NewServer(config, ln, negotiator, handler)
+	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
+	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
+		return err
+	}
+	fmt.Printf("listening on %s\n", sc.host)
+
+	return <-ender.Ends()
+}
+
+type udpClientCommand struct {
+	host string
+}
+
+func (cl *udpClientCommand) Synopsis() string     { return "udpclient" }
+func (cl *udpClientCommand) Flags() *cmdy.FlagSet { return nil }
+
+func (cl *udpClientCommand) Args() *args.ArgSet {
+	as := args.NewArgSet()
+	as.StringOptional(&cl.host, "host", ":9634", "host")
+	return as
+}
+
+func (cl *udpClientCommand) Run(ctx cmdy.Context) error {
+	// defer profile.Start().Stop()
+
+	config := socketsrv.ConnectorConfig{}
+	connector := socketsrv.NewConnector(config, negotiator)
+
+	handler := &ServerHandler{}
+	in, err := ioutil.ReadFile("/Users/bl/Downloads/The Rust Programming Language.htm")
+	if err != nil {
+		return err
+	}
+	in = in[:10000]
+	_ = in
+
+	iter := 50000
+	threads := 1
+	var wg sync.WaitGroup
+	wg.Add(threads)
+
+	s := time.Now()
+
+	for thread := 0; thread < threads; thread++ {
+		time.Sleep(1 * time.Millisecond)
+		go func(thread int) {
+			defer wg.Done()
+
+			client, err := connector.StreamClient(ctx, "udp", cl.host, handler)
+			if err != nil {
+				fmt.Println("thread", thread, "failed:", err)
+				return
+			}
+			defer client.Close()
+
+			rq := &TestRequest{
+				Foo: fmt.Sprintf("%d", thread),
+			}
+			for i := 0; i < iter; i++ {
+				rsp, err := (client.Request(ctx, rq))
+				if err != nil {
+					fmt.Println("thread", thread, "failed:", err)
+					return
+				}
+				_ = rsp
+				// fmt.Printf("%#v\n", rsp)
+			}
+		}(thread)
+	}
+
+	wg.Wait()
+
+	spew.Dump(time.Since(s))
+
+	return nil
+}
+
+type udpServerCommand struct {
+	host string
+}
+
+func (sc *udpServerCommand) Synopsis() string   { return "udpserver" }
+func (sc *udpServerCommand) Args() *args.ArgSet { return nil }
+
+func (sc *udpServerCommand) Flags() *cmdy.FlagSet {
+	fs := cmdy.NewFlagSet()
+	fs.StringVar(&sc.host, "host", ":9634", "host")
+	return fs
+}
+
+func (sc *udpServerCommand) Run(ctx cmdy.Context) error {
+	defer profile.Start(profile.MemProfile).Stop()
+
+	debugServer()
+
+	handler := &ServerHandler{}
+
+	var config socketsrv.ServerConfig
+	ln, err := socketsrv.ListenStream("udp", sc.host)
+	if err != nil {
+		return err
+	}
+
+	srv := socketsrv.NewServer(config, ln, negotiator, handler)
+	ender := service.NewEndListener(1)
 	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
 	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
 		return err
@@ -417,23 +638,20 @@ func (p AltProto) Encode(env socketsrv.Envelope, into []byte, encData *socketsrv
 		*encData = &altProtoData{}
 	}
 
-	if len(into) < 12 {
-		into = make([]byte, 12)
-	}
-	encoding.PutUint32(into, uint32(env.ID))
-	encoding.PutUint32(into[4:], uint32(env.ReplyTo))
-	encoding.PutUint32(into[8:], uint32(env.Kind))
+	var hdr [12]byte
+	encoding.PutUint32(hdr[0:], uint32(env.ID))
+	encoding.PutUint32(hdr[4:], uint32(env.ReplyTo))
+	encoding.PutUint32(hdr[8:], uint32(env.Kind))
 
-	var bw bytewriter.Writer
-	bw.Give(into[:12])
+	buf := bytes.NewBuffer(into[:0])
+	buf.Write(hdr[:])
 
-	enc := json.NewEncoder(&bw)
+	enc := json.NewEncoder(buf)
 	if err := enc.Encode(env.Message); err != nil {
 		return nil, err
 	}
 
-	out, ilen := bw.Take()
-	return out[:ilen], nil
+	return buf.Bytes(), nil
 }
 
 type altProtoData struct {
@@ -587,4 +805,21 @@ func (p CompressingProto) Encode(env socketsrv.Envelope, into []byte, encData *s
 		out, ilen = bw.Take()
 	}
 	return out[:ilen], nil
+}
+
+func debugServer() {
+	mux := http.NewServeMux()
+	mux.Handle("/debug/vars", expvar.Handler())
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	hsrv := &http.Server{Addr: "localhost:14123"}
+	hsrv.Handler = mux
+	svc := service.New("", &serviceutil.HTTP{Server: hsrv})
+	if err := service.StartTimeout(10*time.Second, services.Runner(), svc); err != nil {
+		panic(err)
+	}
 }

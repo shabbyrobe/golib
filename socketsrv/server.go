@@ -52,11 +52,12 @@ func (srv *Server) onEnd(stage service.Stage, svc *service.Service, err error) {
 	id := ConnID(svc.Name)
 	srv.connsMu.Lock()
 	delete(srv.conns, id)
+	ln := len(srv.conns)
 	srv.connsMu.Unlock()
 
 	// FIXME:
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("onend", ln, err)
 	}
 }
 

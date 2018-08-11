@@ -2,6 +2,7 @@ package packetsrv
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"time"
 
@@ -9,83 +10,82 @@ import (
 )
 
 type communicator struct {
-	conn  net.PacketConn
-	addr  net.Addr
-	pongs chan time.Time
+	addr   net.Addr
+	reader chan readMsg
+	writer chan<- writeMsg
+	closer chan<- net.Addr
+	pongs  chan time.Time
+	stop   chan struct{}
+
+	// lastRead is owned for reading and writing by the Listener, not by this
+	// struct.
+	lastRead time.Time
 }
 
 var _ socketsrv.Communicator = &communicator{}
 
+func newCommunicator(
+	addr net.Addr,
+	reader chan readMsg,
+	writer chan<- writeMsg,
+	closer chan<- net.Addr,
+	stop chan struct{},
+) *communicator {
+
+	return &communicator{
+		addr:   addr,
+		pongs:  make(chan time.Time, 1),
+		reader: reader,
+		writer: writer,
+		closer: closer,
+		stop:   stop,
+	}
+}
+
 func (pc *communicator) Close() error {
-	return pc.conn.Close()
+	select {
+	case pc.closer <- pc.addr:
+	case <-pc.stop:
+	}
+	return nil
 }
 
 func (pc *communicator) ReadMessage(into []byte, limit uint32, timeout time.Duration) (buf []byte, rerr error) {
-	if timeout > 0 {
-		if err := pc.conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
-			return into, err
+	// FIXME: need some sort of sync.Cond-based shitshow for efficiency here,
+	// this is foul.
+	tc := time.After(timeout)
+	select {
+	case msg, ok := <-pc.reader:
+		if ok {
+			return msg.buf, nil
+		} else {
+			return into, io.EOF
 		}
+	case <-pc.stop:
+		return nil, io.EOF
+	case <-tc:
+		return into, fmt.Errorf("packetsrv: timeout")
 	}
-
-	if cap(into) < int(limit) {
-		into = make([]byte, int(limit))
-	} else {
-		into = into[:int(limit)]
-	}
-
-	n, addr, err := pc.conn.ReadFrom(into)
-	if err != nil {
-		return into, err
-	}
-	if addr != pc.addr {
-		return into[:0], nil
-	}
-	if n == 1 && into[0] == 0 {
-		select {
-		case pc.pongs <- time.Now():
-		default:
-		}
-		return into[:0], nil
-	}
-
-	return into[:n], nil
 }
 
-func (pc *communicator) WriteMessage(data []byte, limit uint32, timeout time.Duration) (rerr error) {
-	if timeout > 0 {
-		if err := pc.conn.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
-			return err
-		}
-	}
+func (pc *communicator) WriteMessage(data []byte, timeout time.Duration) (rerr error) {
+	// FIXME: need some sort of sync.Cond-based shitshow for efficiency here,
+	// this is foul.
+	tc := time.After(timeout)
+	errc := make(chan error, 1)
 
-	mlen := len(data)
-	if uint32(mlen) > limit {
-		return fmt.Errorf("socket: packet of length %d exceeded limit %d", mlen, limit)
+	select {
+	case pc.writer <- writeMsg{addr: pc.addr, buf: data, errc: errc}:
+		return <-errc
+	case <-pc.stop:
+		return io.EOF
+	case <-tc:
+		return fmt.Errorf("packetsrv: write timeout")
 	}
-
-	if n, err := pc.conn.WriteTo(data, pc.addr); err != nil {
-		return err
-	} else if n != mlen {
-		return fmt.Errorf("short message write")
-	}
-
-	return nil
 }
 
 func (pc *communicator) Ping(timeout time.Duration) (rerr error) {
-	if timeout > 0 {
-		if err := pc.conn.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
-			return err
-		}
-	}
-
-	if n, err := pc.conn.WriteTo(packetPingBuf, pc.addr); err != nil {
-		return err
-	} else if n != packetPingBufLen {
-		return fmt.Errorf("short message write")
-	}
-
-	return nil
+	return pc.WriteMessage(packetPingBuf, timeout)
 }
 
 var packetPingBuf = []byte{0}

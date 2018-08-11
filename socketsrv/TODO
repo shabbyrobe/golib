@@ -3,8 +3,6 @@
 - Disconnection callback
 - UDP experiment
 - Unix socket experiment
-- Version negotiation
-  - Should support arbitrary protocols
+- Can version negotiation support arbitrary protocols?
 - Could this be used for watchout's linewise protocol?
 - pub/sub
-
