@@ -10,8 +10,18 @@ type ConnConfig struct {
 	HeartbeatInterval  time.Duration
 	ReadTimeout        time.Duration
 	WriteTimeout       time.Duration
-	ResponseTimeout    time.Duration
-	CleanupInterval    time.Duration
+
+	// ResponseTimeout declares how long the connection will wait for a
+	// response to the MessageID before yielding an error. The effective
+	// ResponseTimeout is 'ResponseTimeout <= n <= ResponseTimeout +
+	// CleanupInterval', so make sure you balance those two intervals to suit
+	// your needs.
+	ResponseTimeout time.Duration
+
+	// CleanupInterval determines how frequently to check for responses that
+	// have timed out. Cleanup blocks the connection and considers all messages
+	// currently in-flight.
+	CleanupInterval time.Duration
 }
 
 func (c ConnConfig) IsZero() bool {
@@ -22,11 +32,12 @@ func DefaultConnConfig() ConnConfig {
 	return ConnConfig{
 		IncomingBuffer:     1024,
 		OutgoingBuffer:     1024,
+		HeartbeatInterval:  2 * time.Second,
 		WriteTimeout:       10 * time.Second,
 		ReadTimeout:        10 * time.Second,
 		ReadBufferInitial:  2048,
 		WriteBufferInitial: 2048,
-		CleanupInterval:    60 * time.Second,
+		CleanupInterval:    5 * time.Second,
 		ResponseTimeout:    10 * time.Second,
 	}
 }
