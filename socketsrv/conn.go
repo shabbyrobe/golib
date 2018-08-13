@@ -309,6 +309,8 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 }
 
 func (c *conn) nextID() MessageID {
+	// This starts at 1 and increments by 2 to guarantee that we will never use
+	// ID 0, which is reserved to mean "No message ID".
 	return MessageID(atomic.AddUint32(&c.nextMessageID, 2))
 }
 
