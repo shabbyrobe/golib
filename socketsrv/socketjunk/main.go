@@ -479,7 +479,7 @@ type JSONEnvelope struct {
 
 type ServerHandler struct{}
 
-func (h ServerHandler) HandleIncoming(id socketsrv.ConnID, msg socketsrv.Message) (rs socketsrv.Message, rerr error) {
+func (h ServerHandler) HandleRequest(id socketsrv.ConnID, msg socketsrv.Message) (rs socketsrv.Message, rerr error) {
 	switch msg := msg.(type) {
 	case *TestRequest:
 		return &TestResponse{Bar: msg.Foo + ": yep!"}, nil

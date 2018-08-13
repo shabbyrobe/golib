@@ -202,7 +202,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 		// Drain the calls channel and add the items to the map for shutdown reporting:
 		close(c.calls)
 		for call := range c.calls {
-			calls[call.id] = call
+			calls[call.env.ID] = call
 		}
 
 		// Report shutdown to all pending calls:
@@ -240,7 +240,6 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 			call, ok := calls[env.ID]
 			if ok {
 				delete(calls, env.ID)
-
 				select {
 				case call.rs <- Result{Message: env.Message}:
 				default:
@@ -248,7 +247,14 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 				}
 
 			} else {
-				rs, err := c.handler.HandleIncoming(c.id, env.Message)
+				irq := IncomingRequest{
+					conn:      c,
+					ConnID:    c.id,
+					MessageID: env.ID,
+					Message:   env.Message,
+					Deadline:  call.deadline,
+				}
+				rs, err := c.handler.HandleRequest(ctx, irq)
 				if err != nil {
 					return err
 				}
@@ -267,10 +273,22 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 
 		// Process call:
 		case out := <-c.calls:
-			calls[out.id] = out
-			kind, err := mapper.MessageKind(out.msg)
+			if out.env.ReplyTo == MessageNone {
+				calls[out.env.ID] = out
+			}
+
+			// If the call itself carries an error, this has come from a Handler. These
+			// errors need to terminate the connection and be passed through to the
+			// disconnection handler as there is no way to handle errors of this kind
+			// inside a handler.
+			if out.err != nil {
+				return out.err
+			}
+
+			var err error
+			out.env.Kind, err = mapper.MessageKind(out.env.Message)
 			if err != nil {
-				delete(calls, out.id)
+				delete(calls, out.env.ID)
 				select {
 				case out.rs <- Result{Err: err}:
 				default:
@@ -279,7 +297,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 			}
 
 			select {
-			case c.outgoing <- Envelope{ID: out.id, Message: out.msg, Kind: kind}:
+			case c.outgoing <- out.env:
 			case <-ctx.Done():
 				return nil
 			}
@@ -287,7 +305,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 		// Cleanup:
 		case at := <-cleanup:
 			for id, call := range calls {
-				if at.Sub(call.at) < c.config.ResponseTimeout {
+				if call.deadline.Sub(at) >= 0 {
 					continue
 				}
 				delete(calls, id)
@@ -314,19 +332,16 @@ func (c *conn) nextID() MessageID {
 	return MessageID(atomic.AddUint32(&c.nextMessageID, 2))
 }
 
-func (c *conn) Send(ctx context.Context, msg Message, recv chan<- Result) (rerr error) {
+func (c *conn) send(ctx context.Context, sendCall call) (rerr error) {
 	if atomic.LoadUint32(&c.state) != connRunning {
 		return fmt.Errorf("socket: send to conn which is not running")
 	}
 
-	c.sendWait.Add(1)
-
-	sendCall := call{
-		id:  c.nextID(),
-		at:  time.Now(),
-		rs:  recv,
-		msg: msg,
+	if c.config.ResponseTimeout > 0 {
+		sendCall.deadline = time.Now().Add(c.config.ResponseTimeout)
 	}
+
+	c.sendWait.Add(1)
 
 	select {
 	case c.calls <- sendCall:
@@ -340,6 +355,42 @@ func (c *conn) Send(ctx context.Context, msg Message, recv chan<- Result) (rerr 
 	case <-ctx.Done():
 		c.sendWait.Done()
 		return ctx.Err()
+	}
+}
+
+func (c *conn) Send(ctx context.Context, msg Message, recv chan<- Result) (rerr error) {
+	sendCall := call{
+		env: Envelope{
+			ID:      c.nextID(),
+			Message: msg,
+		},
+		rs: recv,
+	}
+	return c.send(ctx, sendCall)
+}
+
+func (c *conn) Reply(ctx context.Context, to MessageID, msg Message, replyError error) (rerr error) {
+	rc := make(chan Result, 1)
+	sendCall := call{
+		env: Envelope{
+			ID:      c.nextID(),
+			ReplyTo: to,
+			Message: msg,
+		},
+		err: replyError,
+		rs:  rc,
+	}
+	if err := c.send(ctx, sendCall); err != nil {
+		return err
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+
+	case result := <-rc:
+		_, err := result.Message, result.Err
+		return err
 	}
 }
 
@@ -360,8 +411,8 @@ func (c *conn) Request(ctx context.Context, msg Message) (resp Message, rerr err
 }
 
 type call struct {
-	rs  chan<- Result
-	id  MessageID
-	msg Message
-	at  time.Time
+	env      Envelope
+	rs       chan<- Result
+	err      error
+	deadline time.Time
 }

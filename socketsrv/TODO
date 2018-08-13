@@ -1,4 +1,3 @@
-- Tests
 - Connection callback
 - Disconnection callback
 - UDP experiment
@@ -6,3 +5,12 @@
 - Can version negotiation support arbitrary protocols?
 - Could this be used for watchout's linewise protocol?
 - pub/sub
+- error type in mapper
+- handeincoming needs a context param
+- connector/client should accept a service listener so we can receive onend
+
+Tests:
+- when replyto does not exist in awaiting call map
+- replying to a reply... maybe this should be possible? see what happens.
+- response timeout
+
