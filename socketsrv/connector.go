@@ -27,6 +27,10 @@ func NewConnector(config ConnectorConfig, negotiator Negotiator) *Connector {
 	return dl
 }
 
+func (c *Connector) Shutdown(ctx context.Context) error {
+	return c.clients.Shutdown(ctx)
+}
+
 func (c *Connector) StreamClient(ctx context.Context, network, host string, handler Handler) (Client, error) {
 	d := net.Dialer{}
 	conn, err := d.DialContext(ctx, network, host)
