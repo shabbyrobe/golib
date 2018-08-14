@@ -3,6 +3,7 @@ package socketsrv
 import (
 	"context"
 	"net"
+	"sync"
 
 	service "github.com/shabbyrobe/go-service"
 	"github.com/shabbyrobe/golib/incrementer"
@@ -12,7 +13,24 @@ type Connector struct {
 	config     ConnectorConfig
 	clients    service.Runner
 	negotiator Negotiator
+
 	nextID     incrementer.Inc
+	nextIDLock sync.Mutex
+}
+
+type ClientOption func(cnct *Connector, c *client)
+
+type OnClientDisconnect func(connector *Connector, id ConnID, err error)
+
+func ClientDisconnect(cb OnClientDisconnect) ClientOption {
+	return func(cnct *Connector, c *client) {
+		c.svc.WithOnEnd(func(stage service.Stage, svc *service.Service, err error) {
+			if stage == service.StageRun {
+				c := svc.Runnable.(*conn)
+				cb(cnct, c.ID(), err)
+			}
+		})
+	}
 }
 
 func NewConnector(config ConnectorConfig, negotiator Negotiator) *Connector {
@@ -31,25 +49,36 @@ func (c *Connector) Shutdown(ctx context.Context) error {
 	return c.clients.Shutdown(ctx)
 }
 
-func (c *Connector) StreamClient(ctx context.Context, network, host string, handler Handler) (Client, error) {
-	d := net.Dialer{}
+func (c *Connector) StreamClient(ctx context.Context, network, host string, handler Handler, opts ...ClientOption) (Client, error) {
+	d := net.Dialer{
+		Timeout: c.config.DialTimeout,
+	}
 	conn, err := d.DialContext(ctx, network, host)
 	if err != nil {
 		return nil, err
 	}
 
 	raw := Stream(conn)
-	return c.Client(ctx, raw, handler)
+	return c.Client(ctx, raw, handler, opts...)
 }
 
-func (c *Connector) Client(ctx context.Context, rc Communicator, handler Handler) (Client, error) {
+func (c *Connector) Client(ctx context.Context, rc Communicator, handler Handler, opts ...ClientOption) (Client, error) {
+	c.nextIDLock.Lock()
 	id := ConnID(c.nextID.Next())
+	c.nextIDLock.Unlock()
+
 	conn := newConn(id, ClientSide, c.config.Conn, rc, c.negotiator, handler)
+	svc := service.New(service.Name(conn.ID()), conn)
+
 	cl := &client{
 		conn:      conn,
-		svc:       service.New(service.Name(conn.ID()), conn),
+		svc:       svc,
 		connector: c,
 	}
+	for _, o := range opts {
+		o(c, cl)
+	}
+
 	if err := c.clients.Start(ctx, cl.svc); err != nil {
 		_ = rc.Close()
 		return nil, err

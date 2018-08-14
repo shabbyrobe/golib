@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
 	"expvar"
@@ -65,11 +66,20 @@ func run() error {
 }
 
 type tcpClientCommand struct {
-	host string
+	host    string
+	total   int
+	threads int
+	wait    time.Duration
 }
 
-func (cl *tcpClientCommand) Synopsis() string     { return "tcpclient" }
-func (cl *tcpClientCommand) Flags() *cmdy.FlagSet { return nil }
+func (cl *tcpClientCommand) Synopsis() string { return "tcpclient" }
+func (cl *tcpClientCommand) Flags() *cmdy.FlagSet {
+	fs := cmdy.NewFlagSet()
+	fs.IntVar(&cl.total, "n", 100000, "total messages to send")
+	fs.IntVar(&cl.threads, "c", 10, "threads")
+	fs.DurationVar(&cl.wait, "w", 0, "wait between requests")
+	return fs
+}
 
 func (cl *tcpClientCommand) Args() *args.ArgSet {
 	as := args.NewArgSet()
@@ -80,30 +90,41 @@ func (cl *tcpClientCommand) Args() *args.ArgSet {
 func (cl *tcpClientCommand) Run(ctx cmdy.Context) error {
 	// defer profile.Start().Stop()
 
-	config := socketsrv.ConnectorConfig{}
+	config := socketsrv.DefaultConnectorConfig()
+	config.Conn.ResponseTimeout = 20 * time.Second
+	config.Conn.ReadTimeout = 20 * time.Second
+	config.Conn.WriteTimeout = 20 * time.Second
+
 	connector := socketsrv.NewConnector(config, negotiator)
 
 	handler := &ServerHandler{}
-	in, err := ioutil.ReadFile("/Users/bl/Downloads/The Rust Programming Language.htm")
-	if err != nil {
-		return err
-	}
-	in = in[:10000]
+	in := make([]byte, 10000)
+	rand.Reader.Read(in)
 	_ = in
 
-	iter := 50000
-	threads := 1
 	var wg sync.WaitGroup
-	wg.Add(threads)
+	wg.Add(cl.threads)
+
+	iter := cl.total / cl.threads
+	left := cl.total % cl.threads
 
 	s := time.Now()
 
-	for thread := 0; thread < threads; thread++ {
+	for thread := 0; thread < cl.threads; thread++ {
 		time.Sleep(1 * time.Millisecond)
-		go func(thread int) {
+		citer := iter
+		if thread == 0 {
+			citer += left
+		}
+
+		go func(thread int, iter int) {
 			defer wg.Done()
 
-			client, err := connector.StreamClient(ctx, "tcp", cl.host, handler)
+			client, err := connector.StreamClient(ctx, "tcp", cl.host, handler,
+				socketsrv.ClientDisconnect(func(connector *socketsrv.Connector, id socketsrv.ConnID, err error) {
+					fmt.Println(id, err)
+				}),
+			)
 			if err != nil {
 				fmt.Println("thread", thread, "failed:", err)
 				return
@@ -113,21 +134,29 @@ func (cl *tcpClientCommand) Run(ctx cmdy.Context) error {
 			rq := &TestRequest{
 				Foo: fmt.Sprintf("%d", thread),
 			}
+			rs := make(chan socketsrv.Result, 1)
 			for i := 0; i < iter; i++ {
-				rsp, err := (client.Request(ctx, rq))
+				err := (client.Send(ctx, rq, rs))
 				if err != nil {
 					fmt.Println("thread", thread, "failed:", err)
 					return
 				}
+				rsp := <-rs
 				_ = rsp
+				if cl.wait > 0 {
+					time.Sleep(cl.wait)
+				}
 				// fmt.Printf("%#v\n", rsp)
 			}
-		}(thread)
+		}(thread, citer)
 	}
 
 	wg.Wait()
 
-	spew.Dump(time.Since(s))
+	since := time.Since(s)
+	fmt.Println(since,
+		since/time.Duration(cl.total),
+		int64(cl.total)*int64(time.Second)/int64(since))
 
 	return nil
 }
@@ -146,19 +175,30 @@ func (sc *tcpServerCommand) Flags() *cmdy.FlagSet {
 }
 
 func (sc *tcpServerCommand) Run(ctx cmdy.Context) error {
-	defer profile.Start(profile.MemProfile).Stop()
+	// defer profile.Start(profile.BlockProfile).Stop()
 
 	debugServer()
 
 	handler := &ServerHandler{}
 
-	var config socketsrv.ServerConfig
+	var config = socketsrv.DefaultServerConfig()
+	config.Conn.ResponseTimeout = 20 * time.Second
+	config.Conn.ReadTimeout = 20 * time.Second
+	config.Conn.WriteTimeout = 20 * time.Second
+
 	ln, err := socketsrv.ListenStream("tcp", sc.host)
 	if err != nil {
 		return err
 	}
 
-	srv := socketsrv.NewServer(config, ln, negotiator, handler)
+	srv := socketsrv.NewServer(config, ln, negotiator, handler,
+		socketsrv.ServerConnect(func(srv *socketsrv.Server, id socketsrv.ConnID) {
+			fmt.Println("connect", id)
+		}),
+		socketsrv.ServerDisconnect(func(srv *socketsrv.Server, id socketsrv.ConnID, err error) {
+			fmt.Println("disconnect", id, err)
+		}),
+	)
 	ender := service.NewEndListener(1)
 	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
 	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
@@ -479,8 +519,8 @@ type JSONEnvelope struct {
 
 type ServerHandler struct{}
 
-func (h ServerHandler) HandleRequest(id socketsrv.ConnID, msg socketsrv.Message) (rs socketsrv.Message, rerr error) {
-	switch msg := msg.(type) {
+func (h ServerHandler) HandleRequest(ctx context.Context, in socketsrv.IncomingRequest) (rs socketsrv.Message, rerr error) {
+	switch msg := in.Message.(type) {
 	case *TestRequest:
 		return &TestResponse{Bar: msg.Foo + ": yep!"}, nil
 	default:
@@ -709,7 +749,7 @@ func debugServer() {
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-	hsrv := &http.Server{Addr: "localhost:14123"}
+	hsrv := &http.Server{Addr: ":14123"}
 	hsrv.Handler = mux
 	svc := service.New("", &serviceutil.HTTP{Server: hsrv})
 	if err := service.StartTimeout(10*time.Second, services.Runner(), svc); err != nil {

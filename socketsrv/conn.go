@@ -2,7 +2,6 @@ package socketsrv
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -99,7 +98,11 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 	// Reader thread:
 	go func() {
 		rdBuf := make([]byte, c.config.ReadBufferInitial)
+
+		// encData contains reader-local shared memory that the Protocol may use
+		// to store connection-scoped arbitrary data:
 		var encData ProtoData
+
 		defer func() {
 			if encData != nil {
 				_ = encData.Close()
@@ -135,7 +138,11 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 	// Writer thread:
 	go func() {
 		wrBuf := make([]byte, 0, c.config.WriteBufferInitial)
+
+		// decData contains writer-local shared memory that the Protocol may use
+		// to store connection-scoped arbitrary data:
 		var decData ProtoData
+
 		defer func() {
 			if decData != nil {
 				_ = decData.Close()
@@ -180,6 +187,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 		}
 	}()
 
+	// calls contains all requests that are currently awaiting a response.
 	calls := make(map[MessageID]call)
 
 	// Shutdown procedure:
@@ -208,7 +216,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 		// Report shutdown to all pending calls:
 		rserr := rerr
 		if rserr == nil {
-			rserr = errors.New("socket: shutdown")
+			rserr = errConnShutdown
 		}
 		for _, call := range calls {
 			select {
@@ -252,7 +260,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 					ConnID:    c.id,
 					MessageID: env.ID,
 					Message:   env.Message,
-					Deadline:  call.deadline,
+					Deadline:  time.Now().Add(c.config.ResponseTimeout),
 				}
 				rs, err := c.handler.HandleRequest(ctx, irq)
 				if err != nil {
@@ -311,7 +319,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 				delete(calls, id)
 
 				select {
-				case call.rs <- Result{Err: errors.New("socketsrv: response timeout")}:
+				case call.rs <- Result{Err: errResponseTimeout}:
 				default:
 					return fmt.Errorf("call receiver would block")
 				}
@@ -333,16 +341,11 @@ func (c *conn) nextID() MessageID {
 }
 
 func (c *conn) send(ctx context.Context, sendCall call) (rerr error) {
-	if atomic.LoadUint32(&c.state) != connRunning {
-		return fmt.Errorf("socket: send to conn which is not running")
-	}
-
 	if c.config.ResponseTimeout > 0 {
 		sendCall.deadline = time.Now().Add(c.config.ResponseTimeout)
 	}
 
 	c.sendWait.Add(1)
-
 	select {
 	case c.calls <- sendCall:
 		c.sendWait.Done()
@@ -350,7 +353,7 @@ func (c *conn) send(ctx context.Context, sendCall call) (rerr error) {
 
 	case <-c.stop:
 		c.sendWait.Done()
-		return errors.New("socket: shutdown")
+		return errConnShutdown
 
 	case <-ctx.Done():
 		c.sendWait.Done()
@@ -358,7 +361,38 @@ func (c *conn) send(ctx context.Context, sendCall call) (rerr error) {
 	}
 }
 
+var resultPool = sync.Pool{
+	New: func() interface{} {
+		return make(chan Result, 1)
+	},
+}
+
+func (c *conn) sendResult(ctx context.Context, sendCall call) (rs Message, rerr error) {
+	recv := resultPool.Get().(chan Result)
+	sendCall.rs = recv
+	if err := c.send(ctx, sendCall); err != nil {
+		return nil, rerr
+	}
+
+	// Don't wait on c.stop() in this select block. The stop channel may yield before the
+	// result channel does even when a real result is available.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+
+	case result := <-recv:
+		// We can only easily guarantee the channel is in a state fit to return
+		// to the pool if we have received a value from it. It may be possible
+		// in other branches but it's harder to verify.
+		resultPool.Put(recv)
+		return result.Message, result.Err
+	}
+}
+
 func (c *conn) Send(ctx context.Context, msg Message, recv chan<- Result) (rerr error) {
+	if atomic.LoadUint32(&c.state) != connRunning {
+		return errConnSendNotRunning
+	}
 	sendCall := call{
 		env: Envelope{
 			ID:      c.nextID(),
@@ -366,11 +400,16 @@ func (c *conn) Send(ctx context.Context, msg Message, recv chan<- Result) (rerr 
 		},
 		rs: recv,
 	}
-	return c.send(ctx, sendCall)
+	if err := c.send(ctx, sendCall); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *conn) Reply(ctx context.Context, to MessageID, msg Message, replyError error) (rerr error) {
-	rc := make(chan Result, 1)
+	if atomic.LoadUint32(&c.state) != connRunning {
+		return errConnSendNotRunning
+	}
 	sendCall := call{
 		env: Envelope{
 			ID:      c.nextID(),
@@ -378,36 +417,23 @@ func (c *conn) Reply(ctx context.Context, to MessageID, msg Message, replyError 
 			Message: msg,
 		},
 		err: replyError,
-		rs:  rc,
 	}
-	if err := c.send(ctx, sendCall); err != nil {
-		return err
-	}
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-
-	case result := <-rc:
-		_, err := result.Message, result.Err
-		return err
-	}
+	_, rerr = c.sendResult(ctx, sendCall)
+	return rerr
 }
 
 func (c *conn) Request(ctx context.Context, msg Message) (resp Message, rerr error) {
-	rc := make(chan Result, 1)
-	if err := c.Send(ctx, msg, rc); err != nil {
-		return nil, err
+	if atomic.LoadUint32(&c.state) != connRunning {
+		return nil, errConnSendNotRunning
 	}
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-
-	case result := <-rc:
-		resp, rerr = result.Message, result.Err
-		return resp, rerr
+	sendCall := call{
+		env: Envelope{
+			ID:      c.nextID(),
+			Message: msg,
+		},
 	}
+	resp, rerr = c.sendResult(ctx, sendCall)
+	return resp, rerr
 }
 
 type call struct {

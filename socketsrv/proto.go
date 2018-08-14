@@ -55,9 +55,26 @@ type IncomingRequest struct {
 //
 // Calling Done more than once is an error.
 //
+// Hopefully temporary caveat:
+//
+// Avoid using the Context that HandleRequest receives for the first argument;
+// the context will be cancelled as soon as the connection is lost. This leads
+// to the following race:
+//
+//  - conn.Reply() is called in thread a
+//  - conn.Reply() tells the connection's reactor to write the response
+//  - connection reactor writes reply to remote in thread b
+//  - connection reactor sends result back to conn.Reply() through a channel
+//  - remote closes, terminating connection
+//  - both ctx.Done() and the connection reactor's reply will be available to
+//    the select block in conn.Reply(), which gives you a 50/50 chance of the
+//    correct 'nil error' being returned or a context.Canceled being returned.
+//
+// If this is not a concern, you can use the context from the Handler.
+//
 func (i IncomingRequest) Done(ctx context.Context, rs Message, replyError error) error {
 	if !atomic.CompareAndSwapUint32(&i.done, 0, 1) {
-		panic(fmt.Errorf("socketsrv: request done"))
+		return fmt.Errorf("socketsrv: request done")
 	}
 	return i.conn.Reply(ctx, i.MessageID, rs, replyError)
 }
@@ -70,8 +87,10 @@ type Handler interface {
 	// so keep any processing inside HandleRequest to an absolute minimum.
 	//
 	// If you wish to defer processing the response (for example, in a queue),
-	// the IncomingRequest may be retained, but this will have interactions
-	// with ConnConfig.ResponseTimeout. The request will time out after
+	// the IncomingRequest may be retained. You should be careful not to retain
+	// forever as this will prevent the underlying connection resource from
+	// being garbage collected. This will also have interactions with
+	// ConnConfig.ResponseTimeout. The request will time out after
 	// IncomingRequest.Deadline if Deadline is not the zero time.
 	//
 	// If the connection is lost, any retained IncomingRequest will become

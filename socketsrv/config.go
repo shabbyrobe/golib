@@ -59,6 +59,7 @@ func DefaultServerConfig() ServerConfig {
 type ConnectorConfig struct {
 	Conn        ConnConfig
 	HaltTimeout time.Duration
+	DialTimeout time.Duration
 }
 
 func (c ConnectorConfig) IsZero() bool {
@@ -68,6 +69,7 @@ func (c ConnectorConfig) IsZero() bool {
 func DefaultConnectorConfig() ConnectorConfig {
 	return ConnectorConfig{
 		Conn:        DefaultConnConfig(),
+		DialTimeout: 10 * time.Second,
 		HaltTimeout: 10 * time.Second,
 	}
 }

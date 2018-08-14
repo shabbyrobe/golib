@@ -1,16 +1,15 @@
-- Connection callback
-- Disconnection callback
-- UDP experiment
-- Unix socket experiment
 - Can version negotiation support arbitrary protocols?
 - Could this be used for watchout's linewise protocol?
+- Allow streaming long messages directly from Communicator to Proto using Reader/Writer
 - pub/sub
-- error type in mapper
-- handeincoming needs a context param
-- connector/client should accept a service listener so we can receive onend
+- context.Context passed to HandleMessage should become Done() when service
+  finishes halting, not when service starts to halt
+- reconnector?
 
 Tests:
 - when replyto does not exist in awaiting call map
 - replying to a reply... maybe this should be possible? see what happens.
 - response timeout
+- conn shutdown before async handler returns result
+- connector shutdown should shut down all clients
 
