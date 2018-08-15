@@ -40,11 +40,13 @@ func NewCommunicator(ws *websocket.Conn) *Communicator {
 	return comm
 }
 
+func (cm *Communicator) MessageLimit() int { return 0 }
+
 func (cm *Communicator) Close() error {
 	return cm.ws.Close()
 }
 
-func (cm *Communicator) ReadMessage(into []byte, limit uint32, timeout time.Duration) (extended []byte, rerr error) {
+func (cm *Communicator) ReadMessage(into []byte, limit int, timeout time.Duration) (extended []byte, rerr error) {
 	// NextReader does not receive pongs, we are using the websocket's
 	// SetPongHandler for that job, so we can't set a read timeout here as the
 	// pongs will never be read this way and the timeout will occur even
@@ -62,12 +64,12 @@ func (cm *Communicator) ReadMessage(into []byte, limit uint32, timeout time.Dura
 
 	// The websocket protocol makes length available as part of the header,
 	// but the gorilla library does not expose the field for us to validate:
-	mlen := binary.BigEndian.Uint32(lbuf)
+	mlen := int(binary.BigEndian.Uint32(lbuf))
 	if mlen > limit {
 		return into, fmt.Errorf("socket: message of length %d exceeded limit %d", mlen, uint32(limit))
 	}
 
-	if uint32(cap(into)) < mlen {
+	if cap(into) < mlen {
 		into = make([]byte, mlen)
 	} else {
 		into = into[:mlen]

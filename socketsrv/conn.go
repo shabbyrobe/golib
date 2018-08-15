@@ -2,6 +2,7 @@ package socketsrv
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -35,8 +36,6 @@ type conn struct {
 
 	state         uint32
 	nextMessageID uint32
-	lastRecv      time.Time
-	lastSend      time.Time
 	calls         chan call
 
 	// number of currently active calls to Send(). this is used during shutdown
@@ -104,9 +103,10 @@ func (c *conn) negotiate() (Protocol, error) {
 		return nil, errReadTimeout
 	}
 }
+
 func (c *conn) Run(ctx service.Context) (rerr error) {
 	if !atomic.CompareAndSwapUint32(&c.state, connNew, connRunning) {
-		return fmt.Errorf("socket: cannot re-use Conn")
+		return errors.New("socketsrv: cannot re-use Conn")
 	}
 
 	failer := service.NewFailureListener(1)
@@ -124,7 +124,13 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 		return fmt.Errorf("socketsrv: proto %q returned nil mapper", proto.ProtocolName())
 	}
 
+	// The Communicator's view of the maximum message size is a harder limit than
+	// the protocol's. If it is non-zero, it takes precedence.
 	messageLimit := proto.MessageLimit()
+	commMessageLimit := c.comm.MessageLimit()
+	if commMessageLimit > 0 && commMessageLimit < messageLimit {
+		messageLimit = commMessageLimit
+	}
 
 	// Reader thread:
 	go func() {
@@ -156,7 +162,6 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 				failer.Send(err)
 				return
 			}
-			c.lastRecv = time.Now()
 
 			select {
 			case incoming <- env:
@@ -202,7 +207,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 					failer.Send(err)
 					return
 				}
-				mlen := uint32(len(wrBuf))
+				mlen := len(wrBuf)
 				if mlen > messageLimit {
 					failer.Send(fmt.Errorf("conn: message of length %d exceeded limit %d", mlen, messageLimit))
 					return

@@ -9,32 +9,38 @@ import (
 )
 
 type clientCommunicator struct {
-	conn net.Conn
+	conn         net.Conn
+	messageLimit int
 }
 
 var _ socketsrv.Communicator = &communicator{}
 
 func ClientCommunicator(conn net.Conn) socketsrv.Communicator {
 	return &clientCommunicator{
-		conn: conn,
+		conn:         conn,
+		messageLimit: DefaultMessageLimit,
 	}
+}
+
+func (pc *clientCommunicator) MessageLimit() int {
+	return pc.messageLimit
 }
 
 func (pc *clientCommunicator) Close() error {
 	return pc.conn.Close()
 }
 
-func (pc *clientCommunicator) ReadMessage(into []byte, limit uint32, timeout time.Duration) (buf []byte, rerr error) {
+func (pc *clientCommunicator) ReadMessage(into []byte, limit int, timeout time.Duration) (buf []byte, rerr error) {
 	if timeout > 0 {
 		if err := pc.conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
 			return into, err
 		}
 	}
 
-	if cap(into) < 65536 {
-		into = make([]byte, 65536)
+	if cap(into) < limit {
+		into = make([]byte, limit)
 	} else {
-		into = into[:65536]
+		into = into[:limit]
 	}
 
 	n, err := pc.conn.Read(into)

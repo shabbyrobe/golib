@@ -46,24 +46,19 @@ func (nc *stream) ReadMessage(into []byte, limit int, timeout time.Duration) (bu
 	}
 
 	lbuf := nc.rdLenBuf[:]
-
 	if _, err := io.ReadFull(nc.reader, lbuf); err != nil {
 		return into, err
 	}
 
-	mlen := binary.BigEndian.Uint32(lbuf)
+	mlen := int(binary.BigEndian.Uint32(lbuf))
 	if mlen > limit {
 		return into, fmt.Errorf("socket: message of length %d exceeded limit %d", mlen, uint32(limit))
 
 	} else if mlen == 0 {
-		select {
-		case nc.pongs <- time.Now():
-		default:
-		}
 		return into[:0], nil
 	}
 
-	if uint32(cap(into)) < mlen {
+	if cap(into) < mlen {
 		into = make([]byte, mlen)
 	} else {
 		into = into[:mlen]
@@ -87,16 +82,15 @@ func (nc *stream) WriteMessage(data []byte, timeout time.Duration) (rerr error) 
 
 	lbuf := nc.wrLenBuf[:]
 	binary.BigEndian.PutUint32(lbuf, uint32(mlen))
-	if n, err := nc.writer.Write(lbuf); err != nil {
-		return err
-	} else if n != 4 {
-		return fmt.Errorf("short length write")
-	}
 
-	if n, err := nc.writer.Write(data); err != nil {
+	// FIXME: this puts pressure on the GC but it's significantly faster for smaller messages.
+	// the protocol really needs to be adjusted to accept a writer.
+	out := append(lbuf, data...)
+
+	if n, err := nc.writer.Write(out); err != nil {
 		return err
-	} else if n != mlen {
-		return fmt.Errorf("short message write")
+	} else if n != len(out) {
+		return fmt.Errorf("short write")
 	}
 
 	return nil

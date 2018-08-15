@@ -8,8 +8,9 @@ import (
 	"time"
 )
 
+
 type Protocol interface {
-	MessageLimit() uint32
+	MessageLimit() int
 	ProtocolName() string
 
 	// Mapper is cached by Conn on creation.

@@ -9,12 +9,15 @@ import (
 	"github.com/shabbyrobe/golib/socketsrv"
 )
 
+const DefaultMessageLimit int = 508
+
 type communicator struct {
-	addr   net.Addr
-	reader chan readMsg
-	writer chan<- writeMsg
-	closer chan<- net.Addr
-	stop   chan struct{}
+	addr         net.Addr
+	reader       chan readMsg
+	writer       chan<- writeMsg
+	closer       chan<- net.Addr
+	stop         chan struct{}
+	messageLimit int
 
 	// lastRead is owned for reading and writing by the Listener, not by this
 	// struct.
@@ -37,7 +40,15 @@ func newCommunicator(
 		writer: writer,
 		closer: closer,
 		stop:   stop,
+
+		// Thus, safe packet size of 508 = 576 - 60 (IP header) - 8 (udp header) is reasonable.
+		// FIXME: configurable
+		messageLimit: DefaultMessageLimit,
 	}
+}
+
+func (pc *communicator) MessageLimit() int {
+	return pc.messageLimit
 }
 
 func (pc *communicator) Close() error {
@@ -48,7 +59,7 @@ func (pc *communicator) Close() error {
 	return nil
 }
 
-func (pc *communicator) ReadMessage(into []byte, limit uint32, timeout time.Duration) (buf []byte, rerr error) {
+func (pc *communicator) ReadMessage(into []byte, limit int, timeout time.Duration) (buf []byte, rerr error) {
 	// FIXME: need some sort of sync.Cond-based shitshow for efficiency here,
 	// this is foul.
 	tc := time.After(timeout)
