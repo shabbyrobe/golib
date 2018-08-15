@@ -39,7 +39,6 @@ type listener struct {
 }
 
 func (pl *listener) Run(ctx service.Context) error {
-	fmt.Println(pl.network, pl.addr)
 	pc, err := net.ListenPacket(pl.network, pl.addr)
 	if err != nil {
 		return err
