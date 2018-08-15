@@ -68,8 +68,8 @@ func (c ConnectorConfig) IsZero() bool {
 	return c == ConnectorConfig{}
 }
 
-func DefaultConnectorConfig() ConnectorConfig {
-	return ConnectorConfig{
+func DefaultConnectorConfig() *ConnectorConfig {
+	return &ConnectorConfig{
 		Conn:        DefaultConnConfig(),
 		DialTimeout: 10 * time.Second,
 		HaltTimeout: 10 * time.Second,

@@ -9,6 +9,13 @@ import (
 	"github.com/shabbyrobe/golib/incrementer"
 )
 
+// Connector creates Client connections to Servers.
+//
+// Connector is similar to the idea of net.Dialer, but Dialer is more of a
+// configuration struct. Connector retains state about the connections that are
+// currently running and you can shut them all down simultaneously with
+// Shutdown() if you like.
+//
 type Connector struct {
 	config     ConnectorConfig
 	clients    service.Runner
@@ -33,12 +40,12 @@ func ClientDisconnect(cb OnClientDisconnect) ClientOption {
 	}
 }
 
-func NewConnector(config ConnectorConfig, negotiator Negotiator) *Connector {
-	if config.IsZero() {
+func NewConnector(config *ConnectorConfig, negotiator Negotiator) *Connector {
+	if config == nil || config.IsZero() {
 		config = DefaultConnectorConfig()
 	}
 	dl := &Connector{
-		config:     config,
+		config:     *config,
 		negotiator: negotiator,
 	}
 	dl.clients = service.NewRunner()
