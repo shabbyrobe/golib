@@ -33,7 +33,7 @@ func (l *Listener) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// FIXME: is panic appropriate here?
 		panic(err)
 	}
-	comm := &Communicator{ws: ws}
+	comm := NewCommunicator(ws)
 	select {
 	case l.comms <- comm:
 	case <-l.stop:
