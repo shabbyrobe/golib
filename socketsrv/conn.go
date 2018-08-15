@@ -124,6 +124,11 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 		return fmt.Errorf("socketsrv: proto %q returned nil mapper", proto.ProtocolName())
 	}
 
+	codec := proto.Codec()
+	if codec == nil {
+		return fmt.Errorf("socketsrv: proto %q returned nil codec", proto.ProtocolName())
+	}
+
 	// The Communicator's view of the maximum message size is a harder limit than
 	// the protocol's. If it is non-zero, it takes precedence.
 	messageLimit := proto.MessageLimit()
@@ -157,7 +162,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 				continue // heartbeats can be empty
 			}
 
-			env, err := proto.Decode(rdBuf, &encData)
+			env, err := codec.Decode(rdBuf, mapper, &encData)
 			if err != nil {
 				failer.Send(err)
 				return
@@ -202,7 +207,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 
 			case env := <-c.outgoing:
 				var err error
-				wrBuf, err = proto.Encode(env, wrBuf, &decData)
+				wrBuf, err = codec.Encode(env, wrBuf, &decData)
 				if err != nil {
 					failer.Send(err)
 					return

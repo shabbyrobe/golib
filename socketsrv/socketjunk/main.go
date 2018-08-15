@@ -27,11 +27,10 @@ import (
 	"github.com/shabbyrobe/go-service/serviceutil"
 	"github.com/shabbyrobe/golib/iotools/bytewriter"
 	"github.com/shabbyrobe/golib/socketsrv"
+	"github.com/shabbyrobe/golib/socketsrv/jsonsrv"
 	"github.com/shabbyrobe/golib/socketsrv/packetsrv"
 	"github.com/shabbyrobe/golib/socketsrv/wsocketsrv"
 )
-
-var negotiator socketsrv.Negotiator
 
 var encoding = binary.BigEndian
 
@@ -42,14 +41,6 @@ func main() {
 }
 
 func run() error {
-	negotiator = &VersionNegotiator{
-		Protocols: map[uint32]socketsrv.Protocol{
-			1: Proto{},
-			2: socketsrv.NewJSONProtocol("json", Mapper{}, 1000000),
-			// 3: CompressingProto{},
-		},
-	}
-
 	bld := func() (cmdy.Command, error) {
 		return cmdy.NewGroup("socketjunk", cmdy.Builders{
 			"tcpclient": func() (cmdy.Command, error) { return &tcpClientCommand{}, nil },
@@ -62,6 +53,16 @@ func run() error {
 	}
 
 	return cmdy.Run(context.Background(), os.Args[1:], bld)
+}
+
+func negotiatorBuild() socketsrv.Negotiator {
+	negotiator := socketsrv.NewVersionNegotiator(
+		10*time.Second,
+		Proto{version: 1, messageLimit: 1000000, mapper: Mapper{}, codec: SimpleCodec{}},
+		Proto{version: 2, messageLimit: 1000000, mapper: Mapper{}, codec: jsonsrv.NewCodec()},
+		// CompressingProto{},
+	)
+	return negotiator
 }
 
 type tcpClientCommand struct {
@@ -86,16 +87,16 @@ func (cl *tcpClientCommand) Run(ctx cmdy.Context) error {
 	// defer profile.Start().Stop()
 
 	config := cl.spammer.Config()
-	connector := socketsrv.NewConnector(config, negotiator)
+	connector := socketsrv.NewConnector(config, negotiatorBuild())
 
 	clientCb := func(handler socketsrv.Handler, opts ...socketsrv.ClientOption) (socketsrv.Client, error) {
-		client, err := connector.StreamClient(ctx, "tcp", cl.host, handler)
+		client, err := connector.StreamClient(ctx, "tcp", cl.host, handler, opts...)
 		if err != nil {
 			return nil, err
 		}
 		return client, nil
 	}
-	return cl.spammer.Spam(ctx, clientCb)
+	return cl.spammer.Spam(ctx, nil, clientCb)
 }
 
 type tcpServerCommand struct {
@@ -128,7 +129,7 @@ func (sc *tcpServerCommand) Run(ctx cmdy.Context) error {
 		return err
 	}
 
-	srv := socketsrv.NewServer(config, ln, negotiator, handler,
+	srv := socketsrv.NewServer(config, ln, negotiatorBuild(), handler,
 		socketsrv.ServerConnect(func(srv *socketsrv.Server, id socketsrv.ConnID) {
 			fmt.Println("connect", id)
 		}),
@@ -158,7 +159,7 @@ func (cl *pktClientCommand) Args() *args.ArgSet {
 }
 
 func (cl *pktClientCommand) Run(ctx cmdy.Context) error {
-	connector := socketsrv.NewConnector(nil, negotiator)
+	connector := socketsrv.NewConnector(nil, negotiatorBuild())
 
 	dialer := net.Dialer{}
 	handler := &ServerHandler{}
@@ -236,7 +237,7 @@ func (sc *pktServerCommand) Run(ctx cmdy.Context) error {
 		return err
 	}
 
-	srv := socketsrv.NewServer(config, ln, negotiator, handler)
+	srv := socketsrv.NewServer(config, ln, negotiatorBuild(), handler)
 	ender := service.NewEndListener(1)
 	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
 	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
@@ -269,7 +270,7 @@ func (cl *wsClientCommand) Run(ctx cmdy.Context) error {
 	// defer profile.Start().Stop()
 
 	config := cl.spammer.Config()
-	connector := socketsrv.NewConnector(config, negotiator)
+	connector := socketsrv.NewConnector(config, negotiatorBuild())
 
 	clientCb := func(handler socketsrv.Handler, opts ...socketsrv.ClientOption) (socketsrv.Client, error) {
 		dialer := websocket.Dialer{
@@ -289,7 +290,7 @@ func (cl *wsClientCommand) Run(ctx cmdy.Context) error {
 		}
 		return client, nil
 	}
-	return cl.spammer.Spam(ctx, clientCb)
+	return cl.spammer.Spam(ctx, nil, clientCb)
 }
 
 type wsServerCommand struct {
@@ -324,7 +325,7 @@ func (sc *wsServerCommand) Run(ctx cmdy.Context) error {
 
 	handler := &ServerHandler{}
 
-	srv := socketsrv.NewServer(config, ln, negotiator, handler,
+	srv := socketsrv.NewServer(config, ln, negotiatorBuild(), handler,
 		socketsrv.ServerConnect(func(srv *socketsrv.Server, id socketsrv.ConnID) {
 			fmt.Println("connect", id)
 		}),
@@ -389,22 +390,17 @@ func (v *VersionNegotiator) Negotiate(side socketsrv.Side, c socketsrv.Communica
 	return v.Protocols[max], nil
 }
 
-type Proto struct {
-	mapper Mapper
-}
+type SimpleCodec struct{}
 
-func (p Proto) ProtocolName() string     { return "Proto" }
-func (p Proto) Mapper() socketsrv.Mapper { return p.mapper }
-func (p Proto) Version() int             { return 1 }
-func (p Proto) MessageLimit() int        { return 10000000 }
+var _ socketsrv.Codec = SimpleCodec{}
 
-func (p Proto) Decode(in []byte, decdata *socketsrv.ProtoData) (env socketsrv.Envelope, rerr error) {
+func (p SimpleCodec) Decode(in []byte, mapper socketsrv.Mapper, decdata *socketsrv.ProtoData) (env socketsrv.Envelope, rerr error) {
 	var je JSONEnvelope
 	if err := json.Unmarshal(in, &je); err != nil {
 		return env, err
 	}
 
-	msg, err := p.mapper.Message(je.Kind)
+	msg, err := mapper.Message(je.Kind)
 	if err != nil {
 		return env, err
 	}
@@ -420,7 +416,7 @@ func (p Proto) Decode(in []byte, decdata *socketsrv.ProtoData) (env socketsrv.En
 	return env, nil
 }
 
-func (p Proto) Encode(env socketsrv.Envelope, into []byte, encdata *socketsrv.ProtoData) (extended []byte, rerr error) {
+func (p SimpleCodec) Encode(env socketsrv.Envelope, into []byte, encdata *socketsrv.ProtoData) (extended []byte, rerr error) {
 	var bw bytewriter.Writer
 	bw.Give(into[:0])
 	enc := json.NewEncoder(&bw)
@@ -511,16 +507,25 @@ func (m Mapper) MessageKind(msg socketsrv.Message) (int, error) {
 	}
 }
 
-type CompressingProto struct {
-	mapper Mapper
+type Proto struct {
+	version      int
+	name         string
+	mapper       socketsrv.Mapper
+	codec        socketsrv.Codec
+	messageLimit int
 }
 
-func (p CompressingProto) ProtocolName() string     { return "CompressingProto" }
-func (p CompressingProto) Mapper() socketsrv.Mapper { return p.mapper }
-func (p CompressingProto) Version() int             { return 1 }
-func (p CompressingProto) MessageLimit() int        { return 10000000 }
+func (p Proto) ProtocolName() string     { return p.name }
+func (p Proto) Mapper() socketsrv.Mapper { return p.mapper }
+func (p Proto) Codec() socketsrv.Codec   { return p.codec }
+func (p Proto) Version() int             { return p.version }
+func (p Proto) MessageLimit() int        { return p.messageLimit }
 
-func (p CompressingProto) Decode(in []byte, decData *socketsrv.ProtoData) (env socketsrv.Envelope, rerr error) {
+type CompressingCodec struct{}
+
+var _ socketsrv.Codec = &CompressingCodec{}
+
+func (p CompressingCodec) Decode(in []byte, mapper socketsrv.Mapper, decData *socketsrv.ProtoData) (env socketsrv.Envelope, rerr error) {
 	var data *altProtoData
 	if *decData == nil {
 		data = &altProtoData{}
@@ -535,7 +540,7 @@ func (p CompressingProto) Decode(in []byte, decData *socketsrv.ProtoData) (env s
 	env.ID = socketsrv.MessageID(encoding.Uint32(in))
 	env.ReplyTo = socketsrv.MessageID(encoding.Uint32(in[4:]))
 	env.Kind = int(encoding.Uint32(in[8:]))
-	env.Message, rerr = p.mapper.Message(env.Kind)
+	env.Message, rerr = mapper.Message(env.Kind)
 
 	compressed := in[12]&0x1 == 0x1
 	msg := in[13:]
@@ -558,7 +563,7 @@ func (p CompressingProto) Decode(in []byte, decData *socketsrv.ProtoData) (env s
 	return env, nil
 }
 
-func (p CompressingProto) Encode(env socketsrv.Envelope, into []byte, encData *socketsrv.ProtoData) (extended []byte, rerr error) {
+func (p CompressingCodec) Encode(env socketsrv.Envelope, into []byte, encData *socketsrv.ProtoData) (extended []byte, rerr error) {
 	var data *altProtoData
 	if *encData == nil {
 		fw, err := flate.NewWriter(ioutil.Discard, 9)

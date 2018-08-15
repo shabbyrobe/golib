@@ -33,8 +33,7 @@ func (sp *spammer) Config() *socketsrv.ConnectorConfig {
 
 type spammerClientCb func(handler socketsrv.Handler, opts ...socketsrv.ClientOption) (socketsrv.Client, error)
 
-func (sp *spammer) Spam(ctx cmdy.Context, clientCb spammerClientCb) error {
-	handler := &ServerHandler{}
+func (sp *spammer) Spam(ctx cmdy.Context, handler socketsrv.Handler, clientCb spammerClientCb) error {
 	in := make([]byte, 10000)
 	rand.Reader.Read(in)
 	_ = in
@@ -58,7 +57,7 @@ func (sp *spammer) Spam(ctx cmdy.Context, clientCb spammerClientCb) error {
 
 			opts := []socketsrv.ClientOption{
 				socketsrv.ClientDisconnect(func(connector *socketsrv.Connector, id socketsrv.ConnID, err error) {
-					fmt.Println(id, err)
+					fmt.Println("disconnected:", id, err)
 				}),
 			}
 
