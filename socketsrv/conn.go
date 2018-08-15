@@ -15,7 +15,7 @@ type Side int
 
 const (
 	ClientSide Side = 1
-	ServerSide Side = 1
+	ServerSide Side = 2
 )
 
 type ConnID string
@@ -36,7 +36,7 @@ type conn struct {
 
 	state         uint32
 	nextMessageID uint32
-	calls         chan call
+	calls         chan *call
 
 	// number of currently active calls to Send(). this is used during shutdown
 	// so we know that all calls to Send have responded to the stop signal so we
@@ -44,7 +44,7 @@ type conn struct {
 	sendWait sync.WaitGroup
 
 	// writer thread's queue
-	outgoing chan Envelope
+	outgoing chan *Envelope
 
 	stop chan struct{}
 }
@@ -52,6 +52,15 @@ type conn struct {
 func newConn(id ConnID, side Side, config ConnConfig, comm Communicator, neg Negotiator, handler Handler) *conn {
 	if config.IsZero() {
 		config = DefaultConnConfig()
+	}
+
+	nmID := uint32(1)
+
+	// FIXME: this is a temporary cheat to try to make sure the IDs don't line up
+	// exactly between the local and the remote by default. It helps to flush out
+	// bugs with ID vs ReplyTo:
+	if side == ClientSide {
+		nmID = 10001
 	}
 
 	return &conn{
@@ -62,9 +71,9 @@ func newConn(id ConnID, side Side, config ConnConfig, comm Communicator, neg Neg
 		negotiator: neg,
 		handler:    handler,
 
-		nextMessageID: 1,
-		outgoing:      make(chan Envelope, config.OutgoingBuffer),
-		calls:         make(chan call, config.OutgoingBuffer),
+		nextMessageID: nmID,
+		outgoing:      make(chan *Envelope, config.OutgoingBuffer),
+		calls:         make(chan *call, config.OutgoingBuffer),
 		stop:          make(chan struct{}),
 	}
 }
@@ -104,13 +113,117 @@ func (c *conn) negotiate() (Protocol, error) {
 	}
 }
 
+func (c *conn) writerThread(
+	ctx context.Context,
+	failer *service.FailureListener,
+	codec Codec,
+	messageLimit int,
+) {
+	wrBuf := make([]byte, 0, c.config.WriteBufferInitial)
+
+	// decData contains writer-local shared memory that the Protocol may use
+	// to store connection-scoped arbitrary data:
+	var decData ProtoData
+
+	defer func() {
+		if decData != nil {
+			_ = decData.Close()
+		}
+	}()
+
+	var heartbeat <-chan time.Time
+	if c.config.HeartbeatSendInterval > 0 {
+		ht := time.NewTicker(c.config.HeartbeatSendInterval)
+		defer ht.Stop()
+		heartbeat = ht.C
+	}
+
+	for {
+		select {
+		case <-heartbeat:
+			if err := c.comm.Ping(c.config.WriteTimeout); err != nil {
+				failer.Send(err)
+				return
+			}
+
+		case env := <-c.outgoing:
+			var err error
+			wrBuf, err = codec.Encode(*env, wrBuf, &decData)
+			if err != nil {
+				failer.Send(err)
+				return
+			}
+			mlen := len(wrBuf)
+			if mlen > messageLimit {
+				failer.Send(fmt.Errorf("conn: message of length %d exceeded limit %d", mlen, messageLimit))
+				return
+			}
+			if err := c.comm.WriteMessage(wrBuf, c.config.WriteTimeout); err != nil {
+				failer.Send(err)
+				return
+			}
+
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (c *conn) readerThread(
+	ctx context.Context,
+	failer *service.FailureListener,
+	codec Codec,
+	messageLimit int,
+	mapper Mapper,
+	incoming chan *Envelope,
+) {
+	rdBuf := make([]byte, c.config.ReadBufferInitial)
+
+	// encData contains reader-local shared memory that the Protocol may use
+	// to store connection-scoped arbitrary data:
+	var encData ProtoData
+
+	defer func() {
+		if encData != nil {
+			_ = encData.Close()
+		}
+	}()
+
+	var err error
+	for {
+		rdBuf, err = c.comm.ReadMessage(rdBuf, messageLimit, c.config.ReadTimeout)
+		if err != nil {
+			failer.Send(err)
+			return
+		}
+
+		var env *Envelope
+
+		// heartbeats can be represented as empty buffers
+		if len(rdBuf) != 0 {
+			denv, err := codec.Decode(rdBuf, mapper, &encData)
+			if err != nil {
+				failer.Send(err)
+				return
+			}
+			env = &denv
+		}
+
+		select {
+		case incoming <- env:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 func (c *conn) Run(ctx service.Context) (rerr error) {
 	if !atomic.CompareAndSwapUint32(&c.state, connNew, connRunning) {
 		return errors.New("socketsrv: cannot re-use Conn")
 	}
 
 	failer := service.NewFailureListener(1)
-	incoming := make(chan Envelope, c.config.IncomingBuffer)
+	incoming := make(chan *Envelope, c.config.IncomingBuffer)
 
 	// Negotiate may access the network. The connection is not ready until
 	// negotiation has succeeded:
@@ -137,99 +250,11 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 		messageLimit = commMessageLimit
 	}
 
-	// Reader thread:
-	go func() {
-		rdBuf := make([]byte, c.config.ReadBufferInitial)
-
-		// encData contains reader-local shared memory that the Protocol may use
-		// to store connection-scoped arbitrary data:
-		var encData ProtoData
-
-		defer func() {
-			if encData != nil {
-				_ = encData.Close()
-			}
-		}()
-
-		var err error
-		for {
-			rdBuf, err = c.comm.ReadMessage(rdBuf, messageLimit, c.config.ReadTimeout)
-			if err != nil {
-				failer.Send(err)
-				return
-			}
-			if len(rdBuf) == 0 {
-				continue // heartbeats can be empty
-			}
-
-			env, err := codec.Decode(rdBuf, mapper, &encData)
-			if err != nil {
-				failer.Send(err)
-				return
-			}
-
-			select {
-			case incoming <- env:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	// Writer thread:
-	go func() {
-		wrBuf := make([]byte, 0, c.config.WriteBufferInitial)
-
-		// decData contains writer-local shared memory that the Protocol may use
-		// to store connection-scoped arbitrary data:
-		var decData ProtoData
-
-		defer func() {
-			if decData != nil {
-				_ = decData.Close()
-			}
-		}()
-
-		var heartbeat <-chan time.Time
-		if c.config.HeartbeatSendInterval > 0 {
-			ht := time.NewTicker(c.config.HeartbeatSendInterval)
-			defer ht.Stop()
-			heartbeat = ht.C
-		}
-
-		for {
-			select {
-			case <-heartbeat:
-				if err := c.comm.Ping(c.config.WriteTimeout); err != nil {
-					failer.Send(err)
-					return
-				}
-
-			case env := <-c.outgoing:
-				var err error
-				wrBuf, err = codec.Encode(env, wrBuf, &decData)
-				if err != nil {
-					failer.Send(err)
-					return
-				}
-				mlen := len(wrBuf)
-				if mlen > messageLimit {
-					failer.Send(fmt.Errorf("conn: message of length %d exceeded limit %d", mlen, messageLimit))
-					return
-				}
-				if err := c.comm.WriteMessage(wrBuf, c.config.WriteTimeout); err != nil {
-					failer.Send(err)
-					return
-				}
-
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	go c.writerThread(ctx, failer, codec, messageLimit)
+	go c.readerThread(ctx, failer, codec, messageLimit, mapper, incoming)
 
 	// calls contains all requests that are currently awaiting a response.
-	calls := make(map[MessageID]call)
+	calls := make(map[MessageID]*call)
 
 	// Shutdown procedure:
 	defer func() {
@@ -261,7 +286,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 		}
 		for _, call := range calls {
 			select {
-			case call.rs <- Result{Err: rserr}:
+			case call.rs <- Result{ID: call.env.ID, Err: rserr}:
 			default:
 			}
 		}
@@ -300,20 +325,27 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 		case env := <-incoming:
 			lastRecv = time.Now()
 
-			call, ok := calls[env.ID]
-			if ok {
+			if env == nil {
+				// It's a heartbeat. Do nothing, but we still need to send it to the reactor
+				// so it can update the lastRecv time.
+
+			} else if env.ReplyTo != 0 {
 				// Incoming message is a response to an existing call:
-				delete(calls, env.ID)
+				call, ok := calls[env.ReplyTo]
+				if !ok {
+					return fmt.Errorf("socketsrv: unexpected incoming %d in reply to message %d", env.ID, env.ReplyTo)
+				}
+
+				delete(calls, env.ReplyTo)
 				select {
-				case call.rs <- Result{Message: env.Message}:
+				case call.rs <- Result{ID: env.ID, Message: env.Message}:
 				default:
 					return fmt.Errorf("call receiver would block")
 				}
 
-			} else {
-				// Incoming message is not a response, it's either a remote
-				// originated request or a late response to a local request so
-				// it should be handled by a Handler:
+			} else if c.handler != nil {
+				// Incoming message is not a response so it should be handled
+				// by a Handler:
 				irq := IncomingRequest{
 					conn:      c,
 					ConnID:    c.id,
@@ -321,6 +353,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 					Message:   env.Message,
 					Deadline:  lastRecv.Add(c.config.ResponseTimeout),
 				}
+
 				rs, err := c.handler.HandleRequest(ctx, irq)
 				if err != nil {
 					return err
@@ -330,17 +363,24 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 					if err != nil {
 						return err
 					}
+
 					select {
-					case c.outgoing <- Envelope{ID: c.nextID(), ReplyTo: env.ID, Kind: kind, Message: rs}:
+					case c.outgoing <- &Envelope{ID: c.nextID(), ReplyTo: env.ID, Kind: kind, Message: rs}:
 					case <-ctx.Done():
 						return nil
 					}
 				}
+
+			} else {
+				// Incoming message is unhandled; terminate the connection:
+				return fmt.Errorf("socketsrv: unexpected incoming message %T(%d)", env.Message, env.Kind)
 			}
 
 		// Connection handles call (conn.Request, conn.Send, conn.Reply):
 		case out := <-c.calls:
 			if out.env.ReplyTo == MessageNone {
+				// Request or Send, so we need to retain the call so we can look it up when
+				// we get the corresponding incoming message from the remote:
 				calls[out.env.ID] = out
 			}
 
@@ -356,15 +396,21 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 			out.env.Kind, err = mapper.MessageKind(out.env.Message)
 			if err != nil {
 				delete(calls, out.env.ID)
+			}
+
+			// If the call is a conn.Reply or if an error occurred, we need to unblock the caller.
+			// If the call is a Send or a Request, we don't unblock until we receive an incoming
+			// message:
+			if err != nil || out.env.ReplyTo != MessageNone {
 				select {
-				case out.rs <- Result{Err: err}:
+				case out.rs <- Result{ID: out.env.ID, Err: err}:
 				default:
 					return fmt.Errorf("call receiver would block")
 				}
 			}
 
 			select {
-			case c.outgoing <- out.env:
+			case c.outgoing <- &out.env:
 			case <-ctx.Done():
 				return nil
 			}
@@ -384,7 +430,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 				delete(calls, id)
 
 				select {
-				case call.rs <- Result{Err: errResponseTimeout}:
+				case call.rs <- Result{ID: call.env.ID, Err: errResponseTimeout}:
 				default:
 					return fmt.Errorf("call receiver would block")
 				}
@@ -412,7 +458,7 @@ func (c *conn) send(ctx context.Context, sendCall call) (rerr error) {
 
 	c.sendWait.Add(1)
 	select {
-	case c.calls <- sendCall:
+	case c.calls <- &sendCall:
 		c.sendWait.Done()
 		return nil
 

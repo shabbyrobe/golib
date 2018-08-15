@@ -9,20 +9,20 @@ import (
 	"github.com/shabbyrobe/golib/socketsrv"
 )
 
-type Codec struct {
+var Codec = NewCodec()
+
+type codec struct {
 	encoding binary.ByteOrder
 }
 
-var _ socketsrv.Codec = &Codec{}
-
-type Option func(jp *Codec)
+type Option func(jp *codec)
 
 func Encoding(bo binary.ByteOrder) Option {
-	return func(jp *Codec) { jp.encoding = bo }
+	return func(jp *codec) { jp.encoding = bo }
 }
 
-func NewCodec(opts ...Option) *Codec {
-	jp := &Codec{}
+func NewCodec(opts ...Option) socketsrv.Codec {
+	jp := &codec{}
 	for _, o := range opts {
 		o(jp)
 	}
@@ -32,7 +32,7 @@ func NewCodec(opts ...Option) *Codec {
 	return jp
 }
 
-func (p *Codec) Decode(in []byte, mapper socketsrv.Mapper, decdata *socketsrv.ProtoData) (env socketsrv.Envelope, err error) {
+func (p *codec) Decode(in []byte, mapper socketsrv.Mapper, decdata *socketsrv.ProtoData) (env socketsrv.Envelope, err error) {
 	if len(in) < 12 {
 		return env, fmt.Errorf("socketsrv: short message")
 	}
@@ -52,7 +52,7 @@ func (p *Codec) Decode(in []byte, mapper socketsrv.Mapper, decdata *socketsrv.Pr
 	return env, nil
 }
 
-func (p *Codec) Encode(env socketsrv.Envelope, into []byte, encData *socketsrv.ProtoData) (extended []byte, rerr error) {
+func (p *codec) Encode(env socketsrv.Envelope, into []byte, encData *socketsrv.ProtoData) (extended []byte, rerr error) {
 	var hdr [12]byte
 	p.encoding.PutUint32(hdr[0:], uint32(env.ID))
 	p.encoding.PutUint32(hdr[4:], uint32(env.ReplyTo))

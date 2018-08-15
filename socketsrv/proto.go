@@ -58,6 +58,9 @@ func NewVersionNegotiator(timeout time.Duration, protos ...VersionedProtocol) *V
 		encoding:  binary.BigEndian,
 		timeout:   timeout,
 	}
+	if vn.timeout <= 0 {
+		vn.timeout = 10 * time.Second
+	}
 
 	var ours = make([]byte, len(protos)*4)
 	for i, p := range protos {
@@ -71,6 +74,18 @@ func NewVersionNegotiator(timeout time.Duration, protos ...VersionedProtocol) *V
 	vn.ours = ours
 
 	return vn
+}
+
+func (v *VersionNegotiator) Limit(versions ...int) (*VersionNegotiator, error) {
+	protos := make([]VersionedProtocol, len(versions))
+	for i, ver := range versions {
+		p := v.protocols[uint32(ver)]
+		if p == nil {
+			return nil, fmt.Errorf("socketsrv: could not find version %d", ver)
+		}
+		protos[i] = p
+	}
+	return NewVersionNegotiator(v.timeout, protos...), nil
 }
 
 func (v *VersionNegotiator) Negotiate(side Side, c Communicator) (Protocol, error) {

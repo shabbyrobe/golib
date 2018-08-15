@@ -52,8 +52,8 @@ func (s ServerConfig) IsZero() bool {
 	return s == ServerConfig{}
 }
 
-func DefaultServerConfig() ServerConfig {
-	return ServerConfig{
+func DefaultServerConfig() *ServerConfig {
+	return &ServerConfig{
 		Conn: DefaultConnConfig(),
 	}
 }

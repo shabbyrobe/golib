@@ -15,4 +15,6 @@ Tests:
 - version negotiation timeouts
 - websocket server timeout when client does not send heartbeat
 - websocket client timeout when server does not send heartbeat
+- there was a bug where replies were looking for their own ID in the calls
+  map instead of the ReplyTo ID. this needs a test.
 

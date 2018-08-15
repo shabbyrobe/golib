@@ -11,15 +11,17 @@ import (
 )
 
 type spammer struct {
-	total   int
-	threads int
-	wait    time.Duration
+	total    int
+	threads  int
+	waitRq   time.Duration
+	waitConn time.Duration
 }
 
 func (sp *spammer) Flags(fs *cmdy.FlagSet) {
 	fs.IntVar(&sp.total, "n", 100000, "total messages to send")
 	fs.IntVar(&sp.threads, "c", 10, "threads")
-	fs.DurationVar(&sp.wait, "w", 0, "wait between requests")
+	fs.DurationVar(&sp.waitRq, "wr", 0, "wait between requests")
+	fs.DurationVar(&sp.waitConn, "wc", 0, "wait between connections")
 }
 
 func (sp *spammer) Config() *socketsrv.ConnectorConfig {
@@ -51,6 +53,9 @@ func (sp *spammer) Spam(ctx cmdy.Context, handler socketsrv.Handler, clientCb sp
 		if thread == 0 {
 			citer += left
 		}
+		if sp.waitConn > 0 {
+			time.Sleep(sp.waitConn)
+		}
 
 		go func(thread int, iter int) {
 			defer wg.Done()
@@ -81,8 +86,8 @@ func (sp *spammer) Spam(ctx cmdy.Context, handler socketsrv.Handler, clientCb sp
 				}
 				rsp := <-rs
 				_ = rsp
-				if sp.wait > 0 {
-					time.Sleep(sp.wait)
+				if sp.waitRq > 0 {
+					time.Sleep(sp.waitRq)
 				}
 				// fmt.Printf("%#v\n", rsp)
 			}

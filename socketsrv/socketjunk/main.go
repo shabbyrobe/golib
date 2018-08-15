@@ -59,7 +59,7 @@ func negotiatorBuild() socketsrv.Negotiator {
 	negotiator := socketsrv.NewVersionNegotiator(
 		10*time.Second,
 		Proto{version: 1, messageLimit: 1000000, mapper: Mapper{}, codec: SimpleCodec{}},
-		Proto{version: 2, messageLimit: 1000000, mapper: Mapper{}, codec: jsonsrv.NewCodec()},
+		Proto{version: 2, messageLimit: 1000000, mapper: Mapper{}, codec: jsonsrv.Codec},
 		// CompressingProto{},
 	)
 	return negotiator
@@ -231,13 +231,12 @@ func (sc *pktServerCommand) Run(ctx cmdy.Context) error {
 
 	handler := &ServerHandler{}
 
-	var config socketsrv.ServerConfig
 	ln, err := packetsrv.Listen("udp", sc.host)
 	if err != nil {
 		return err
 	}
 
-	srv := socketsrv.NewServer(config, ln, negotiatorBuild(), handler)
+	srv := socketsrv.NewServer(nil, ln, negotiatorBuild(), handler)
 	ender := service.NewEndListener(1)
 	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
 	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
@@ -309,7 +308,6 @@ func (sc *wsServerCommand) Flags() *cmdy.FlagSet {
 func (sc *wsServerCommand) Run(ctx cmdy.Context) error {
 	defer profile.Start().Stop()
 
-	var config socketsrv.ServerConfig
 	ln := wsocketsrv.NewListener(websocket.Upgrader{})
 
 	websrv := &http.Server{
@@ -325,7 +323,7 @@ func (sc *wsServerCommand) Run(ctx cmdy.Context) error {
 
 	handler := &ServerHandler{}
 
-	srv := socketsrv.NewServer(config, ln, negotiatorBuild(), handler,
+	srv := socketsrv.NewServer(nil, ln, negotiatorBuild(), handler,
 		socketsrv.ServerConnect(func(srv *socketsrv.Server, id socketsrv.ConnID) {
 			fmt.Println("connect", id)
 		}),

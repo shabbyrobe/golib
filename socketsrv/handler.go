@@ -52,6 +52,14 @@ func (i IncomingRequest) Done(ctx context.Context, rs Message, replyError error)
 	return i.conn.Reply(ctx, i.MessageID, rs, replyError)
 }
 
+// Handler is used by your application to dispatch any message that is sent by
+// a remote that isn't a response.
+//
+// Handlers must handle every message from every protocol that is negotiated
+// by the Negotiator. Protocol defines a specification, Negotiator defines the
+// range of specifications accepted by your app, and Handler bridges that range
+// with your app's logic.
+//
 type Handler interface {
 	// HandleRequest is called when a Request is received from the remote end
 	// of a connection

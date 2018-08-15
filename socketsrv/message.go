@@ -16,6 +16,7 @@ func (m MessageID) Empty() bool { return m == MessageNone }
 type Message interface{}
 
 type Result struct {
+	ID      MessageID
 	Message Message
 	Err     error
 }

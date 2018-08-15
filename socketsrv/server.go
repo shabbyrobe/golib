@@ -46,7 +46,7 @@ type Server struct {
 	running uint32
 }
 
-func NewServer(config ServerConfig, listener Listener, negotiator Negotiator, handler Handler, opts ...ServerOption) *Server {
+func NewServer(config *ServerConfig, listener Listener, negotiator Negotiator, handler Handler, opts ...ServerOption) *Server {
 	if listener == nil {
 		panic("socket: listener must not be nil")
 	}
@@ -56,12 +56,12 @@ func NewServer(config ServerConfig, listener Listener, negotiator Negotiator, ha
 	if negotiator == nil {
 		panic("socket: negotiator must not be nil")
 	}
-	if config.IsZero() {
+	if config == nil || config.IsZero() {
 		config = DefaultServerConfig()
 	}
 
 	srv := &Server{
-		config:     config,
+		config:     *config,
 		listener:   listener,
 		conns:      make(map[ConnID]*conn),
 		handler:    handler,
