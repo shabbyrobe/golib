@@ -14,7 +14,6 @@ type communicator struct {
 	reader chan readMsg
 	writer chan<- writeMsg
 	closer chan<- net.Addr
-	pongs  chan time.Time
 	stop   chan struct{}
 
 	// lastRead is owned for reading and writing by the Listener, not by this
@@ -34,7 +33,6 @@ func newCommunicator(
 
 	return &communicator{
 		addr:   addr,
-		pongs:  make(chan time.Time, 1),
 		reader: reader,
 		writer: writer,
 		closer: closer,
@@ -86,6 +84,10 @@ func (pc *communicator) WriteMessage(data []byte, timeout time.Duration) (rerr e
 
 func (pc *communicator) Ping(timeout time.Duration) (rerr error) {
 	return pc.WriteMessage(packetPingBuf, timeout)
+}
+
+func (pc *communicator) Pongs() <-chan struct{} {
+	return nil
 }
 
 var packetPingBuf = []byte{0}

@@ -72,6 +72,38 @@ func newConn(id ConnID, side Side, config ConnConfig, comm Communicator, neg Neg
 
 func (c *conn) ID() ConnID { return c.id }
 
+func (c *conn) negotiate() (Protocol, error) {
+	// Some communicators (like the websocket one) rely on the ping/pong
+	// infrastructure to detect read timeouts and cannot use SetReadDeadline.
+	// We need to establish our own timeout for the negotiation step because
+	// the ping/pong hasn't started yet; it's outside the protocol.
+
+	after := time.After(c.config.ReadTimeout)
+	result := make(chan Protocol, 1)
+	errc := make(chan error, 1)
+
+	go func() {
+		proto, err := c.negotiator.Negotiate(c.side, c.comm)
+		if err != nil {
+			errc <- err
+			return
+		}
+		if proto == nil {
+			errc <- errors.New("socketsrv: negotiator returned nil protocol")
+			return
+		}
+		result <- proto
+	}()
+
+	select {
+	case proto := <-result:
+		return proto, nil
+	case err := <-errc:
+		return nil, err
+	case <-after:
+		return nil, errReadTimeout
+	}
+}
 func (c *conn) Run(ctx service.Context) (rerr error) {
 	if !atomic.CompareAndSwapUint32(&c.state, connNew, connRunning) {
 		return fmt.Errorf("socket: cannot re-use Conn")
@@ -80,17 +112,16 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 	failer := service.NewFailureListener(1)
 	incoming := make(chan Envelope, c.config.IncomingBuffer)
 
-	proto, err := c.negotiator.Negotiate(c.side, c.comm)
+	// Negotiate may access the network. The connection is not ready until
+	// negotiation has succeeded:
+	proto, err := c.negotiate()
 	if err != nil {
 		return err
-	}
-	if proto == nil {
-		return fmt.Errorf("negotiator returned nil protocol")
 	}
 
 	mapper := proto.Mapper()
 	if mapper == nil {
-		panic(fmt.Errorf("proto %q returned nil mapper", proto.ProtocolName()))
+		return fmt.Errorf("socketsrv: proto %q returned nil mapper", proto.ProtocolName())
 	}
 
 	messageLimit := proto.MessageLimit()
@@ -150,8 +181,8 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 		}()
 
 		var heartbeat <-chan time.Time
-		if c.config.HeartbeatInterval > 0 {
-			ht := time.NewTicker(c.config.HeartbeatInterval)
+		if c.config.HeartbeatSendInterval > 0 {
+			ht := time.NewTicker(c.config.HeartbeatSendInterval)
 			defer ht.Stop()
 			heartbeat = ht.C
 		}
@@ -234,6 +265,16 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 		cleanup = ct.C
 	}
 
+	// Heartbeat setup. Pong channel may be nil:
+	lastRecv := time.Now()
+	pongs := c.comm.Pongs()
+	var heartbeatCheck <-chan time.Time
+	if c.config.HeartbeatCheckInterval > 0 {
+		ct := time.NewTicker(c.config.HeartbeatCheckInterval)
+		defer ct.Stop()
+		heartbeatCheck = ct.C
+	}
+
 	// Connection is ready to serve requests:
 	if err := ctx.Ready(); err != nil {
 		return err
@@ -242,11 +283,16 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 	// Connection reactor loop:
 	for {
 		select {
+		case <-pongs:
+			lastRecv = time.Now()
 
-		// Process incoming message:
+		// Connection processes incoming message:
 		case env := <-incoming:
+			lastRecv = time.Now()
+
 			call, ok := calls[env.ID]
 			if ok {
+				// Incoming message is a response to an existing call:
 				delete(calls, env.ID)
 				select {
 				case call.rs <- Result{Message: env.Message}:
@@ -255,12 +301,15 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 				}
 
 			} else {
+				// Incoming message is not a response, it's either a remote
+				// originated request or a late response to a local request so
+				// it should be handled by a Handler:
 				irq := IncomingRequest{
 					conn:      c,
 					ConnID:    c.id,
 					MessageID: env.ID,
 					Message:   env.Message,
-					Deadline:  time.Now().Add(c.config.ResponseTimeout),
+					Deadline:  lastRecv.Add(c.config.ResponseTimeout),
 				}
 				rs, err := c.handler.HandleRequest(ctx, irq)
 				if err != nil {
@@ -279,7 +328,7 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 				}
 			}
 
-		// Process call:
+		// Connection handles call (conn.Request, conn.Send, conn.Reply):
 		case out := <-c.calls:
 			if out.env.ReplyTo == MessageNone {
 				calls[out.env.ID] = out
@@ -310,7 +359,13 @@ func (c *conn) Run(ctx service.Context) (rerr error) {
 				return nil
 			}
 
-		// Cleanup:
+		// Connection check heartbeat:
+		case at := <-heartbeatCheck:
+			if at.Sub(lastRecv) > c.config.ReadTimeout {
+				return errReadTimeout
+			}
+
+		// Connection cleans up expired calls:
 		case at := <-cleanup:
 			for id, call := range calls {
 				if call.deadline.Sub(at) >= 0 {

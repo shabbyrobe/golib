@@ -13,7 +13,6 @@ func Stream(nc net.Conn) Communicator {
 		conn:   nc,
 		reader: nc,
 		writer: nc,
-		pongs:  make(chan time.Time, 1),
 	}
 }
 
@@ -21,7 +20,6 @@ type stream struct {
 	conn     net.Conn
 	reader   io.Reader
 	writer   io.Writer
-	pongs    chan time.Time
 	rdLenBuf [4]byte
 	wrLenBuf [4]byte
 }
@@ -32,7 +30,15 @@ func (nc *stream) Close() error {
 	return nc.conn.Close()
 }
 
-func (nc *stream) ReadMessage(into []byte, limit uint32, timeout time.Duration) (buf []byte, rerr error) {
+func (nc *stream) MessageLimit() int { return 0 }
+
+func (nc *stream) Pongs() <-chan struct{} {
+	// pongs are represented as 0-length returns from ReadMessage in this
+	// Communicator.
+	return nil
+}
+
+func (nc *stream) ReadMessage(into []byte, limit int, timeout time.Duration) (buf []byte, rerr error) {
 	if timeout > 0 {
 		if err := nc.conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
 			return into, err

@@ -12,7 +12,7 @@ import (
 
 type Communicator struct {
 	ws       *websocket.Conn
-	pongs    chan time.Time
+	pongs    chan struct{}
 	rdLenBuf [4]byte
 	wrLenBuf [4]byte
 }
@@ -22,13 +22,13 @@ var _ socketsrv.Communicator = &Communicator{}
 func NewCommunicator(ws *websocket.Conn) *Communicator {
 	comm := &Communicator{
 		ws:    ws,
-		pongs: make(chan time.Time, 1),
+		pongs: make(chan struct{}, 1),
 	}
 
 	existing := ws.PongHandler()
 	ws.SetPongHandler(func(s string) error {
 		select {
-		case comm.pongs <- time.Now():
+		case comm.pongs <- struct{}{}:
 		default:
 		}
 		if existing != nil {
@@ -45,11 +45,10 @@ func (cm *Communicator) Close() error {
 }
 
 func (cm *Communicator) ReadMessage(into []byte, limit uint32, timeout time.Duration) (extended []byte, rerr error) {
-	if timeout > 0 {
-		if err := cm.ws.SetReadDeadline(time.Now().Add(timeout)); err != nil {
-			return into, err
-		}
-	}
+	// NextReader does not receive pongs, we are using the websocket's
+	// SetPongHandler for that job, so we can't set a read timeout here as the
+	// pongs will never be read this way and the timeout will occur even
+	// when the heartbeats are sent.
 
 	_, rdr, err := cm.ws.NextReader()
 	if err != nil {
@@ -126,6 +125,6 @@ func (cm *Communicator) Ping(timeout time.Duration) (rerr error) {
 	return cm.ws.WritePreparedMessage(ping)
 }
 
-func (cm *Communicator) Pongs() <-chan time.Time {
+func (cm *Communicator) Pongs() <-chan struct{} {
 	return cm.pongs
 }

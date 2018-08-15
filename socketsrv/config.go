@@ -3,13 +3,14 @@ package socketsrv
 import "time"
 
 type ConnConfig struct {
-	IncomingBuffer     int
-	OutgoingBuffer     int
-	ReadBufferInitial  int
-	WriteBufferInitial int
-	HeartbeatInterval  time.Duration
-	ReadTimeout        time.Duration
-	WriteTimeout       time.Duration
+	IncomingBuffer         int
+	OutgoingBuffer         int
+	ReadBufferInitial      int
+	WriteBufferInitial     int
+	HeartbeatSendInterval  time.Duration
+	HeartbeatCheckInterval time.Duration
+	ReadTimeout            time.Duration
+	WriteTimeout           time.Duration
 
 	// ResponseTimeout declares how long the connection will wait for a
 	// response to the MessageID before yielding an error. The effective
@@ -30,15 +31,16 @@ func (c ConnConfig) IsZero() bool {
 
 func DefaultConnConfig() ConnConfig {
 	return ConnConfig{
-		IncomingBuffer:     1024,
-		OutgoingBuffer:     1024,
-		HeartbeatInterval:  2 * time.Second,
-		WriteTimeout:       10 * time.Second,
-		ReadTimeout:        10 * time.Second,
-		ReadBufferInitial:  2048,
-		WriteBufferInitial: 2048,
-		CleanupInterval:    5 * time.Second,
-		ResponseTimeout:    10 * time.Second,
+		IncomingBuffer:         1024,
+		OutgoingBuffer:         1024,
+		HeartbeatSendInterval:  2 * time.Second,
+		HeartbeatCheckInterval: 5 * time.Second,
+		WriteTimeout:           10 * time.Second,
+		ReadTimeout:            10 * time.Second,
+		ReadBufferInitial:      2048,
+		WriteBufferInitial:     2048,
+		CleanupInterval:        5 * time.Second,
+		ResponseTimeout:        10 * time.Second,
 	}
 }
 

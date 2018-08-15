@@ -64,3 +64,7 @@ func (pc *clientCommunicator) WriteMessage(data []byte, timeout time.Duration) (
 func (pc *clientCommunicator) Ping(timeout time.Duration) (rerr error) {
 	return pc.WriteMessage(packetPingBuf, timeout)
 }
+
+func (pc *clientCommunicator) Pongs() <-chan struct{} {
+	return nil
+}
