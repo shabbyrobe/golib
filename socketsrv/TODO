@@ -12,4 +12,7 @@ Tests:
 - response timeout
 - conn shutdown before async handler returns result
 - connector shutdown should shut down all clients
+- version negotiation timeouts
+- websocket server timeout when client does not send heartbeat
+- websocket client timeout when server does not send heartbeat
 

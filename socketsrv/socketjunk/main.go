@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/flate"
 	"context"
-	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
 	"expvar"
@@ -46,7 +45,7 @@ func run() error {
 	negotiator = &VersionNegotiator{
 		Protocols: map[uint32]socketsrv.Protocol{
 			1: Proto{},
-			2: AltProto{},
+			2: socketsrv.NewJSONProtocol("json", Mapper{}, 1000000),
 			// 3: CompressingProto{},
 		},
 	}
@@ -67,17 +66,13 @@ func run() error {
 
 type tcpClientCommand struct {
 	host    string
-	total   int
-	threads int
-	wait    time.Duration
+	spammer spammer
 }
 
 func (cl *tcpClientCommand) Synopsis() string { return "tcpclient" }
 func (cl *tcpClientCommand) Flags() *cmdy.FlagSet {
 	fs := cmdy.NewFlagSet()
-	fs.IntVar(&cl.total, "n", 100000, "total messages to send")
-	fs.IntVar(&cl.threads, "c", 10, "threads")
-	fs.DurationVar(&cl.wait, "w", 0, "wait between requests")
+	cl.spammer.Flags(fs)
 	return fs
 }
 
@@ -90,75 +85,17 @@ func (cl *tcpClientCommand) Args() *args.ArgSet {
 func (cl *tcpClientCommand) Run(ctx cmdy.Context) error {
 	// defer profile.Start().Stop()
 
-	config := socketsrv.DefaultConnectorConfig()
-	config.Conn.ResponseTimeout = 20 * time.Second
-	config.Conn.ReadTimeout = 20 * time.Second
-	config.Conn.WriteTimeout = 20 * time.Second
-
+	config := cl.spammer.Config()
 	connector := socketsrv.NewConnector(config, negotiator)
 
-	handler := &ServerHandler{}
-	in := make([]byte, 10000)
-	rand.Reader.Read(in)
-	_ = in
-
-	var wg sync.WaitGroup
-	wg.Add(cl.threads)
-
-	iter := cl.total / cl.threads
-	left := cl.total % cl.threads
-
-	s := time.Now()
-
-	for thread := 0; thread < cl.threads; thread++ {
-		time.Sleep(1 * time.Millisecond)
-		citer := iter
-		if thread == 0 {
-			citer += left
+	clientCb := func(handler socketsrv.Handler, opts ...socketsrv.ClientOption) (socketsrv.Client, error) {
+		client, err := connector.StreamClient(ctx, "tcp", cl.host, handler)
+		if err != nil {
+			return nil, err
 		}
-
-		go func(thread int, iter int) {
-			defer wg.Done()
-
-			client, err := connector.StreamClient(ctx, "tcp", cl.host, handler,
-				socketsrv.ClientDisconnect(func(connector *socketsrv.Connector, id socketsrv.ConnID, err error) {
-					fmt.Println(id, err)
-				}),
-			)
-			if err != nil {
-				fmt.Println("thread", thread, "failed:", err)
-				return
-			}
-			defer client.Close()
-
-			rq := &TestRequest{
-				Foo: fmt.Sprintf("%d", thread),
-			}
-			rs := make(chan socketsrv.Result, 1)
-			for i := 0; i < iter; i++ {
-				err := (client.Send(ctx, rq, rs))
-				if err != nil {
-					fmt.Println("thread", thread, "failed:", err)
-					return
-				}
-				rsp := <-rs
-				_ = rsp
-				if cl.wait > 0 {
-					time.Sleep(cl.wait)
-				}
-				// fmt.Printf("%#v\n", rsp)
-			}
-		}(thread, citer)
+		return client, nil
 	}
-
-	wg.Wait()
-
-	since := time.Since(s)
-	fmt.Println(since,
-		since/time.Duration(cl.total),
-		int64(cl.total)*int64(time.Second)/int64(since))
-
-	return nil
+	return cl.spammer.Spam(ctx, clientCb)
 }
 
 type tcpServerCommand struct {
@@ -199,14 +136,12 @@ func (sc *tcpServerCommand) Run(ctx cmdy.Context) error {
 			fmt.Println("disconnect", id, err)
 		}),
 	)
-	ender := service.NewEndListener(1)
-	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
-	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
-		return err
-	}
+
+	go srv.Serve(sc.host)
+
 	fmt.Printf("listening on %s\n", sc.host)
 
-	return <-ender.Ends()
+	select {}
 }
 
 type pktClientCommand struct {
@@ -223,8 +158,7 @@ func (cl *pktClientCommand) Args() *args.ArgSet {
 }
 
 func (cl *pktClientCommand) Run(ctx cmdy.Context) error {
-	config := socketsrv.ConnectorConfig{}
-	connector := socketsrv.NewConnector(config, negotiator)
+	connector := socketsrv.NewConnector(nil, negotiator)
 
 	dialer := net.Dialer{}
 	handler := &ServerHandler{}
@@ -314,11 +248,16 @@ func (sc *pktServerCommand) Run(ctx cmdy.Context) error {
 }
 
 type wsClientCommand struct {
-	url string
+	url     string
+	spammer spammer
 }
 
-func (cl *wsClientCommand) Synopsis() string     { return "wsclient" }
-func (cl *wsClientCommand) Flags() *cmdy.FlagSet { return nil }
+func (cl *wsClientCommand) Synopsis() string { return "wsclient" }
+func (cl *wsClientCommand) Flags() *cmdy.FlagSet {
+	fs := cmdy.NewFlagSet()
+	cl.spammer.Flags(fs)
+	return fs
+}
 
 func (cl *wsClientCommand) Args() *args.ArgSet {
 	as := args.NewArgSet()
@@ -329,35 +268,28 @@ func (cl *wsClientCommand) Args() *args.ArgSet {
 func (cl *wsClientCommand) Run(ctx cmdy.Context) error {
 	// defer profile.Start().Stop()
 
-	config := socketsrv.ConnectorConfig{}
+	config := cl.spammer.Config()
 	connector := socketsrv.NewConnector(config, negotiator)
-	handler := &ServerHandler{}
 
-	dialer := websocket.Dialer{
-		HandshakeTimeout: 5 * time.Second,
-	}
-
-	sock, _, err := dialer.Dial(cl.url, nil)
-	if err != nil {
-		return err
-	}
-	client, err := connector.Client(ctx, wsocketsrv.NewCommunicator(sock), handler)
-	if err != nil {
-		return err
-	}
-
-	rq := &TestRequest{}
-
-	s := time.Now()
-	for i := 0; i < 10000; i++ {
-		_, err := (client.Request(ctx, rq))
-		if err != nil {
-			return err
+	clientCb := func(handler socketsrv.Handler, opts ...socketsrv.ClientOption) (socketsrv.Client, error) {
+		dialer := websocket.Dialer{
+			HandshakeTimeout: 5 * time.Second,
 		}
+		sock, _, err := dialer.Dial(cl.url, nil)
+		if err != nil {
+			return nil, err
+		}
+		client, err := connector.Client(ctx, wsocketsrv.NewCommunicator(sock), handler,
+			socketsrv.ClientDisconnect(func(connector *socketsrv.Connector, id socketsrv.ConnID, err error) {
+				fmt.Println(id, err)
+			}),
+		)
+		if err != nil {
+			return nil, err
+		}
+		return client, nil
 	}
-	spew.Dump(time.Since(s))
-
-	return client.Close()
+	return cl.spammer.Spam(ctx, clientCb)
 }
 
 type wsServerCommand struct {
@@ -392,7 +324,14 @@ func (sc *wsServerCommand) Run(ctx cmdy.Context) error {
 
 	handler := &ServerHandler{}
 
-	srv := socketsrv.NewServer(config, ln, negotiator, handler)
+	srv := socketsrv.NewServer(config, ln, negotiator, handler,
+		socketsrv.ServerConnect(func(srv *socketsrv.Server, id socketsrv.ConnID) {
+			fmt.Println("connect", id)
+		}),
+		socketsrv.ServerDisconnect(func(srv *socketsrv.Server, id socketsrv.ConnID, err error) {
+			fmt.Println("disconnect", id, err)
+		}),
+	)
 	svc := service.New(service.Name(sc.host), srv).WithEndListener(ender)
 	if err := service.StartTimeout(5*time.Second, services.Runner(), svc); err != nil {
 		return err
@@ -457,7 +396,7 @@ type Proto struct {
 func (p Proto) ProtocolName() string     { return "Proto" }
 func (p Proto) Mapper() socketsrv.Mapper { return p.mapper }
 func (p Proto) Version() int             { return 1 }
-func (p Proto) MessageLimit() uint32     { return 10000000 }
+func (p Proto) MessageLimit() int        { return 10000000 }
 
 func (p Proto) Decode(in []byte, decdata *socketsrv.ProtoData) (env socketsrv.Envelope, rerr error) {
 	var je JSONEnvelope
@@ -540,62 +479,6 @@ type TestResponse struct {
 
 type TestCommand struct{}
 
-type AltProto struct {
-	mapper Mapper
-}
-
-func (p AltProto) ProtocolName() string     { return "AltProto" }
-func (p AltProto) Mapper() socketsrv.Mapper { return p.mapper }
-func (p AltProto) Version() int             { return 1 }
-func (p AltProto) MessageLimit() uint32     { return 10000000 }
-
-func (p AltProto) Decode(in []byte, decdata *socketsrv.ProtoData) (env socketsrv.Envelope, rerr error) {
-	if len(in) < 12 {
-		return env, fmt.Errorf("short message")
-	}
-
-	env.ID = socketsrv.MessageID(encoding.Uint32(in))
-	env.ReplyTo = socketsrv.MessageID(encoding.Uint32(in[4:]))
-	env.Kind = int(encoding.Uint32(in[8:]))
-	env.Message, rerr = p.mapper.Message(env.Kind)
-
-	if err := json.Unmarshal(in[12:], &env.Message); err != nil {
-		return env, err
-	}
-
-	return env, nil
-}
-
-func (p AltProto) Encode(env socketsrv.Envelope, into []byte, encData *socketsrv.ProtoData) (extended []byte, rerr error) {
-	if *encData == nil {
-		*encData = &altProtoData{}
-	}
-
-	var hdr [12]byte
-	encoding.PutUint32(hdr[0:], uint32(env.ID))
-	encoding.PutUint32(hdr[4:], uint32(env.ReplyTo))
-	encoding.PutUint32(hdr[8:], uint32(env.Kind))
-
-	buf := bytes.NewBuffer(into[:0])
-	buf.Write(hdr[:])
-
-	enc := json.NewEncoder(buf)
-	if err := enc.Encode(env.Message); err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
-}
-
-type altProtoData struct {
-	scratch     []byte
-	flateWriter *flate.Writer
-}
-
-func (a *altProtoData) Close() error {
-	return nil
-}
-
 type Mapper struct{}
 
 func (m Mapper) Message(kind int) (socketsrv.Message, error) {
@@ -635,7 +518,7 @@ type CompressingProto struct {
 func (p CompressingProto) ProtocolName() string     { return "CompressingProto" }
 func (p CompressingProto) Mapper() socketsrv.Mapper { return p.mapper }
 func (p CompressingProto) Version() int             { return 1 }
-func (p CompressingProto) MessageLimit() uint32     { return 10000000 }
+func (p CompressingProto) MessageLimit() int        { return 10000000 }
 
 func (p CompressingProto) Decode(in []byte, decData *socketsrv.ProtoData) (env socketsrv.Envelope, rerr error) {
 	var data *altProtoData
@@ -738,6 +621,15 @@ func (p CompressingProto) Encode(env socketsrv.Envelope, into []byte, encData *s
 		out, ilen = bw.Take()
 	}
 	return out[:ilen], nil
+}
+
+type altProtoData struct {
+	scratch     []byte
+	flateWriter *flate.Writer
+}
+
+func (a *altProtoData) Close() error {
+	return nil
 }
 
 func debugServer() {
