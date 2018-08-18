@@ -85,12 +85,12 @@ func (cl *tcpClientCommand) Args() *args.ArgSet {
 
 func (cl *tcpClientCommand) Run(ctx cmdy.Context) error {
 	// defer profile.Start().Stop()
+	debugServer(":14440")
 
-	config := cl.spammer.Config()
-	connector := socketsrv.NewConnector(config, negotiatorBuild())
+	dialer := cl.spammer.Dialer(negotiatorBuild())
 
 	clientCb := func(handler socketsrv.Handler, opts ...socketsrv.ClientOption) (socketsrv.Client, error) {
-		client, err := connector.StreamClient(ctx, "tcp", cl.host, handler, opts...)
+		client, err := dialer.DialStream(ctx, "tcp", cl.host, handler, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -115,7 +115,7 @@ func (sc *tcpServerCommand) Flags() *cmdy.FlagSet {
 func (sc *tcpServerCommand) Run(ctx cmdy.Context) error {
 	// defer profile.Start(profile.BlockProfile).Stop()
 
-	debugServer()
+	debugServer(":14441")
 
 	handler := &ServerHandler{}
 
@@ -159,7 +159,7 @@ func (cl *pktClientCommand) Args() *args.ArgSet {
 }
 
 func (cl *pktClientCommand) Run(ctx cmdy.Context) error {
-	connector := socketsrv.NewConnector(nil, negotiatorBuild())
+	socketDialer := socketsrv.DefaultDialer(negotiatorBuild())
 
 	dialer := net.Dialer{}
 	handler := &ServerHandler{}
@@ -186,7 +186,7 @@ func (cl *pktClientCommand) Run(ctx cmdy.Context) error {
 			if err != nil {
 				panic(err)
 			}
-			client, err := connector.Client(ctx, packetsrv.ClientCommunicator(conn), handler)
+			client, err := socketDialer.Client(ctx, packetsrv.ClientCommunicator(conn), handler)
 			if err != nil {
 				panic(err)
 			}
@@ -227,7 +227,7 @@ func (sc *pktServerCommand) Flags() *cmdy.FlagSet {
 func (sc *pktServerCommand) Run(ctx cmdy.Context) error {
 	defer profile.Start().Stop()
 
-	debugServer()
+	debugServer(":14442")
 
 	handler := &ServerHandler{}
 
@@ -268,22 +268,17 @@ func (cl *wsClientCommand) Args() *args.ArgSet {
 func (cl *wsClientCommand) Run(ctx cmdy.Context) error {
 	// defer profile.Start().Stop()
 
-	config := cl.spammer.Config()
-	connector := socketsrv.NewConnector(config, negotiatorBuild())
+	dialer := cl.spammer.Dialer(negotiatorBuild())
 
 	clientCb := func(handler socketsrv.Handler, opts ...socketsrv.ClientOption) (socketsrv.Client, error) {
-		dialer := websocket.Dialer{
+		wsDialer := websocket.Dialer{
 			HandshakeTimeout: 5 * time.Second,
 		}
-		sock, _, err := dialer.Dial(cl.url, nil)
+		sock, _, err := wsDialer.Dial(cl.url, nil)
 		if err != nil {
 			return nil, err
 		}
-		client, err := connector.Client(ctx, wsocketsrv.NewCommunicator(sock), handler,
-			socketsrv.ClientDisconnect(func(connector *socketsrv.Connector, id socketsrv.ConnID, err error) {
-				fmt.Println(id, err)
-			}),
-		)
+		client, err := dialer.Client(ctx, wsocketsrv.NewCommunicator(sock), handler, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -635,7 +630,7 @@ func (a *altProtoData) Close() error {
 	return nil
 }
 
-func debugServer() {
+func debugServer(host string) {
 	mux := http.NewServeMux()
 	mux.Handle("/debug/vars", expvar.Handler())
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
@@ -644,10 +639,12 @@ func debugServer() {
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-	hsrv := &http.Server{Addr: ":14123"}
+	hsrv := &http.Server{Addr: host}
 	hsrv.Handler = mux
-	svc := service.New("", &serviceutil.HTTP{Server: hsrv})
+	hsvc := &serviceutil.HTTP{Server: hsrv}
+	svc := service.New("", hsvc)
 	if err := service.StartTimeout(10*time.Second, services.Runner(), svc); err != nil {
 		panic(err)
 	}
+	fmt.Println("debug server running on", hsvc.Port())
 }

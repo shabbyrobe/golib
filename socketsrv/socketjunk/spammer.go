@@ -24,12 +24,12 @@ func (sp *spammer) Flags(fs *cmdy.FlagSet) {
 	fs.DurationVar(&sp.waitConn, "wc", 0, "wait between connections")
 }
 
-func (sp *spammer) Config() *socketsrv.ConnectorConfig {
-	config := socketsrv.DefaultConnectorConfig()
-	config.Conn.ResponseTimeout = 20 * time.Second
-	config.Conn.ReadTimeout = 20 * time.Second
-	config.Conn.WriteTimeout = 20 * time.Second
-	config.Conn.HeartbeatSendInterval = 60 * time.Second
+func (sp *spammer) Dialer(neg socketsrv.Negotiator) socketsrv.Dialer {
+	config := socketsrv.DefaultDialer(neg)
+	config.ResponseTimeout = 20 * time.Second
+	config.ReadTimeout = 20 * time.Second
+	config.WriteTimeout = 20 * time.Second
+	config.HeartbeatSendInterval = 60 * time.Second
 	return config
 }
 
@@ -61,7 +61,7 @@ func (sp *spammer) Spam(ctx cmdy.Context, handler socketsrv.Handler, clientCb sp
 			defer wg.Done()
 
 			opts := []socketsrv.ClientOption{
-				socketsrv.ClientDisconnect(func(connector *socketsrv.Connector, id socketsrv.ConnID, err error) {
+				socketsrv.ClientDisconnect(func(id socketsrv.ConnID, err error) {
 					fmt.Println("disconnected:", id, err)
 				}),
 			}

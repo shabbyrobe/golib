@@ -11,6 +11,7 @@ import (
 	"github.com/shabbyrobe/golib/incrementer"
 )
 
+// TODO(bw): Remove go-service from this package entirely.
 var serverRunner = service.NewRunner()
 
 type (
@@ -33,13 +34,15 @@ func ServerDisconnect(cb OnServerDisconnect) ServerOption {
 
 type Server struct {
 	config       ServerConfig
-	nextID       incrementer.Inc
 	runner       service.Runner
 	listener     Listener
 	handler      Handler
 	negotiator   Negotiator
 	onConnect    OnServerConnect
 	onDisconnect OnServerDisconnect
+
+	nextID   incrementer.Inc
+	nextIDMu sync.Mutex
 
 	conns   map[ConnID]*conn
 	connsMu sync.Mutex
@@ -71,25 +74,16 @@ func NewServer(config *ServerConfig, listener Listener, negotiator Negotiator, h
 		o(srv)
 	}
 
-	srv.runner = service.NewRunner(service.RunnerOnEnd(srv.onEnd))
 	return srv
 }
 
-func (srv *Server) onEnd(stage service.Stage, svc *service.Service, err error) {
-	// FIXME: There are deadlock issues with connsMu. onEnd can be called
-	// before runner.Start() has yielded, which would mean that connsMu is not
-	// unlocked before we attempt to acquire it here. The goroutine is a bit
-	// of a cheat; go-service probably needs to be less deadlock-prone for this
-	// use case.
-	go func() {
-		id := ConnID(svc.Name)
-		srv.connsMu.Lock()
-		delete(srv.conns, id)
-		srv.connsMu.Unlock()
-		if srv.onDisconnect != nil {
-			srv.onDisconnect(srv, id, err)
-		}
-	}()
+func (srv *Server) onEnd(id ConnID, err error) {
+	srv.connsMu.Lock()
+	delete(srv.conns, id)
+	srv.connsMu.Unlock()
+	if srv.onDisconnect != nil {
+		srv.onDisconnect(srv, id, err)
+	}
 }
 
 func (srv *Server) MustServe(host string) {
@@ -149,20 +143,26 @@ func (srv *Server) Run(ctx service.Context) (rerr error) {
 			// "started" until version negotiation is complete, but version
 			// negotiation may hit the network.
 			go func() {
+				srv.nextIDMu.Lock()
 				id := ConnID(srv.nextID.Next())
+				srv.nextIDMu.Unlock()
+
 				conn := newConn(id, ServerSide, srv.config.Conn, raw, srv.negotiator, srv.handler)
 
 				// we must start the service and raise the onConnected event
 				// while the lock is acquired otherwise the "onDisconnect"
 				// callback can be called before the "onConnect" callback.
 				srv.connsMu.Lock()
-				if err := srv.runner.Start(ctx, service.New(service.Name(id), conn)); err != nil {
-					srv.connsMu.Unlock()
 
-					_ = raw.Close()
+				ended := make(chan error, 1)
+				if err := conn.start(ended); err != nil {
 					ctx.OnError(err)
 					return
 				}
+				go func() {
+					srv.onEnd(id, <-ended)
+				}()
+
 				if srv.onConnect != nil {
 					srv.onConnect(srv, id)
 				}
