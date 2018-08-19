@@ -19,4 +19,4 @@ Tests:
 - nil handler should be guaranteed to work
 - context.Context passed to HandleMessage should become Done() when service
   finishes halting, not when service starts to halt
-
+- listener.Close() should cause Server to stop

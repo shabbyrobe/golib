@@ -4,11 +4,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"time"
 )
 
 type Negotiator interface {
-	Negotiate(Side, Communicator) (Protocol, error)
+	Negotiate(Side, Communicator, ConnConfig) (Protocol, error)
 }
 
 type Mapper interface {
@@ -44,22 +43,19 @@ type VersionedProtocol interface {
 
 type VersionNegotiator struct {
 	protocols map[uint32]VersionedProtocol
-	timeout   time.Duration
 	encoding  binary.ByteOrder
 	ours      []byte
 }
 
-func NewVersionNegotiator(timeout time.Duration, protos ...VersionedProtocol) *VersionNegotiator {
+var _ Negotiator = &VersionNegotiator{}
+
+func NewVersionNegotiator(protos ...VersionedProtocol) *VersionNegotiator {
 	if len(protos) == 0 {
 		panic("socketsrv: no procols specified")
 	}
 	vn := &VersionNegotiator{
 		protocols: make(map[uint32]VersionedProtocol),
 		encoding:  binary.BigEndian,
-		timeout:   timeout,
-	}
-	if vn.timeout <= 0 {
-		vn.timeout = 10 * time.Second
 	}
 
 	var ours = make([]byte, len(protos)*4)
@@ -68,6 +64,9 @@ func NewVersionNegotiator(timeout time.Duration, protos ...VersionedProtocol) *V
 			panic("socketsrv: proto version must fit inside uint32")
 		}
 		pv := uint32(p.Version())
+		if vn.protocols[pv] != nil {
+			panic(fmt.Errorf("socketsrv: duplicate proto version %d", pv))
+		}
 		vn.encoding.PutUint32(ours[i*4:], pv)
 		vn.protocols[pv] = p
 	}
@@ -76,6 +75,8 @@ func NewVersionNegotiator(timeout time.Duration, protos ...VersionedProtocol) *V
 	return vn
 }
 
+// Limit returns a copy of the VersionNegotiator, limited to the versions
+// passed.
 func (v *VersionNegotiator) Limit(versions ...int) (*VersionNegotiator, error) {
 	protos := make([]VersionedProtocol, len(versions))
 	for i, ver := range versions {
@@ -85,20 +86,15 @@ func (v *VersionNegotiator) Limit(versions ...int) (*VersionNegotiator, error) {
 		}
 		protos[i] = p
 	}
-	return NewVersionNegotiator(v.timeout, protos...), nil
+	return NewVersionNegotiator(protos...), nil
 }
 
-func (v *VersionNegotiator) Negotiate(side Side, c Communicator) (Protocol, error) {
-	timeout := v.timeout
-	if timeout <= 0 {
-		timeout = 10 * time.Second
-	}
-
-	if err := c.WriteMessage(v.ours, timeout); err != nil {
+func (v *VersionNegotiator) Negotiate(side Side, c Communicator, config ConnConfig) (Protocol, error) {
+	if err := c.WriteMessage(v.ours, config.WriteTimeout); err != nil {
 		return nil, err
 	}
 
-	msg, err := c.ReadMessage(nil, 1024, timeout)
+	msg, err := c.ReadMessage(nil, 1024, config.ReadTimeout)
 	if err != nil {
 		return nil, err
 	}

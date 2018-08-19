@@ -49,6 +49,8 @@ type Server struct {
 	running uint32
 }
 
+// BUG(bw): listener will be moved from NewServer to Serve() once the
+// dependency on go-service is removed.
 func NewServer(config *ServerConfig, listener Listener, negotiator Negotiator, handler Handler, opts ...ServerOption) *Server {
 	if listener == nil {
 		panic("socket: listener must not be nil")
@@ -86,17 +88,17 @@ func (srv *Server) onEnd(id ConnID, err error) {
 	}
 }
 
-func (srv *Server) MustServe(host string) {
-	if err := srv.Serve(host); err != nil {
+func (srv *Server) MustServe() {
+	if err := srv.Serve(); err != nil {
 		panic(err)
 	}
 }
 
 // Serve is a shorthand for starting the Server as a service using
 // github.com/shabbyrobe/go-service.
-func (srv *Server) Serve(host string) error {
+func (srv *Server) Serve() error {
 	ender := service.NewEndListener(1)
-	svc := service.New(service.Name(host), srv).WithEndListener(ender)
+	svc := service.New(service.Name("server"), srv).WithEndListener(ender)
 
 	// Hard-coded timeout shouldn't be an issue here.
 	if err := service.StartTimeout(10*time.Second, serverRunner, svc); err != nil {

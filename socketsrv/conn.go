@@ -241,7 +241,7 @@ func (c *conn) negotiate() (Protocol, error) {
 	errc := make(chan error, 1)
 
 	go func() {
-		proto, err := c.negotiator.Negotiate(c.side, c.comm)
+		proto, err := c.negotiator.Negotiate(c.side, c.comm, c.config)
 		if err != nil {
 			errc <- err
 			return
@@ -593,6 +593,7 @@ func (c *conn) sendResult(ctx context.Context, sendCall call) (rs Message, rerr 
 
 	// Don't wait on c.stop in this select block. The stop channel may yield
 	// before the result channel does even when a real result is available.
+	// The receiver channel will yield if the connection shuts down properly.
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()

@@ -57,7 +57,6 @@ func run() error {
 
 func negotiatorBuild() socketsrv.Negotiator {
 	negotiator := socketsrv.NewVersionNegotiator(
-		10*time.Second,
 		Proto{version: 1, messageLimit: 1000000, mapper: Mapper{}, codec: SimpleCodec{}},
 		Proto{version: 2, messageLimit: 1000000, mapper: Mapper{}, codec: jsonsrv.Codec},
 		// CompressingProto{},
@@ -138,7 +137,7 @@ func (sc *tcpServerCommand) Run(ctx cmdy.Context) error {
 		}),
 	)
 
-	go srv.Serve(sc.host)
+	go srv.Serve()
 
 	fmt.Printf("listening on %s\n", sc.host)
 
