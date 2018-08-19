@@ -226,6 +226,7 @@ func (tb T) floatNear(fatal bool, epsilon float64, expected float64, actual floa
 }
 
 func (tb T) failCompare(kind string, exp, act interface{}, fatal bool, frameOffset int, v ...interface{}) {
+	tb.Helper()
 	extra := ""
 	if len(v) > 0 {
 		extra = fmt.Sprintf(" - "+v[0].(string), v[1:]...)
@@ -237,6 +238,7 @@ func (tb T) failCompare(kind string, exp, act interface{}, fatal bool, frameOffs
 }
 
 func (tb T) fail(fatal bool, msg string) {
+	tb.Helper()
 	if fatal {
 		tb.Fatal(msg)
 	} else {
