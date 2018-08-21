@@ -1,5 +1,3 @@
-// +build ignore
-
 package socketsrv
 
 import (
@@ -11,16 +9,19 @@ import (
 )
 
 type testingListener struct {
+	communicators chan Communicator
 }
 
 var _ Listener = &testingListener{}
 
 func newTestingListener() *testingListener {
-	return &testingListener{}
+	return &testingListener{
+		communicators: make(chan Communicator, 1),
+	}
 }
 
 func (tl *testingListener) Accept() (Communicator, error) {
-	return nil, nil
+	return <-tl.communicators, nil
 }
 
 func (tl *testingListener) Close() error {
@@ -71,11 +72,12 @@ func (tc *testingCommunicator) WriteMessage(data []byte, timeout time.Duration) 
 }
 
 type testingServer struct {
-	config          ServerConfig
+	config          *ServerConfig
 	server          *Server
 	listener        Listener
 	handler         Handler
 	negotiator      Negotiator
+	protocol        Protocol
 	testingListener *testingListener
 	serverOpts      []ServerOption
 }
@@ -92,13 +94,57 @@ func newTestingServer(tt assert.T, opts ...serverOpt) *testingServer {
 	if ts.listener == nil {
 		ts.listener = newTestingListener()
 	}
+	if ts.negotiator == nil {
+		ts.negotiator = ts
+	}
+	if ts.protocol == nil {
+		ts.protocol = ts
+	}
 
 	ts.server = NewServer(ts.config, ts.listener, ts.negotiator, ts.handler, ts.serverOpts...)
 	return ts
 }
 
+func (ts *testingServer) Negotiate(Side, Communicator, ConnConfig) (Protocol, error) {
+	return ts.protocol, nil
+}
+
 func (ts *testingServer) HandleRequest(ctx context.Context, ir IncomingRequest) (rs Message, rerr error) {
 	return nil, nil
+}
+
+func (ts *testingServer) Mapper() Mapper {
+	panic("not implemented")
+}
+
+func (ts *testingServer) MessageLimit() int {
+	panic("not implemented")
+}
+
+func (ts *testingServer) ProtocolName() string {
+	panic("not implemented")
+}
+
+func (ts *testingServer) Codec() Codec {
+	panic("not implemented")
+}
+
+type testingProtocol struct{}
+
+func (ts *testingProtocol) Mapper() Mapper {
+	panic("not implemented")
+}
+
+func (ts *testingProtocol) MessageLimit() int {
+	panic("not implemented")
+}
+
+func (ts *testingProtocol) ProtocolName() string {
+	panic("not implemented")
+}
+
+func (ts *testingProtocol) Codec() Codec {
+	panic("not implemented")
 }
 
 type serverOpt func(s *testingServer)

@@ -2,7 +2,6 @@ package socketsrv
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -23,6 +22,12 @@ const (
 	connRunning  uint32 = 1
 	connComplete uint32 = 2
 )
+
+var resultPool = sync.Pool{
+	New: func() interface{} {
+		return make(chan Result, 1)
+	},
+}
 
 type conn struct {
 	id         ConnID
@@ -98,15 +103,17 @@ func (c *conn) Close() error {
 		c.stopClosed = true
 
 	} else {
-		return fmt.Errorf("socketsrv: conn already closed")
+		return errAlreadyClosed
 	}
 
 	return nil
 }
 
+// Send a message to the remote connection. Responses will be sent to the recv channel.
+// If the recv channel would block, the connection is terminated.
 func (c *conn) Send(ctx context.Context, msg Message, recv chan<- Result) (rerr error) {
 	if atomic.LoadUint32(&c.state) != connRunning {
-		return errConnSendNotRunning
+		return errNotRunning
 	}
 	sendCall := call{
 		env: Envelope{
@@ -123,7 +130,7 @@ func (c *conn) Send(ctx context.Context, msg Message, recv chan<- Result) (rerr 
 
 func (c *conn) Reply(ctx context.Context, to MessageID, msg Message, replyError error) (rerr error) {
 	if atomic.LoadUint32(&c.state) != connRunning {
-		return errConnSendNotRunning
+		return errNotRunning
 	}
 	sendCall := call{
 		env: Envelope{
@@ -139,7 +146,7 @@ func (c *conn) Reply(ctx context.Context, to MessageID, msg Message, replyError 
 
 func (c *conn) Request(ctx context.Context, msg Message) (resp Message, rerr error) {
 	if atomic.LoadUint32(&c.state) != connRunning {
-		return nil, errConnSendNotRunning
+		return nil, errNotRunning
 	}
 	sendCall := call{
 		env: Envelope{
@@ -151,30 +158,78 @@ func (c *conn) Request(ctx context.Context, msg Message) (resp Message, rerr err
 	return resp, rerr
 }
 
+func (c *conn) send(ctx context.Context, sendCall call) (rerr error) {
+	if c.config.ResponseTimeout > 0 {
+		sendCall.deadline = time.Now().Add(c.config.ResponseTimeout)
+	}
+
+	c.sendWait.Add(1)
+
+	// send should not return wrapped errors; callers of send will wrap as needed:
+	select {
+	case c.calls <- &sendCall:
+		c.sendWait.Done()
+		return nil
+
+	case <-c.stop:
+		c.sendWait.Done()
+		return errConnShutdown
+
+	case <-ctx.Done():
+		c.sendWait.Done()
+		return ctx.Err()
+	}
+}
+
+func (c *conn) sendResult(ctx context.Context, sendCall call) (rs Message, rerr error) {
+	recv := resultPool.Get().(chan Result)
+	sendCall.rs = recv
+	if err := c.send(ctx, sendCall); err != nil {
+		return nil, rerr
+	}
+
+	// sendResult should not return wrapped errors; callers of send will wrap as needed.
+
+	// Don't wait on c.stop in this select block. The stop channel may yield
+	// before the result channel does even when a real result is available.
+	// The receiver channel will yield if the connection shuts down properly.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+
+	case result := <-recv:
+		// We can only easily guarantee the channel is in a state fit to return
+		// to the pool if we have received a value from it. It may be possible
+		// in other branches but it's harder to verify.
+		resultPool.Put(recv)
+		return result.Message, result.Err
+	}
+}
+
 func (c *conn) start(ended chan error) (rerr error) {
 	if cap(ended) < 1 {
 		panic("socketsrv: ended must have cap >= 1")
 	}
 
 	if !atomic.CompareAndSwapUint32(&c.state, connNew, connRunning) {
-		return errors.New("socketsrv: cannot re-use Conn")
+		return errNotRunning
 	}
 
-	// Negotiate may access the network. The connection is not ready until
-	// negotiation has succeeded:
+	// negotiate() may access the network. The connection is not ready until
+	// negotiation has succeeded. negotiate() ensures that proto is not nil.
 	proto, err := c.negotiate()
 	if err != nil {
-		return err
+		return &ConnError{ID: c.id, Op: OpNegotiate, Err: err}
 	}
 
 	mapper := proto.Mapper()
 	if mapper == nil {
-		return fmt.Errorf("socketsrv: proto %q returned nil mapper", proto.ProtocolName())
+		panic(fmt.Errorf("proto %q returned nil mapper", proto.ProtocolName()))
 	}
 
 	codec := proto.Codec()
 	if codec == nil {
-		return fmt.Errorf("socketsrv: proto %q returned nil codec", proto.ProtocolName())
+		panic(fmt.Errorf("proto %q returned nil codec", proto.ProtocolName()))
 	}
 
 	// The Communicator's view of the maximum message size is a harder limit than
@@ -247,12 +302,13 @@ func (c *conn) negotiate() (Protocol, error) {
 			return
 		}
 		if proto == nil {
-			errc <- errors.New("socketsrv: negotiator returned nil protocol")
+			errc <- errNoProtocol
 			return
 		}
 		result <- proto
 	}()
 
+	// negotiate should not return wrapped errors:
 	select {
 	case proto := <-result:
 		return proto, nil
@@ -266,7 +322,20 @@ func (c *conn) negotiate() (Protocol, error) {
 func (c *conn) writerThread(
 	codec Codec,
 	messageLimit int,
-) error {
+) (rerr error) {
+
+	defer func() {
+		// If the Close() function is called in between the writer thread's select
+		// block yielding a value via the 'outgoing' channel and the call to write
+		// to the Communicator, WriteMessage will fail with "use of closed network
+		// connection". If Close() has been called, we don't care about these errors:
+		c.stopCloseMu.Lock()
+		if c.stopClosed {
+			rerr = nil
+		}
+		c.stopCloseMu.Unlock()
+	}()
+
 	wrBuf := make([]byte, 0, c.config.WriteBufferInitial)
 
 	// decData contains writer-local shared memory that the Protocol may use
@@ -290,21 +359,24 @@ func (c *conn) writerThread(
 		select {
 		case <-heartbeat:
 			if err := c.comm.Ping(c.config.WriteTimeout); err != nil {
-				return err
+				return &ConnError{ID: c.ID(), Op: OpPing, Err: err}
 			}
 
 		case env := <-c.outgoing:
 			var err error
 			wrBuf, err = codec.Encode(*env, wrBuf, &decData)
 			if err != nil {
-				return err
+				return &protocolError{ID: c.id, Err: err}
 			}
+
 			mlen := len(wrBuf)
 			if mlen > messageLimit {
-				return fmt.Errorf("conn: message of length %d exceeded limit %d", mlen, messageLimit)
+				// FIXME: error struct
+				return &protocolError{ID: c.id,
+					Err: fmt.Errorf("message of length %d exceeded limit %d", mlen, messageLimit)}
 			}
 			if err := c.comm.WriteMessage(wrBuf, c.config.WriteTimeout); err != nil {
-				return err
+				return &ConnError{ID: c.id, Op: OpWrite, Err: err}
 			}
 
 		case <-c.stop:
@@ -317,7 +389,20 @@ func (c *conn) readerThread(
 	codec Codec,
 	messageLimit int,
 	mapper Mapper,
-) error {
+) (rerr error) {
+
+	defer func() {
+		// If the Close() function is called in between the send to 'c.incoming'
+		// succeeding and the next ReadMessage call, the ReadMessage call will fail
+		// with the message "use of closed network connection". If Close() has been
+		// called, we don't care about these errors:
+		c.stopCloseMu.Lock()
+		if c.stopClosed {
+			rerr = nil
+		}
+		c.stopCloseMu.Unlock()
+	}()
+
 	rdBuf := make([]byte, c.config.ReadBufferInitial)
 
 	// encData contains reader-local shared memory that the Protocol may use
@@ -334,7 +419,7 @@ func (c *conn) readerThread(
 	for {
 		rdBuf, err = c.comm.ReadMessage(rdBuf, messageLimit, c.config.ReadTimeout)
 		if err != nil {
-			return err
+			return &ConnError{ID: c.ID(), Op: OpRead, Err: err}
 		}
 
 		var env *Envelope
@@ -343,7 +428,7 @@ func (c *conn) readerThread(
 		if len(rdBuf) != 0 {
 			denv, err := codec.Decode(rdBuf, mapper, &encData)
 			if err != nil {
-				return err
+				return &protocolError{ID: c.id, Err: err}
 			}
 			env = &denv
 		}
@@ -384,6 +469,7 @@ func (c *conn) reactorShutdown(calls map[MessageID]*call, rerr *error) {
 	// Report shutdown to all pending calls:
 	rserr := *rerr
 	if rserr == nil {
+		// should not be wrapped; wrapping will happen in Send/Request
 		rserr = errConnShutdown
 	}
 	for _, call := range calls {
@@ -404,7 +490,10 @@ func (c *conn) reactor(proto Protocol, mapper Mapper, codec Codec) (rerr error) 
 
 	defer c.reactorShutdown(calls, &rerr)
 
-	shutdownCtx := &connShutdownContext{done: c.stopped}
+	// shutdownCtx is used when a context is needed that becomes Done() after
+	// the conn's Run method has finished shutting down, rather than a context
+	// that becomes Done() when the shutdown process begins.
+	shutdownCtx := &chanContext{done: c.stopped}
 
 	// Configure cleanup channel:
 	var cleanup <-chan time.Time
@@ -435,21 +524,22 @@ func (c *conn) reactor(proto Protocol, mapper Mapper, codec Codec) (rerr error) 
 			lastRecv = time.Now()
 
 			if env == nil {
-				// It's a heartbeat. Do nothing, but we still need to send it to the reactor
-				// so it can update the lastRecv time.
+				// It's a heartbeat. Do nothing, it's only sent here to the reactor so we
+				// can update the lastRecv time.
 
 			} else if env.ReplyTo != 0 {
 				// Incoming message is a response to an existing call:
 				call, ok := calls[env.ReplyTo]
 				if !ok {
-					return fmt.Errorf("socketsrv: unexpected incoming %d in reply to message %d", env.ID, env.ReplyTo)
+					return &ConnError{ID: c.id, Op: OpRead,
+						Err: fmt.Errorf("unexpected incoming id %d in reply to message %d", env.ID, env.ReplyTo)}
 				}
 
 				delete(calls, env.ReplyTo)
 				select {
 				case call.rs <- Result{ID: env.ID, Message: env.Message}:
 				default:
-					return fmt.Errorf("call receiver would block")
+					return errReceiverBlocked
 				}
 
 			} else if c.handler != nil {
@@ -470,7 +560,7 @@ func (c *conn) reactor(proto Protocol, mapper Mapper, codec Codec) (rerr error) 
 				if rs != nil {
 					kind, err := mapper.MessageKind(rs)
 					if err != nil {
-						return err
+						return &protocolError{ID: c.id, Err: err}
 					}
 
 					select {
@@ -482,7 +572,8 @@ func (c *conn) reactor(proto Protocol, mapper Mapper, codec Codec) (rerr error) 
 
 			} else {
 				// Incoming message is unhandled; terminate the connection:
-				return fmt.Errorf("socketsrv: unexpected incoming message %T(%d)", env.Message, env.Kind)
+				return &protocolError{ID: c.id,
+					Err: fmt.Errorf("unexpected incoming message %T(%d)", env.Message, env.Kind)}
 			}
 
 		// Connection handles call (conn.Request, conn.Send, conn.Reply):
@@ -493,18 +584,19 @@ func (c *conn) reactor(proto Protocol, mapper Mapper, codec Codec) (rerr error) 
 				calls[out.env.ID] = out
 			}
 
-			// If the call itself carries an error, this has come from a Handler. These
-			// errors need to terminate the connection and be passed through to the
-			// disconnection handler as there is no way to handle errors of this kind
-			// inside a handler.
+			// If the call itself carries an error, this has come from a Handler. Errors
+			// from a Handler should not be wrapped in a ConnError. These errors need to
+			// terminate the connection and be passed through to the disconnection handler
+			// as there is no way to handle errors of this kind inside a handler.
 			if out.err != nil {
-				return out.err
+				return &ConnError{ID: c.id, Op: OpHandle, Err: out.err}
 			}
 
 			var err error
 			out.env.Kind, err = mapper.MessageKind(out.env.Message)
 			if err != nil {
 				delete(calls, out.env.ID)
+				err = &protocolError{ID: c.id, Err: err}
 			}
 
 			// If the call is a conn.Reply or if an error occurred, we need to unblock the caller.
@@ -514,7 +606,7 @@ func (c *conn) reactor(proto Protocol, mapper Mapper, codec Codec) (rerr error) 
 				select {
 				case out.rs <- Result{ID: out.env.ID, Err: err}:
 				default:
-					return fmt.Errorf("call receiver would block")
+					return errReceiverBlocked
 				}
 			}
 
@@ -541,7 +633,7 @@ func (c *conn) reactor(proto Protocol, mapper Mapper, codec Codec) (rerr error) 
 				select {
 				case call.rs <- Result{ID: call.env.ID, Err: errResponseTimeout}:
 				default:
-					return fmt.Errorf("call receiver would block")
+					return errReceiverBlocked
 				}
 			}
 
@@ -557,83 +649,9 @@ func (c *conn) nextID() MessageID {
 	return MessageID(atomic.AddUint32(&c.nextMessageID, 2))
 }
 
-func (c *conn) send(ctx context.Context, sendCall call) (rerr error) {
-	if c.config.ResponseTimeout > 0 {
-		sendCall.deadline = time.Now().Add(c.config.ResponseTimeout)
-	}
-
-	c.sendWait.Add(1)
-	select {
-	case c.calls <- &sendCall:
-		c.sendWait.Done()
-		return nil
-
-	case <-c.stop:
-		c.sendWait.Done()
-		return errConnShutdown
-
-	case <-ctx.Done():
-		c.sendWait.Done()
-		return ctx.Err()
-	}
-}
-
-var resultPool = sync.Pool{
-	New: func() interface{} {
-		return make(chan Result, 1)
-	},
-}
-
-func (c *conn) sendResult(ctx context.Context, sendCall call) (rs Message, rerr error) {
-	recv := resultPool.Get().(chan Result)
-	sendCall.rs = recv
-	if err := c.send(ctx, sendCall); err != nil {
-		return nil, rerr
-	}
-
-	// Don't wait on c.stop in this select block. The stop channel may yield
-	// before the result channel does even when a real result is available.
-	// The receiver channel will yield if the connection shuts down properly.
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-
-	case result := <-recv:
-		// We can only easily guarantee the channel is in a state fit to return
-		// to the pool if we have received a value from it. It may be possible
-		// in other branches but it's harder to verify.
-		resultPool.Put(recv)
-		return result.Message, result.Err
-	}
-}
-
 type call struct {
 	env      Envelope
 	rs       chan<- Result
 	err      error
 	deadline time.Time
-}
-
-// connShutdownContext is used when a context is needed that becomes Done()
-// after the conn's Run method has completely shut down, rather than a
-// context that becomes Done() when the shutdown process begins.
-type connShutdownContext struct {
-	done chan struct{}
-}
-
-func (csc *connShutdownContext) Deadline() (deadline time.Time, ok bool) {
-	return
-}
-
-func (csc *connShutdownContext) Done() <-chan struct{} {
-	return csc.done
-}
-
-func (csc *connShutdownContext) Err() error {
-	// FIXME: maybe should return an error when done is closed:
-	return nil
-}
-
-func (csc *connShutdownContext) Value(key interface{}) interface{} {
-	return nil
 }

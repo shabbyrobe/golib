@@ -12,14 +12,14 @@ import (
 
 type spammer struct {
 	total    int
-	threads  int
+	conns    int
 	waitRq   time.Duration
 	waitConn time.Duration
 }
 
 func (sp *spammer) Flags(fs *cmdy.FlagSet) {
 	fs.IntVar(&sp.total, "n", 100000, "total messages to send")
-	fs.IntVar(&sp.threads, "c", 10, "threads")
+	fs.IntVar(&sp.conns, "c", 10, "connections")
 	fs.DurationVar(&sp.waitRq, "wr", 0, "wait between requests")
 	fs.DurationVar(&sp.waitConn, "wc", 0, "wait between connections")
 }
@@ -40,17 +40,17 @@ func (sp *spammer) Spam(ctx cmdy.Context, handler socketsrv.Handler, clientCb sp
 	rand.Reader.Read(in)
 	_ = in
 
-	var wg sync.WaitGroup
-	wg.Add(sp.threads)
+	var wgt, wgConn sync.WaitGroup
+	wgt.Add(sp.conns)
 
-	iter := sp.total / sp.threads
-	left := sp.total % sp.threads
+	iter := sp.total / sp.conns
+	left := sp.total % sp.conns
 
 	s := time.Now()
 
-	for thread := 0; thread < sp.threads; thread++ {
+	for conn := 0; conn < sp.conns; conn++ {
 		citer := iter
-		if thread == 0 {
+		if conn == 0 {
 			citer += left
 		}
 		if sp.waitConn > 0 {
@@ -58,11 +58,15 @@ func (sp *spammer) Spam(ctx cmdy.Context, handler socketsrv.Handler, clientCb sp
 		}
 
 		go func(thread int, iter int) {
-			defer wg.Done()
+			defer wgt.Done()
 
 			opts := []socketsrv.ClientOption{
+				socketsrv.ClientConnect(func(id socketsrv.ConnID) {
+					wgConn.Add(1)
+				}),
 				socketsrv.ClientDisconnect(func(id socketsrv.ConnID, err error) {
 					fmt.Println("disconnected:", id, err)
+					wgConn.Done()
 				}),
 			}
 
@@ -91,10 +95,11 @@ func (sp *spammer) Spam(ctx cmdy.Context, handler socketsrv.Handler, clientCb sp
 				}
 				// fmt.Printf("%#v\n", rsp)
 			}
-		}(thread, citer)
+		}(conn, citer)
 	}
 
-	wg.Wait()
+	wgt.Wait()
+	wgConn.Wait()
 
 	since := time.Since(s)
 	fmt.Println(since,

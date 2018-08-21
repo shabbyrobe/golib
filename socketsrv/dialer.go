@@ -25,6 +25,7 @@ func DefaultDialer(neg Negotiator) Dialer {
 
 // dial is an accumulator for ClientOption.
 type dial struct {
+	onConnect    OnClientConnect
 	onDisconnect OnClientDisconnect
 }
 
@@ -37,8 +38,20 @@ type Dialer struct {
 
 type ClientOption func(dial *dial)
 
+type OnClientConnect func(id ConnID)
 type OnClientDisconnect func(id ConnID, err error)
 
+// ClientConnect is a ClientOption that registers a callback that happens when
+// a dialer establishes a client connection. It will block the Dial/Client methods
+// and is guaranteed to happen before the ClientDisconnect.
+func ClientConnect(cb OnClientConnect) ClientOption {
+	return func(dial *dial) { dial.onConnect = cb }
+}
+
+// ClientConnect is a ClientOption that registers a callback that happens when
+// a client connection is lost. It is guaranteed to happen after ClientConnect.
+// It will not be called if Client() or DialStream() would return an error; you
+// will only get one error or the other.
 func ClientDisconnect(cb OnClientDisconnect) ClientOption {
 	return func(dial *dial) { dial.onDisconnect = cb }
 }
@@ -80,6 +93,10 @@ func (d Dialer) Client(ctx context.Context, rc Communicator, handler Handler, op
 	ended := make(chan error, 1)
 	if err := conn.start(ended); err != nil {
 		return nil, err
+	}
+
+	if currentDial.onConnect != nil {
+		currentDial.onConnect(id)
 	}
 
 	if currentDial.onDisconnect != nil {
