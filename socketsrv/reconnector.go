@@ -88,7 +88,7 @@ func (rc *Reconnector) Send(ctx context.Context, msg Message, recv chan<- Result
 	if client != nil {
 		return client.Send(ctx, msg, recv)
 	}
-	return errNotRunning
+	return errUnavailable
 }
 
 func (rc *Reconnector) Request(ctx context.Context, msg Message) (resp Message, rerr error) {
@@ -102,7 +102,7 @@ func (rc *Reconnector) Request(ctx context.Context, msg Message) (resp Message, 
 	if client != nil {
 		return client.Request(ctx, msg)
 	}
-	return nil, fmt.Errorf("socketsrv: client not available")
+	return nil, errUnavailable
 }
 
 func (rc *Reconnector) Dial(ctx context.Context) error {

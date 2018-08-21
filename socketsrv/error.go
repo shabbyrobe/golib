@@ -14,6 +14,7 @@ var (
 	errConnShutdown   error = &errTemporary{"socketsrv: conn shutdown"}
 	errAlreadyClosed  error = &errTemporary{"socketsrv: already closed"}
 	errNotRunning     error = &errTemporary{"socketsrv: not running"}
+	errUnavailable    error = &errTemporary{"socketsrv: resource temporarily unavailable"}
 	errAlreadyRunning error = &errTemporary{"socketsrv: already running"}
 
 	// This is an error rather than a panic because callers of Send() are free
