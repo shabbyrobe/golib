@@ -25,8 +25,8 @@ func DefaultDialer(neg Negotiator) Dialer {
 
 // dial is an accumulator for ClientOption.
 type dial struct {
-	onConnect    OnClientConnect
-	onDisconnect OnClientDisconnect
+	onConnects    []OnClientConnect
+	onDisconnects []OnClientDisconnect
 }
 
 // Dialer creates Client connections to Servers.
@@ -45,7 +45,7 @@ type OnClientDisconnect func(id ConnID, err error)
 // a dialer establishes a client connection. It will block the Dial/Client methods
 // and is guaranteed to happen before the ClientDisconnect.
 func ClientConnect(cb OnClientConnect) ClientOption {
-	return func(dial *dial) { dial.onConnect = cb }
+	return func(dial *dial) { dial.onConnects = append(dial.onConnects, cb) }
 }
 
 // ClientConnect is a ClientOption that registers a callback that happens when
@@ -53,7 +53,7 @@ func ClientConnect(cb OnClientConnect) ClientOption {
 // It will not be called if Client() or DialStream() would return an error; you
 // will only get one error or the other.
 func ClientDisconnect(cb OnClientDisconnect) ClientOption {
-	return func(dial *dial) { dial.onDisconnect = cb }
+	return func(dial *dial) { dial.onDisconnects = append(dial.onDisconnects, cb) }
 }
 
 func (d Dialer) DialStream(ctx context.Context, network, host string, handler Handler, opts ...ClientOption) (Client, error) {
@@ -95,13 +95,16 @@ func (d Dialer) Client(ctx context.Context, rc Communicator, handler Handler, op
 		return nil, err
 	}
 
-	if currentDial.onConnect != nil {
-		currentDial.onConnect(id)
+	for _, oc := range currentDial.onConnects {
+		oc(id)
 	}
 
-	if currentDial.onDisconnect != nil {
+	if len(currentDial.onDisconnects) > 0 {
 		go func() {
-			currentDial.onDisconnect(id, <-ended)
+			err := <-ended
+			for _, od := range currentDial.onDisconnects {
+				od(id, err)
+			}
 		}()
 	}
 
