@@ -155,12 +155,14 @@ func (srv *Server) Run(ctx service.Context) (rerr error) {
 				// while the lock is acquired otherwise the "onDisconnect"
 				// callback can be called before the "onConnect" callback.
 				srv.connsMu.Lock()
+				defer srv.connsMu.Unlock()
 
 				ended := make(chan error, 1)
 				if err := conn.start(ended); err != nil {
 					ctx.OnError(err)
 					return
 				}
+
 				go func() {
 					srv.onEnd(id, <-ended)
 				}()
@@ -169,7 +171,6 @@ func (srv *Server) Run(ctx service.Context) (rerr error) {
 					srv.onConnect(srv, id)
 				}
 				srv.conns[id] = conn
-				srv.connsMu.Unlock()
 			}()
 		}
 	}()
