@@ -2,7 +2,7 @@ package iotools
 
 import "io"
 
-// ReadCloserStack wraps a group of io.Writers with a closer that closes
+// ReadCloserStack wraps a group of io.Readers with a closer that closes
 // things in the reverse order to the order they were added.
 // The main use case is wrapping a GzipReader.
 // The Read function will call the last added ReadCloser.
