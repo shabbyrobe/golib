@@ -33,6 +33,8 @@ func TestDiff(t *testing.T) {
 		{md(2018, 1, 2), md(2018, 2, 1), TimeDiff{Days: 30}},
 		{md(2018, 2, 2), md(2018, 3, 1), TimeDiff{Days: 27}},
 		{md(2017, 2, 11), md(2018, 1, 12), TimeDiff{Months: 11, Days: 1}},
+
+		{mdt(2005, 12, 31, 23, 59, 0, 0), mdt(2006, 1, 1, 0, 0, 0, 0), TimeDiff{Minutes: 1}},
 	} {
 		t.Run("", func(t *testing.T) {
 			assert.WrapTB(t).MustEqual(tc.result, Diff(tc.a, tc.b))
