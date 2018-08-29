@@ -11,6 +11,10 @@ const (
 	week = 24 * 7 * time.Hour
 )
 
+func DaysInMonth(year int, month time.Month) int {
+	return time.Date(year, month+1, 0, 0, 0, 0, 0, time.UTC).Day()
+}
+
 func FirstDayOfISOWeek(t time.Time) (tm time.Time, year, week int) {
 	s := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 	if s.Weekday() != time.Monday {
