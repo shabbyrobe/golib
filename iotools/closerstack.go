@@ -7,9 +7,11 @@ import "io"
 // The main use case is wrapping a GzipReader.
 // The Read function will call the last added ReadCloser.
 type ReadCloserStack struct {
+	io.Reader
 	readers []io.ReadCloser
-	reader  io.Reader
 }
+
+var _ io.ReadCloser = &ReadCloserStack{}
 
 func NewReadCloserStack(rc ...io.ReadCloser) *ReadCloserStack {
 	rcs := &ReadCloserStack{}
@@ -17,18 +19,10 @@ func NewReadCloserStack(rc ...io.ReadCloser) *ReadCloserStack {
 	return rcs
 }
 
-func (d *ReadCloserStack) Read(b []byte) (n int, err error) {
-	return d.reader.Read(b)
-}
-
-func (d *ReadCloserStack) SetReader(r io.Reader) {
-	d.reader = r
-}
-
 func (d *ReadCloserStack) AddCloser(rc ...io.ReadCloser) {
 	rcl := len(rc)
 	if rcl > 0 {
-		d.reader = rc[rcl-1]
+		d.Reader = rc[rcl-1]
 		d.readers = append(d.readers, rc...)
 	}
 }
@@ -42,7 +36,7 @@ func (d *ReadCloserStack) Close() error {
 		}
 	}
 	if len(errs) > 0 {
-		return closerStackError{errs}
+		return &closerStackError{errs}
 	}
 	return nil
 }
@@ -52,9 +46,11 @@ func (d *ReadCloserStack) Close() error {
 // The main use case is wrapping a GzipWriter.
 // The Write function will call the last added WriteCloser.
 type WriteCloserStack struct {
+	io.Writer
 	writers []io.WriteCloser
-	writer  io.Writer
 }
+
+var _ io.WriteCloser = &WriteCloserStack{}
 
 func NewWriteCloserStack(wc ...io.WriteCloser) *WriteCloserStack {
 	wcs := &WriteCloserStack{}
@@ -62,18 +58,10 @@ func NewWriteCloserStack(wc ...io.WriteCloser) *WriteCloserStack {
 	return wcs
 }
 
-func (d *WriteCloserStack) Write(b []byte) (n int, err error) {
-	return d.writer.Write(b)
-}
-
-func (d *WriteCloserStack) SetWriter(w io.Writer) {
-	d.writer = w
-}
-
 func (d *WriteCloserStack) AddCloser(wc ...io.WriteCloser) {
 	wcl := len(wc)
 	if wcl > 0 {
-		d.writer = wc[wcl-1]
+		d.Writer = wc[wcl-1]
 		d.writers = append(d.writers, wc...)
 	}
 }
@@ -87,7 +75,7 @@ func (d *WriteCloserStack) Close() error {
 		}
 	}
 	if len(errs) > 0 {
-		return closerStackError{errs}
+		return &closerStackError{errs}
 	}
 	return nil
 }
@@ -96,11 +84,11 @@ type closerStackError struct {
 	errors []error
 }
 
-func (w closerStackError) Errors() []error {
+func (w *closerStackError) Errors() []error {
 	return w.errors
 }
 
-func (w closerStackError) Error() string {
+func (w *closerStackError) Error() string {
 	out := ""
 	for i, e := range w.errors {
 		if i == 0 {
