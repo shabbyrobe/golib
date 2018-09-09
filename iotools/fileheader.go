@@ -8,14 +8,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-const fileHeaderLengthBytes = 8
+const fileHeaderLengthBytes = 4
 
 // FileHeaderBytes extracts the length-delimited header portion of a file from
 // the supplied byte array, if and only if the magic string is present at the
 // start.
 //
 // This API is not stable.
-func FileHeaderBytes(magic string, bts []byte) (hdr []byte, rest []byte, err error) {
+func FileHeaderBytes(magic string, bts []byte) (hdr []byte, n int, err error) {
 	magicLen := len(magic)
 
 	expected := magicLen + fileHeaderLengthBytes
@@ -31,25 +31,27 @@ func FileHeaderBytes(magic string, bts []byte) (hdr []byte, rest []byte, err err
 		}
 	}
 
-	hlen := binary.LittleEndian.Uint64(bts[expected:])
-	eu64 := uint64(expected)
-	return bts[eu64 : eu64+hlen], bts[eu64+hlen:], nil
+	hlen := binary.LittleEndian.Uint32(bts[expected:])
+	eu32 := uint32(expected)
+	return bts[eu32 : eu32+hlen], int(eu32 + hlen), nil
 }
 
 // FileHeaderRead reads the length-delimited header portion of a file from the
 // supplied io.Reader, if and only if the magic string is present at the start.
 //
 // This API is not stable.
-func FileHeaderRead(magic string, rdr io.Reader) (hdr []byte, err error) {
+func FileHeaderRead(magic string, rdr io.Reader) (hdr []byte, n int, err error) {
 	magicLen := len(magic)
 
 	expected := magicLen + fileHeaderLengthBytes
 	bts := make([]byte, expected)
-	n, err := io.ReadFull(rdr, bts)
-	if n != expected {
-		return nil, errors.Errorf("iotools: file header short read preamble")
+
+	rn, err := io.ReadFull(rdr, bts)
+	n += rn
+	if rn != expected {
+		return nil, n, errors.Errorf("iotools: file header short read preamble")
 	} else if err != nil {
-		return nil, err
+		return nil, n, err
 	}
 
 	for i := 0; i < magicLen; i++ {
@@ -61,14 +63,15 @@ func FileHeaderRead(magic string, rdr io.Reader) (hdr []byte, err error) {
 	hlen := binary.LittleEndian.Uint32(bts[magicLen:])
 	if hlen > 0 {
 		hdr = make([]byte, hlen)
-		n, err = io.ReadFull(rdr, hdr)
-		if uint32(n) != hlen {
-			return nil, errors.Errorf("iotools: file header short read")
+		rn, err = io.ReadFull(rdr, hdr)
+		n += rn
+		if uint32(rn) != hlen {
+			return nil, n, errors.Errorf("iotools: file header short read")
 		} else if err != nil {
-			return nil, err
+			return nil, n, err
 		}
 	}
-	return hdr, nil
+	return hdr, n, nil
 }
 
 // FileHeaderWrite writes a length-delimited header section to an io.Writer,
@@ -78,7 +81,7 @@ func FileHeaderWrite(magic string, w io.Writer, hdr []byte) (n int, err error) {
 	preamble := make([]byte, magicLen+fileHeaderLengthBytes)
 	copy(preamble, magic)
 
-	binary.LittleEndian.PutUint64(preamble[magicLen:], uint64(len(hdr)))
+	binary.LittleEndian.PutUint32(preamble[magicLen:], uint32(len(hdr)))
 
 	cn, err := w.Write(preamble)
 	n += cn
