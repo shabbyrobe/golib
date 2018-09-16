@@ -1,10 +1,10 @@
 package synctools
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
-	"bytes"
 	"runtime"
 	"strconv"
 	"strings"
@@ -51,9 +51,9 @@ func (l *LoggingMutex) Lock() {
 
 func (l *LoggingMutex) Unlock() {
 	id := atomic.AddUint64(&next, 1)
-	wlog(unsafe.Pointer(l),id, "unlock")
+	wlog(unsafe.Pointer(l), id, "unlock")
 	l.Mutex.Unlock()
-	wlog(unsafe.Pointer(l), id,"unlocked")
+	wlog(unsafe.Pointer(l), id, "unlocked")
 }
 
 type LoggingRWMutex struct {
@@ -62,33 +62,33 @@ type LoggingRWMutex struct {
 
 func (l *LoggingRWMutex) Lock() {
 	id := atomic.AddUint64(&next, 1)
-	wlog(unsafe.Pointer(l), id,"lock")
+	wlog(unsafe.Pointer(l), id, "lock")
 	l.RWMutex.Lock()
-	wlog(unsafe.Pointer(l), id,"locked")
+	wlog(unsafe.Pointer(l), id, "locked")
 }
 
 func (l *LoggingRWMutex) Unlock() {
 	id := atomic.AddUint64(&next, 1)
-	wlog(unsafe.Pointer(l),id, "unlock")
+	wlog(unsafe.Pointer(l), id, "unlock")
 	l.RWMutex.Unlock()
-	wlog(unsafe.Pointer(l), id,"unlocked")
+	wlog(unsafe.Pointer(l), id, "unlocked")
 }
 
 func (l *LoggingRWMutex) RLock() {
 	id := atomic.AddUint64(&next, 1)
-	wlog(unsafe.Pointer(l),id, "rlock")
+	wlog(unsafe.Pointer(l), id, "rlock")
 	l.RWMutex.RLock()
-	wlog(unsafe.Pointer(l),id, "rlocked")
+	wlog(unsafe.Pointer(l), id, "rlocked")
 }
 
 func (l *LoggingRWMutex) RUnlock() {
 	id := atomic.AddUint64(&next, 1)
-	wlog(unsafe.Pointer(l),id, "runlock")
+	wlog(unsafe.Pointer(l), id, "runlock")
 	l.RWMutex.RUnlock()
-	wlog(unsafe.Pointer(l), id,"runlocked")
+	wlog(unsafe.Pointer(l), id, "runlocked")
 }
 
-func wlog(p unsafe.Pointer,id uint64, event string) {
+func wlog(p unsafe.Pointer, id uint64, event string) {
 	n := time.Now()
 	tm := n.Format("2006-01-02T15:04:05.") // .999999999Z07:00"
 	tm += stringtools.RightPad(strconv.FormatInt(int64(n.Nanosecond()), 10), '0', 9)
