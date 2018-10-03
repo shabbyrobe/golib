@@ -355,11 +355,18 @@ func (i Interval) End(t time.Time) time.Time {
 	return out.In(t.Location())
 }
 
+// Range returns the start and end time for the period represented by the passed-in time.
+//
+// For example, interval.Hours1.Range(time.Time(1970, 1, 1, 0, 30, 0, 0, time.UTC)) will
+// return 1970-01-01T00:00Z and 1970-01-01T01:00Z.
+//
 func (i Interval) Range(t time.Time) (start, end time.Time) {
 	start, end = i.Start(t), i.End(t)
 	return
 }
 
+// Next returns the time at the beginning of the period that starts after the
+// period that encapsulates the passed-in time.
 func (i Interval) Next(t time.Time) time.Time {
 	return i.Time(i.Period(t)+1, t.Location())
 }
