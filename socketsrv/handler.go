@@ -21,7 +21,7 @@ type IncomingRequest struct {
 // the Conn if one is provided instead. If both a response and an error are
 // provided, the error takes precedence.
 //
-// Done Allows you to use the IncomingRequest as a handle to defer responding
+// Done allows you to use the IncomingRequest as a handle to defer responding
 // until outside the Handler. This allows a non-blocking response pattern. For
 // a blocking response, use the 'rs Message' return value of
 // Handler.HandleRequest instead.
