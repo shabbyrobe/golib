@@ -290,6 +290,72 @@ func TestPeriod(t *testing.T) {
 	}
 }
 
+func TestCanCombine(t *testing.T) {
+	for _, tc := range []struct {
+		from, to Interval
+		result   bool
+	}{
+		{Mins1, Mins1, false},
+		{Mins1, Mins2, true},
+		{Mins1, Mins60, true},
+		{Mins1, Hours1, true},
+		{Mins1, Hours2, true},
+		{Mins1, Days1, true},
+		{Mins1, Weeks1, true},
+		{Mins1, Months1, true},
+		{Mins1, New(1, Year), true},
+
+		{Hours1, Hours2, true},
+		{Hours1, Hours24, true},
+		{Hours1, Hours48, true},
+		{Hours1, Days1, true},
+		{Hours1, Days2, true},
+		{Hours1, Weeks1, true},
+		{Hours1, New(2, Week), true},
+		{Hours1, Months1, true},
+		{Hours1, New(1, Year), true},
+		{Hours2, Hours4, true},
+		{Hours4, Days1, true},
+		{Hours12, Weeks1, true},
+		{Hours12, New(3, Week), true},
+		{Hours1, Mins1, false},
+		{Hours1, Mins60, false},
+		{Hours1, New(120, Minute), true},
+		{Hours1, New(119, Minute), false},
+		{Hours1, New(121, Minute), false},
+
+		{Days1, Hours1, false},
+		{Days1, Days1, false},
+		{Days1, Weeks1, true},
+		{Days2, Weeks1, false},
+		{Days7, New(2, Week), false}, // No way to specify how these line up, so it makes sense that you can't convert.
+
+		{Weeks1, New(1, Minute), false},
+		{Weeks1, Hours1, false},
+		{Weeks1, Days1, false},
+		{Weeks1, New(14, Day), false},
+		{Weeks1, Weeks1, false},
+		{Weeks1, New(2, Week), true},
+		{Weeks1, Months1, false},
+		{Weeks1, New(1, Year), false},
+
+		{Months1, Mins1, false},
+		{Months1, Days1, false},
+		{Months1, Weeks1, false},
+		{Months1, Months1, false},
+		{Months1, New(2, Month), true},
+		{Months1, New(1, Year), true},
+		{New(2, Month), New(3, Month), false},
+		{New(2, Month), New(4, Month), true},
+		{New(2, Month), New(1, Year), true},
+	} {
+		t.Run(fmt.Sprintf("%s-%s-%v", tc.from, tc.to, tc.result), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			tt.MustAssert(tc.from.CanCombine(tc.to) == tc.result)
+		})
+	}
+}
+
 var benchStart, benchEnd time.Time
 
 func BenchmarkRangeMonth(b *testing.B) {

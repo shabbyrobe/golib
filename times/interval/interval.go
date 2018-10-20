@@ -188,6 +188,38 @@ func (i Interval) Valid() bool {
 	return Validate(i.Span(), i.Qty()) == nil
 }
 
+func (i Interval) CanCombine(to Interval) bool {
+	if !i.Less(to) {
+		return false
+	}
+
+	fromSpan := i.Span()
+	toSpan := to.Span()
+
+	if fromSpan == Week && toSpan > Week {
+		return false
+	} else if toSpan == Week && fromSpan > Week {
+		return false
+	}
+
+	startOfPeriod := i.Time(0, nil)
+	startOfToPeriod := to.Time(0, nil)
+
+	// Some periods have a start time for the 0-period that isn't exactly
+	// the epoch.
+	var offset = startOfToPeriod.Sub(startOfPeriod)
+
+	endOfToPeriod := to.Time(1, nil).Add(offset)
+	for p := Period(0); ; p++ {
+		inTime := i.Time(p, nil)
+		if inTime.Equal(endOfToPeriod) {
+			return true
+		} else if inTime.After(endOfToPeriod) {
+			return false
+		}
+	}
+}
+
 func (i Interval) Period(t time.Time) Period {
 	qty := int64(i.Qty())
 
