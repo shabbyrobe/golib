@@ -2,8 +2,10 @@
 - Can version negotiation support arbitrary protocols?
 - Could this be used for watchout's linewise protocol?
 - Allow streaming long messages directly from Communicator to Proto using Reader/Writer
+- Message metadata
 - pub/sub
 - reconnector?
+- opentracing example
 
 Tests:
 - when replyto does not exist in awaiting call map
