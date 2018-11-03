@@ -17,7 +17,7 @@ func TestFirstDayOfWeek(t *testing.T) {
 
 	for i := 0; i < iter; i++ {
 		f := start.Add(time.Duration(i) * 24 * time.Hour)
-		n := FirstDayOfWeek(f)
+		n := FirstMondayOfWeek(f)
 		tt.MustEqual(time.Monday, n.Weekday(), f.String())
 	}
 
@@ -25,7 +25,7 @@ func TestFirstDayOfWeek(t *testing.T) {
 		f := start.Add(time.Duration(i) * 24 * time.Hour)
 		f = f.Add(time.Duration(rand.Intn(60)) * time.Minute)
 		f = f.Add(time.Duration(rand.Intn(24)) * time.Hour)
-		n := FirstDayOfWeek(f)
+		n := FirstMondayOfWeek(f)
 		tt.MustEqual(time.Monday, n.Weekday(), f.String())
 	}
 }

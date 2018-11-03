@@ -1,10 +1,13 @@
 package times
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 var (
-	firstDayOfEpochWeek = FirstDayOfWeek(time.Unix(0, 0))
-	epoch               = time.Unix(0, 0)
+	firstMondayOfEpochWeek = FirstMondayOfWeek(time.Unix(0, 0))
+	epoch                  = time.Unix(0, 0)
 )
 
 const (
@@ -15,7 +18,7 @@ func DaysInMonth(year int, month time.Month) int {
 	return time.Date(year, month+1, 0, 0, 0, 0, 0, time.UTC).Day()
 }
 
-func FirstDayOfISOWeek(t time.Time) (tm time.Time, year, week int) {
+func FirstMondayOfISOWeek(t time.Time) (tm time.Time, year, week int) {
 	s := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 	if s.Weekday() != time.Monday {
 		diff := int(s.Weekday() - time.Monday)
@@ -28,7 +31,7 @@ func FirstDayOfISOWeek(t time.Time) (tm time.Time, year, week int) {
 	return s, y, w
 }
 
-func FirstDayOfWeek(t time.Time) time.Time {
+func FirstMondayOfWeek(t time.Time) time.Time {
 	s := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 	if s.Weekday() != time.Monday {
 		diff := int(s.Weekday() - time.Monday)
@@ -48,9 +51,10 @@ func TruncateWeeks(t time.Time, n int) time.Time {
 // PeriodWeeks returns a monotonically increasing/decreasing integer that
 // represents a period of n weeks since the Unix epoch.
 func PeriodWeeks(t time.Time, n int) int {
-	ts := FirstDayOfWeek(t)
-	diff := ts.Sub(firstDayOfEpochWeek)
+	ts := FirstMondayOfWeek(t)
+	diff := ts.Sub(firstMondayOfEpochWeek)
 	weeks := int(diff / week)
+	fmt.Println(weeks)
 
 	var gap int
 	if diff >= 0 {
@@ -68,7 +72,7 @@ func PeriodWeeksTime(p int, n int, loc *time.Location) time.Time {
 		loc = time.UTC
 	}
 	p *= n
-	out := firstDayOfEpochWeek.Add(time.Duration(p) * week)
+	out := firstMondayOfEpochWeek.Add(time.Duration(p) * week)
 	out = time.Date(out.Year(), out.Month(), out.Day(), 0, 0, 0, 0, loc)
 	return out
 }

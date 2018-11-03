@@ -86,7 +86,7 @@ func TestSort(t *testing.T) {
 	tt.MustEqual(ex, in)
 }
 
-func TestPeriod(t *testing.T) {
+func TestPeriodTime(t *testing.T) {
 	for i, c := range []struct {
 		Interval   Interval
 		Period     Period

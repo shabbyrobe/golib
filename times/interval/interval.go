@@ -188,6 +188,9 @@ func (i Interval) Valid() bool {
 	return Validate(i.Span(), i.Qty()) == nil
 }
 
+// CanCombine reports whether this interval represents a clean subdivision of
+// the 'to' interval. For example, 4 hours can combine cleanly to 1 day, but 7
+// hours cannot.
 func (i Interval) CanCombine(to Interval) bool {
 	if !i.Less(to) {
 		return false
@@ -333,6 +336,8 @@ func (i Interval) Time(p Period, loc *time.Location) time.Time {
 	return out
 }
 
+// Start returns the time that represents the inclusive start of the Period
+// that contains t.
 func (i Interval) Start(t time.Time) time.Time {
 	un := t.UnixNano()
 
@@ -361,7 +366,11 @@ func (i Interval) Start(t time.Time) time.Time {
 	return out.In(t.Location())
 }
 
+// End returns the time that represents the exclusive end of the Period
+// that contains t, such that End(t) == Next(t).
 func (i Interval) End(t time.Time) time.Time {
+	// FIXME: is this functionally identical to Next()?
+
 	qty := int64(i.Qty())
 
 	var out time.Time
