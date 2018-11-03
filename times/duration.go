@@ -1,7 +1,6 @@
 package times
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -54,7 +53,6 @@ func PeriodWeeks(t time.Time, n int) int {
 	ts := FirstMondayOfWeek(t)
 	diff := ts.Sub(firstMondayOfEpochWeek)
 	weeks := int(diff / week)
-	fmt.Println(weeks)
 
 	var gap int
 	if diff >= 0 {
