@@ -351,7 +351,7 @@ func TestCanCombine(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%s-%s-%v", tc.from, tc.to, tc.result), func(t *testing.T) {
 			tt := assert.WrapTB(t)
-			tt.MustAssert(tc.from.CanCombine(tc.to) == tc.result)
+			tt.MustAssert(tc.from.CanCombineTo(tc.to) == tc.result)
 		})
 	}
 }

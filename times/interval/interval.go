@@ -188,10 +188,25 @@ func (i Interval) Valid() bool {
 	return Validate(i.Span(), i.Qty()) == nil
 }
 
+// CanDivide reports whether this interval can cleanly subdivide into the 'by'
+// interval. For example, 4 hours can combine cleanly to 1 day, but 7 hours
+// cannot. The "4 hours" part in this example is the "by" interval, and the "1 day"
+// part is the receiver.
+//
+// This returns false if i == by.
+func (i Interval) CanDivideBy(by Interval) bool {
+	return by.CanCombineTo(i)
+}
+
 // CanCombine reports whether this interval represents a clean subdivision of
 // the 'to' interval. For example, 4 hours can combine cleanly to 1 day, but 7
 // hours cannot.
-func (i Interval) CanCombine(to Interval) bool {
+//
+// The "4 hours" part in this example is the receiver, and the "1 day" part is
+// the "to" interval.
+//
+// This returns false if i == to.
+func (i Interval) CanCombineTo(to Interval) bool {
 	if !i.Less(to) {
 		return false
 	}
