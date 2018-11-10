@@ -3,10 +3,8 @@ package interval
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/shabbyrobe/golib/times"
 )
 
@@ -40,6 +38,17 @@ const (
 	Month  Span = 14
 	Year   Span = 15
 
+	// This mistake happens so frequently there's no obvious reason not to
+	// support plurals, but there may be a non-obvious one. Including for now,
+	// will remove this comment if the plurals work without incident:
+	Seconds Span = Second
+	Minutes Span = Minute
+	Hours   Span = Hour
+	Days    Span = Day
+	Weeks   Span = Week
+	Months  Span = Month
+	Years   Span = Year
+
 	// These must not exceed 255.
 	MaxSecond Qty = 60
 	MaxMinute Qty = 90
@@ -50,91 +59,42 @@ const (
 	MaxYear   Qty = 255
 )
 
+// Spans contains all valid interval spans in guaranteed ascending order.
+var Spans = []Span{
+	Second, Minute, Hour, Day, Week, Month, Year,
+}
+
 // intervalRefTime is used for sorting. It is an imperfect mechanism to sort
 // intervals that may have different Qtys, i.e. 25 hours should come after 1
 // day. It can not account for leap-seconds or leap-years.
 var intervalRefTime = time.Date(2018, 1, 1, 12, 0, 0, 0, time.UTC)
 
-func NewValid(qty Qty, span Span) (Interval, error) {
+var epochTime = time.Unix(0, 0)
+
+// Of returns a valid interval from a Qty and a Span, or an error indicating
+// why one could not be created.
+func Of(qty Qty, span Span) (Interval, error) {
 	err := Validate(span, qty)
-	i := New(qty, span)
-	return i, err
+	if err != nil {
+		return 0, err
+	}
+	return Interval((uint(span) << 8) | uint(qty)), nil
 }
 
-func MustNew(qty Qty, span Span) Interval {
-	i, err := NewValid(qty, span)
+// OfValid returns a guaranteed valid interval from a Qty and a Span, panicking
+// if it is not valid.
+func OfValid(qty Qty, span Span) Interval {
+	i, err := Of(qty, span)
 	if err != nil {
 		panic(err)
 	}
 	return i
 }
 
-func New(qty Qty, span Span) Interval {
+// Raw returns an unchecked Interval from a Qty and a Span, which may be
+// invalid.
+func Raw(qty Qty, span Span) Interval {
 	return Interval((uint(span) << 8) | uint(qty))
-}
-
-func MustParse(intvl string) Interval {
-	p, err := Parse(intvl)
-	if err != nil {
-		panic(err)
-	}
-	return p
-}
-
-func Parse(intvl string) (Interval, error) {
-	intvl = strings.TrimSpace(intvl)
-	nidx := -1
-	for idx, c := range intvl {
-		if c < '0' || c > '9' {
-			break
-		}
-		nidx = idx
-	}
-	if nidx < 0 {
-		return 0, errors.Errorf("invalid interval %q", intvl)
-	}
-
-	qty, err := strconv.ParseInt(intvl[:nidx+1], 10, 64)
-	if err != nil {
-		return 0, err
-	}
-
-	span, err := ParseSpan(intvl[nidx+1:])
-	if err != nil {
-		return 0, err
-	}
-	if err := Validate(span, Qty(qty)); err != nil {
-		return 0, err
-	}
-	return New(Qty(qty), span), err
-}
-
-// ParseIntervalPeriod parses a string representing an interval combined with a
-// period using a colon, in the format "<interval>:<period>".
-//
-// The values allowed for "<interval>" are defined by interval.Parse(). The
-// value for "<period>" must be parseable by strconv.ParseInt().
-//
-// See FormatIntervalPeriod for the complement.
-func ParseIntervalPeriod(v string) (intvl Interval, period Period, err error) {
-	var pi int64
-
-	i := strings.IndexByte(v, ':')
-	if i < 0 {
-		goto fail
-	}
-	intvl, err = Parse(v[:i])
-	if err != nil {
-		goto fail
-	}
-	pi, err = strconv.ParseInt(v[i+1:], 10, 64)
-	if err != nil {
-		goto fail
-	}
-	return intvl, Period(pi), nil
-
-fail:
-	return 0, 0, fmt.Errorf("invalid interval/period %q; expected format '1min:1234'", v)
 }
 
 // FormatIntervalPeriod is the complement to ParseIntervalPeriod.
@@ -236,6 +196,15 @@ func (i Interval) CanCombineTo(to Interval) bool {
 			return false
 		}
 	}
+}
+
+func (i Interval) Duration() time.Duration {
+	return i.Time(1, nil).Sub(i.Time(0, nil))
+}
+
+func (i Interval) DurationAt(at time.Time) time.Duration {
+	start, end := i.Range(at)
+	return end.Sub(start)
 }
 
 func (i Interval) Period(t time.Time) Period {
@@ -440,6 +409,19 @@ func (i Interval) Prev(t time.Time) time.Time {
 	return i.Time(i.Period(t)-1, t.Location())
 }
 
+/*
+// FIXME: Breaks existing serialised representations; probably needs
+// to handle integers too if it can.
+func (i Interval) MarshalText() (text []byte, err error) {
+	return []byte(i.String()), nil
+}
+
+func (i *Interval) UnmarshalText(text []byte) (err error) {
+	*i, err = Parse(string(text))
+	return err
+}
+*/
+
 func (p Span) String() string {
 	switch p {
 	case Second:
@@ -462,168 +444,3 @@ func (p Span) String() string {
 }
 
 func (p Span) IsZero() bool { return p == 0 }
-
-func Validate(span Span, qty Qty) error {
-	switch span {
-	case Second:
-		if qty > MaxSecond {
-			return errors.Errorf("qty too large for seconds: expected <= %d, found %d", MaxSecond, qty)
-		}
-	case Minute:
-		if qty > MaxMinute {
-			return errors.Errorf("qty too large for minutes: expected <= %d, found %d", MaxMinute, qty)
-		}
-	case Hour:
-		if qty > MaxHour {
-			return errors.Errorf("qty too large for hours: expected <= %d, found %d", MaxHour, qty)
-		}
-	case Day:
-		if qty > MaxDay {
-			return errors.Errorf("qty too large for days: expected <= %d, found %d", MaxDay, qty)
-		}
-	case Week:
-		if qty > MaxWeek {
-			return errors.Errorf("qty too large for weeks: expected <= %d, found %d", MaxWeek, qty)
-		}
-	case Month:
-		if qty > MaxMonth {
-			return errors.Errorf("qty too large for months: expected <= %d, found %d", MaxMonth, qty)
-		}
-	case Year:
-		if qty > MaxYear {
-			return errors.Errorf("qty too large for years: expected <= %d, found %d", MaxYear, qty)
-		}
-	default:
-		return errors.Errorf("unknown span %s", span)
-	}
-	return nil
-}
-
-func ParseSpan(sstr string) (span Span, err error) {
-	ips := strings.ToLower(strings.TrimSpace(sstr))
-	switch ips {
-	case "s":
-		span = Second
-	case "sec":
-		span = Second
-	case "secs":
-		span = Second
-	case "second":
-		span = Second
-	case "seconds":
-		span = Second
-	case "min":
-		span = Minute
-	case "mins":
-		span = Minute
-	case "minute":
-		span = Minute
-	case "minutes":
-		span = Minute
-	case "h":
-		span = Hour
-	case "hr":
-		span = Hour
-	case "hrs":
-		span = Hour
-	case "hour":
-		span = Hour
-	case "hours":
-		span = Hour
-	case "d":
-		span = Day
-	case "ds":
-		span = Day
-	case "day":
-		span = Day
-	case "days":
-		span = Day
-	case "w":
-		span = Week
-	case "ws":
-		span = Week
-	case "wk":
-		span = Week
-	case "wks":
-		span = Week
-	case "week":
-		span = Week
-	case "weeks":
-		span = Week
-	case "mo":
-		span = Month
-	case "mos":
-		span = Month
-	case "month":
-		span = Month
-	case "months":
-		span = Month
-	case "y":
-		span = Year
-	case "ys":
-		span = Year
-	case "yr":
-		span = Year
-	case "yrs":
-		span = Year
-	case "year":
-		span = Year
-	case "years":
-		span = Year
-	default:
-		err = errors.Errorf("unknown span %q", sstr)
-	}
-	return
-}
-
-var intervalStrings = map[Interval]string{
-	Seconds1: "1sec",
-	Mins1:    "1min",
-	Mins2:    "2min",
-	Mins3:    "3min",
-	Mins5:    "5min",
-	Mins10:   "10min",
-	Mins15:   "15min",
-	Mins30:   "30min",
-	Mins60:   "60min",
-	Hours1:   "1hr",
-	Hours2:   "2hr",
-	Hours3:   "3hr",
-	Hours4:   "4hr",
-	Hours6:   "6hr",
-	Hours8:   "8hr",
-	Hours12:  "12hr",
-	Hours24:  "24hr",
-	Hours48:  "48hr",
-	Days1:    "1d",
-	Days2:    "2d",
-	Days3:    "3d",
-	Days7:    "7d",
-}
-
-const (
-	Seconds1 = Interval((uint(Second) << 8) | uint(1))
-	Mins1    = Interval((uint(Minute) << 8) | uint(1))
-	Mins2    = Interval((uint(Minute) << 8) | uint(2))
-	Mins3    = Interval((uint(Minute) << 8) | uint(3))
-	Mins5    = Interval((uint(Minute) << 8) | uint(5))
-	Mins10   = Interval((uint(Minute) << 8) | uint(10))
-	Mins15   = Interval((uint(Minute) << 8) | uint(15))
-	Mins30   = Interval((uint(Minute) << 8) | uint(30))
-	Mins60   = Interval((uint(Minute) << 8) | uint(60))
-	Hours1   = Interval((uint(Hour) << 8) | uint(1))
-	Hours2   = Interval((uint(Hour) << 8) | uint(2))
-	Hours3   = Interval((uint(Hour) << 8) | uint(3))
-	Hours4   = Interval((uint(Hour) << 8) | uint(4))
-	Hours6   = Interval((uint(Hour) << 8) | uint(6))
-	Hours8   = Interval((uint(Hour) << 8) | uint(8))
-	Hours12  = Interval((uint(Hour) << 8) | uint(12))
-	Hours24  = Interval((uint(Hour) << 8) | uint(24))
-	Hours48  = Interval((uint(Hour) << 8) | uint(48))
-	Days1    = Interval((uint(Day) << 8) | uint(1))
-	Days2    = Interval((uint(Day) << 8) | uint(2))
-	Days3    = Interval((uint(Day) << 8) | uint(3))
-	Days7    = Interval((uint(Day) << 8) | uint(7))
-	Weeks1   = Interval((uint(Week) << 8) | uint(1))
-	Months1  = Interval((uint(Month) << 8) | uint(1))
-)

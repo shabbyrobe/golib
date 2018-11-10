@@ -1,0 +1,26 @@
+package interval
+
+var intervalStrings = map[Interval]string{
+	Seconds1: "1sec",
+	Mins1:    "1min",
+	Mins2:    "2min",
+	Mins3:    "3min",
+	Mins5:    "5min",
+	Mins10:   "10min",
+	Mins15:   "15min",
+	Mins30:   "30min",
+	Mins60:   "60min",
+	Hours1:   "1hr",
+	Hours2:   "2hr",
+	Hours3:   "3hr",
+	Hours4:   "4hr",
+	Hours6:   "6hr",
+	Hours8:   "8hr",
+	Hours12:  "12hr",
+	Hours24:  "24hr",
+	Hours48:  "48hr",
+	Days1:    "1d",
+	Days2:    "2d",
+	Days3:    "3d",
+	Days7:    "7d",
+}
