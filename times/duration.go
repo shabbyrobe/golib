@@ -79,9 +79,19 @@ func TruncateMonth(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
 }
 
+// TruncateMonths will round the time down to the start of the period of
+// n months, for example:
+//	TruncateMonths("2018-08-22", 3) == "2018-07-01".
+//
+// If n == (0, 1), this call is equivalent to TruncateMonth(t)
+//
 func TruncateMonths(t time.Time, n int) time.Time {
-	if n == 1 {
+	if n == 0 || n == 1 {
+		// If TruncateMonths is called with n == 0, it seems the most natural
+		// thing to do is presume 1 because the caller has explicitly asked for
+		// truncation to months.
 		return TruncateMonth(t)
+
 	} else {
 		inMnth := (t.Year() * 12) + (int(t.Month()) - 1)
 
@@ -104,7 +114,19 @@ func PeriodMonth(t time.Time) int {
 	return ((t.Year() - 1970) * 12) + (int(t.Month()) - 1)
 }
 
+// PeriodMonths will return the number of n month periods that have fully
+// elapsed since the unix epoch, for example:
+//	PeriodMonths("1970-07-01", 3) == 2
+//	PeriodMonths("1970-08-22", 3) == 2
+//	PeriodMonths("1970-10-01", 3) == 3
+//
+// If n == (0, 1), this call is equivalent to PeriodMonth(t)
+//
 func PeriodMonths(t time.Time, n int) int {
+	if n == 0 {
+		n = 1
+	}
+
 	inMnth := ((t.Year() - 1970) * 12) + (int(t.Month()) - 1)
 	if inMnth >= 0 {
 		return (inMnth - (inMnth % n)) / n

@@ -33,8 +33,18 @@ func TestFirstDayOfWeek(t *testing.T) {
 func TestTruncateMonths(t *testing.T) {
 	tt := assert.WrapTB(t)
 
-	tm := TruncateMonths(time.Date(1970, 1, 14, 0, 0, 0, 0, time.UTC), 2)
+	// qty of "0" should infer "1":
+	tm := TruncateMonths(time.Date(1970, 1, 14, 0, 0, 0, 0, time.UTC), 0)
 	exp := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+	tt.MustEqual(exp, tm)
+
+	// Negative qty should be treated like positive
+	tm = TruncateMonths(time.Date(1970, 1, 14, 0, 0, 0, 0, time.UTC), -2)
+	exp = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+	tt.MustEqual(exp, tm)
+
+	tm = TruncateMonths(time.Date(1970, 1, 14, 0, 0, 0, 0, time.UTC), 2)
+	exp = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
 	tt.MustEqual(exp, tm)
 
 	tm = TruncateMonths(time.Date(1970, 2, 3, 0, 0, 0, 0, time.UTC), 2)
