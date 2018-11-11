@@ -81,10 +81,10 @@ func TestConvertFuzz(t *testing.T) {
 		period := randomPeriod(nil, from)
 		tt.MustAssert(from != to)
 
-		there, err := from.ConvertPeriod(period, to)
+		there, err := from.ConvertPeriodTo(period, to)
 		tt.MustOK(err)
 
-		back, err := to.ConvertPeriod(there, from)
+		back, err := to.ConvertPeriodTo(there, from)
 		tt.MustOK(err)
 		fmt.Println(from, to, period, there, back)
 		tt.MustEqual(period, back)
