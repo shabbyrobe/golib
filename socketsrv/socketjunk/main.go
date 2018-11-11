@@ -41,14 +41,14 @@ func main() {
 }
 
 func run() error {
-	bld := func() (cmdy.Command, error) {
+	bld := func() (cmdy.Command, cmdy.Init) {
 		return cmdy.NewGroup("socketjunk", cmdy.Builders{
-			"tcpclient": func() (cmdy.Command, error) { return &tcpClientCommand{}, nil },
-			"tcpserver": func() (cmdy.Command, error) { return &tcpServerCommand{}, nil },
-			"pktclient": func() (cmdy.Command, error) { return &pktClientCommand{}, nil },
-			"pktserver": func() (cmdy.Command, error) { return &pktServerCommand{}, nil },
-			"wsclient":  func() (cmdy.Command, error) { return &wsClientCommand{}, nil },
-			"wsserver":  func() (cmdy.Command, error) { return &wsServerCommand{}, nil },
+			"tcpclient": func() (cmdy.Command, cmdy.Init) { return &tcpClientCommand{}, nil },
+			"tcpserver": func() (cmdy.Command, cmdy.Init) { return &tcpServerCommand{}, nil },
+			"pktclient": func() (cmdy.Command, cmdy.Init) { return &pktClientCommand{}, nil },
+			"pktserver": func() (cmdy.Command, cmdy.Init) { return &pktServerCommand{}, nil },
+			"wsclient":  func() (cmdy.Command, cmdy.Init) { return &wsClientCommand{}, nil },
+			"wsserver":  func() (cmdy.Command, cmdy.Init) { return &wsServerCommand{}, nil },
 		}), nil
 	}
 
