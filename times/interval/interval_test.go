@@ -73,6 +73,24 @@ func TestString(t *testing.T) {
 	tt.MustEqual("2yr", Raw(2, Year).String())
 }
 
+func TestConvertFuzz(t *testing.T) {
+	return
+	tt := assert.WrapTB(t)
+	for i := 0; i < 1000; i++ {
+		from, to := randomDivisibleIntervals(nil)
+		period := randomPeriod(nil, from)
+		tt.MustAssert(from != to)
+
+		there, err := from.ConvertPeriod(period, to)
+		tt.MustOK(err)
+
+		back, err := to.ConvertPeriod(there, from)
+		tt.MustOK(err)
+		fmt.Println(from, to, period, there, back)
+		tt.MustEqual(period, back)
+	}
+}
+
 func TestSort(t *testing.T) {
 	tt := assert.WrapTB(t)
 
@@ -319,27 +337,29 @@ func TestCanCombine(t *testing.T) {
 		{Mins1, Mins60, true},
 		{Mins1, Hours1, true},
 		{Mins1, Hours2, true},
-		{Mins1, Days1, true},
-		{Mins1, Weeks1, true},
-		{Mins1, Months1, true},
-		{Mins1, Raw(1, Year), true},
+		{Mins1, Days1, false},
+		{Mins1, Weeks1, false},
+		{Mins1, Months1, false},
+		{Mins1, Raw(1, Year), false},
+		{Mins1, Raw(120, Seconds), true},
 
 		{Hours1, Hours2, true},
 		{Hours1, Hours24, true},
 		{Hours1, Hours48, true},
-		{Hours1, Days1, true},
-		{Hours1, Days2, true},
-		{Hours1, Weeks1, true},
-		{Hours1, Raw(2, Week), true},
-		{Hours1, Months1, true},
-		{Hours1, Raw(1, Year), true},
 		{Hours2, Hours4, true},
-		{Hours4, Days1, true},
-		{Hours12, Weeks1, true},
-		{Hours12, Raw(3, Week), true},
+		{Hours1, Raw(120, Minute), true}, // Can combine downwards into smaller spans if it's clean
+
+		{Hours1, Days1, false}, // Hours don't generally combine into days due to DST
+		{Hours1, Days2, false}, // Hours don't generally combine into days due to DST
+		{Hours4, Days1, false},
+		{Hours1, Weeks1, false},
+		{Hours12, Weeks1, false},
+		{Hours12, Raw(3, Week), false},
+		{Hours1, Months1, false},
+		{Hours1, Raw(1, Year), false},
+
 		{Hours1, Mins1, false},
 		{Hours1, Mins60, false},
-		{Hours1, Raw(120, Minute), true},
 		{Hours1, Raw(119, Minute), false},
 		{Hours1, Raw(121, Minute), false},
 

@@ -6,25 +6,63 @@ import (
 	"time"
 )
 
-// DivideNicely takes an interval and splits it into an interval that
-// will divide it into a minimum number of parts, though possibly more.
-func DivideNicely(intvl Interval, parts int) Interval {
+// DivideNicely takes an interval and splits into an Interval that will fit at
+// least n times into the original. The resulting interval will be the nearest
+// 'human friendly' interval that will supply the desired number of parts.
+//
+// If the limit is set to a non-zero Interval, the resulting interval will
+// never be less than this limit.
+func DivideNicely(intvl Interval, n int, limit Interval) Interval {
 	size := intvl.Time(1, nil).Sub(intvl.Time(0, nil))
-	partSize := size / time.Duration(parts)
+	partSize := size / time.Duration(n)
 
 	// Handle the upper limit gracefully:
-	if intvl.Span() == Year && intvl.Qty() > Qty(parts) {
-		return Raw(intvl.Qty()/Qty(parts), Year)
+	if intvl.Span() == Year && intvl.Qty() > Qty(n) {
+		return Raw(intvl.Qty()/Qty(n), Year)
+	}
+
+	var limitDuration time.Duration
+	if !limit.IsZero() {
+		limitDuration = limit.Duration()
 	}
 
 	result := Seconds1
+
+	var lastInterval Interval
 	for _, niceSize := range niceIntervalSizes {
+		if niceSize.duration < limitDuration {
+			result = lastInterval
+			break
+		}
 		if niceSize.duration <= partSize {
 			result = niceSize.interval
 			break
 		}
+		lastInterval = niceSize.interval
 	}
 	return result
+}
+
+// DivideNicelyFor takes an interval and splits into an Interval that will fit at
+// least n times into the original, but which must be divisible by forIntvl.
+// The resulting interval will be the nearest 'human friendly' interval that
+// will supply the at least the desired number of parts.
+//
+func DivideNicelyFor(intvl Interval, n int, forIntvl Interval) (result Interval, ok bool) {
+	size := intvl.Time(1, nil).Sub(intvl.Time(0, nil))
+	partSize := size / time.Duration(n)
+
+	// Handle the upper limit gracefully:
+	if intvl.Span() == Year && intvl.Qty() > Qty(n) {
+		return Raw(intvl.Qty()/Qty(n), Year), true
+	}
+
+	for _, niceSize := range niceIntervalSizes {
+		if niceSize.duration <= partSize && (niceSize.interval == forIntvl || niceSize.interval.CanDivideBy(forIntvl)) {
+			return niceSize.interval, true
+		}
+	}
+	return forIntvl, false
 }
 
 // Find will find the smallest interval that encapsulates the duration, as

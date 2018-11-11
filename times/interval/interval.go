@@ -8,65 +8,12 @@ import (
 	"github.com/shabbyrobe/golib/times"
 )
 
-type (
-	// Span identifies the unit of the Interval, i.e. Seconds, Minutes, etc.
-	Span uint8
-
-	// Qty is the number of Spans in an Interval.
-	Qty uint
-
-	// Period identifies the number of Intervals that have passed since the
-	// Unix Epoch.
-	Period int64
-
-	// Interval combines a Span and a Qty into a single value.
-	Interval uint16
-)
-
-// These must increase numerically as the durations they represent increase in
-// size. Unfortunately, intervals are not perfectly sortable as 24 months will
-// still come before 1 day. The Less function has a red hot go, but it's not
-// perfect either as it checks against a fixed date, but intervals can
-// represent different spans of time at different dates (daylight savings, leap
-// seconds, etc).
-const (
-	Second Span = 9
-	Minute Span = 10
-	Hour   Span = 11
-	Day    Span = 12
-	Week   Span = 13
-	Month  Span = 14
-	Year   Span = 15
-
-	// This mistake happens so frequently there's no obvious reason not to
-	// support plurals, but there may be a non-obvious one. Including for now,
-	// will remove this comment if the plurals work without incident:
-	Seconds Span = Second
-	Minutes Span = Minute
-	Hours   Span = Hour
-	Days    Span = Day
-	Weeks   Span = Week
-	Months  Span = Month
-	Years   Span = Year
-
-	// These must not exceed 255.
-	MaxSecond Qty = 60
-	MaxMinute Qty = 90
-	MaxHour   Qty = 48
-	MaxDay    Qty = 120
-	MaxWeek   Qty = 52
-	MaxMonth  Qty = 24
-	MaxYear   Qty = 255
-)
-
-// Spans contains all valid interval spans in guaranteed ascending order.
-var Spans = []Span{
-	Second, Minute, Hour, Day, Week, Month, Year,
-}
-
 // intervalRefTime is used for sorting. It is an imperfect mechanism to sort
 // intervals that may have different Qtys, i.e. 25 hours should come after 1
 // day. It can not account for leap-seconds or leap-years.
+//
+// FIXME: why not just use epoch? There must've been a reason. Maybe it
+// has to do with when weeks start.
 var intervalRefTime = time.Date(2018, 1, 1, 12, 0, 0, 0, time.UTC)
 
 var epochTime = time.Unix(0, 0)
@@ -93,6 +40,11 @@ func OfValid(qty Qty, span Span) Interval {
 
 // Raw returns an unchecked Interval from a Qty and a Span, which may be
 // invalid.
+//
+// If you use a Raw interval without validating it, you may get lots of panics
+// well after the Interval has been created. If this matters to you more than
+// raw performance (and it almost certainly does), use interval.Of or
+// interval.OfValid
 func Raw(qty Qty, span Span) Interval {
 	return Interval((uint(span) << 8) | uint(qty))
 }
@@ -148,17 +100,17 @@ func (i Interval) Valid() bool {
 	return Validate(i.Span(), i.Qty()) == nil
 }
 
-// CanDivide reports whether this interval can cleanly subdivide into the 'by'
-// interval. For example, 4 hours can combine cleanly to 1 day, but 7 hours
-// cannot. The "4 hours" part in this example is the "by" interval, and the "1 day"
-// part is the receiver.
+// CanDivideBy reports whether this interval can cleanly subdivide into the
+// 'by' interval. For example, 4 hours can combine cleanly to 1 day, but 7
+// hours cannot. The "4 hours" part in this example is the "by" interval, and
+// the "1 day" part is the receiver.
 //
 // This returns false if i == by.
 func (i Interval) CanDivideBy(by Interval) bool {
 	return by.CanCombineTo(i)
 }
 
-// CanCombine reports whether this interval represents a clean subdivision of
+// CanCombineTo reports whether this interval represents a clean subdivision of
 // the 'to' interval. For example, 4 hours can combine cleanly to 1 day, but 7
 // hours cannot.
 //
@@ -167,16 +119,42 @@ func (i Interval) CanDivideBy(by Interval) bool {
 //
 // This returns false if i == to.
 func (i Interval) CanCombineTo(to Interval) bool {
-	if !i.Less(to) {
-		return false
-	}
-
 	fromSpan := i.Span()
 	toSpan := to.Span()
 
-	if fromSpan == Week && toSpan > Week {
-		return false
-	} else if toSpan == Week && fromSpan > Week {
+	switch fromSpan {
+	case Second, Minute, Hour:
+		if toSpan >= Day {
+			// Daylight saving time makes it impossible to cleanly combine
+			// "part of day" spans into day-based spans or greater.
+			return false
+		}
+
+	case Day:
+		if toSpan != Day && toSpan != Week {
+			// Days only combine cleanly into Weeks or larger spans of Days.
+			return false
+		}
+
+	case Week:
+		if toSpan != Week {
+			// Messy weeks don't combine cleanly into much of anything!
+			return false
+		}
+
+	case Month:
+		if toSpan != Month && toSpan != Year {
+			return false
+		}
+	case Year:
+		if toSpan != Year {
+			return false
+		}
+	default:
+		panic(fmt.Errorf("unhandled span %q", fromSpan))
+	}
+
+	if !i.Less(to) {
 		return false
 	}
 
@@ -198,6 +176,10 @@ func (i Interval) CanCombineTo(to Interval) bool {
 	}
 }
 
+func (i Interval) Distance(from, to Period) time.Duration {
+	return i.Time(to, nil).Sub(i.Time(from, nil))
+}
+
 func (i Interval) Duration() time.Duration {
 	return i.Time(1, nil).Sub(i.Time(0, nil))
 }
@@ -205,6 +187,13 @@ func (i Interval) Duration() time.Duration {
 func (i Interval) DurationAt(at time.Time) time.Duration {
 	start, end := i.Range(at)
 	return end.Sub(start)
+}
+
+func (i Interval) ConvertPeriod(p Period, to Interval) (Period, error) {
+	if !i.CanDivideBy(to) && !i.CanCombineTo(to) {
+		return 0, fmt.Errorf("interval: cannot convert; %s is not divisible to or by %s", i, to)
+	}
+	return to.Period(i.Time(p, nil)), nil
 }
 
 func (i Interval) Period(t time.Time) Period {
@@ -421,26 +410,3 @@ func (i *Interval) UnmarshalText(text []byte) (err error) {
 	return err
 }
 */
-
-func (p Span) String() string {
-	switch p {
-	case Second:
-		return "sec"
-	case Minute:
-		return "min"
-	case Hour:
-		return "hr"
-	case Day:
-		return "d"
-	case Week:
-		return "wk"
-	case Month:
-		return "mo"
-	case Year:
-		return "yr"
-	default:
-		return fmt.Sprintf("Unknown(%d)", p)
-	}
-}
-
-func (p Span) IsZero() bool { return p == 0 }
