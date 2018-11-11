@@ -6,9 +6,9 @@ import (
 	"io"
 )
 
-// CommitReader allows you to Commit a series of reads you have just made,
-// or Rewind to the position the reader was at before the last Commit or
-// Advance.
+// CommitReader allows you to Commit a series of reads you have just made, or
+// Rewind to the position the reader was at before the last time Commit or
+// Advance was called.
 type CommitReader struct {
 	r     io.Reader
 	buf   bytes.Buffer
