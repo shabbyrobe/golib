@@ -15,16 +15,16 @@ func TestDivideNicely(t *testing.T) {
 		limit  Interval
 		result Interval
 	}{
-		{Mins5, 5, 0, Mins1},
-		{Mins5, 10, 0, Seconds30},
-		{Mins5, 10, Mins1, Mins1},
-		{Mins10, 5, 0, Mins2},
-		{Days2, 10, 0, Hours4},
-		{Days2, 10, Hours8, Hours8},
-		{Days2, 10, Hours2, Hours4},
-		{Months1, 4, 0, Weeks1},
-		{Months1, 5, 0, Raw(6, Days)},
-		{Months1, 7, 0, Raw(4, Days)},
+		{Of5Minutes, 5, 0, Of1Minute},
+		{Of5Minutes, 10, 0, Of30Seconds},
+		{Of5Minutes, 10, Of1Minute, Of1Minute},
+		{Of10Minutes, 5, 0, Of2Minutes},
+		{Of2Days, 10, 0, Of4Hours},
+		{Of2Days, 10, Of8Hours, Of8Hours},
+		{Of2Days, 10, Of2Hours, Of4Hours},
+		{Of1Month, 4, 0, Of1Week},
+		{Of1Month, 5, 0, Raw(6, Days)},
+		{Of1Month, 7, 0, Raw(4, Days)},
 		{Raw(10, Years), 3, 0, Raw(3, Years)},
 	} {
 		t.Run(fmt.Sprintf("%s/%d==%s", tc.in, tc.by, tc.result), func(t *testing.T) {
@@ -42,10 +42,10 @@ func TestDivideNicelyFor(t *testing.T) {
 		ok     bool
 		result Interval
 	}{
-		{Mins5, 5, Mins1, true, Mins1},
-		{Hours3, 5, Mins5, true, Mins30},
-		{Raw(26, Minutes), 5, Mins1, true, Mins5},
-		{Raw(26, Minutes), 40, Mins1, false, Mins1},
+		{Of5Minutes, 5, Of1Minute, true, Of1Minute},
+		{Of3Hours, 5, Of5Minutes, true, Of30Minutes},
+		{Raw(26, Minutes), 5, Of1Minute, true, Of5Minutes},
+		{Raw(26, Minutes), 40, Of1Minute, false, Of1Minute},
 	} {
 		t.Run(fmt.Sprintf("%s/%d==%s", tc.in, tc.by, tc.result), func(t *testing.T) {
 			tt := assert.WrapTB(t)
@@ -61,21 +61,21 @@ func TestFind(t *testing.T) {
 		dur    time.Duration
 		result Interval
 	}{
-		{1 * time.Minute, Mins1},
-		{-1 * time.Minute, Mins1},
+		{1 * time.Minute, Of1Minute},
+		{-1 * time.Minute, Of1Minute},
 
-		{2 * time.Minute, Mins2},
-		{121 * time.Second, Mins3},
-		{86400 * time.Second, Days1},
-		{86401 * time.Second, Days2},
+		{2 * time.Minute, Of2Minutes},
+		{121 * time.Second, Of3Minutes},
+		{86400 * time.Second, Of1Day},
+		{86401 * time.Second, Of2Days},
 
-		{24 * time.Hour * 3, Days3},
+		{24 * time.Hour * 3, Of3Days},
 		{(24 * time.Hour * 3) + (1 * time.Minute), Raw(4, Days)},
 
-		{0 * time.Second, Seconds1},
-		{1 * time.Nanosecond, Seconds1},
-		{999 * time.Millisecond, Seconds1},
-		{-1 * time.Millisecond, Seconds1},
+		{0 * time.Second, Of1Second},
+		{1 * time.Nanosecond, Of1Second},
+		{999 * time.Millisecond, Of1Second},
+		{-1 * time.Millisecond, Of1Second},
 	} {
 		t.Run(fmt.Sprintf("%s==%s", tc.dur, tc.result), func(t *testing.T) {
 			tt := assert.WrapTB(t)

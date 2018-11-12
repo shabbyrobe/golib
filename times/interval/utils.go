@@ -26,7 +26,7 @@ func DivideNicely(intvl Interval, n int, limit Interval) Interval {
 		limitDuration = limit.Duration()
 	}
 
-	result := Seconds1
+	result := Of1Second
 
 	var lastInterval Interval
 	for _, niceSize := range niceIntervalSizes {
@@ -119,13 +119,13 @@ func FindAt(duration time.Duration, at time.Time) Interval {
 
 // MUST be storted, otherwise panic!!
 var niceIntervals = []Interval{
-	Seconds1, Seconds2, Seconds5, Seconds10, Seconds15, Seconds30,
-	Mins1, Mins2, Mins5, Mins10, Mins15, Mins30,
-	Hours1, Hours2, Hours3, Hours4, Hours6, Hours8, Hours12,
-	Days1, Days2, Days3, OfValid(4, Days), OfValid(5, Days), OfValid(6, Days),
-	Weeks1, OfValid(2, Weeks), OfValid(3, Weeks), OfValid(4, Weeks),
-	Months1, OfValid(2, Months), OfValid(3, Months), OfValid(4, Months), OfValid(6, Months),
-	Years1,
+	Of1Second, Of2Seconds, Of5Seconds, Of10Seconds, Of15Seconds, Of30Seconds,
+	Of1Minute, Of2Minutes, Of5Minutes, Of10Minutes, Of15Minutes, Of30Minutes,
+	Of1Hour, Of2Hours, Of3Hours, Of4Hours, Of6Hours, Of8Hours, Of12Hours,
+	Of1Day, Of2Days, Of3Days, OfValid(4, Days), OfValid(5, Days), OfValid(6, Days),
+	Of1Week, OfValid(2, Weeks), OfValid(3, Weeks), OfValid(4, Weeks),
+	Of1Month, OfValid(2, Months), OfValid(3, Months), OfValid(4, Months), OfValid(6, Months),
+	Of1Year,
 }
 
 type niceInterval struct {
