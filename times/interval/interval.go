@@ -398,6 +398,11 @@ func (i Interval) Prev(t time.Time) time.Time {
 	return i.Time(i.Period(t)-1, t.Location())
 }
 
+// AsFlag is a convenience API to convert an Interval into a FlagVar.
+func (i Interval) AsFlag() FlagVar {
+	return FlagVar(i)
+}
+
 /*
 // FIXME: Breaks existing serialised representations; probably needs
 // to handle integers too if it can.
