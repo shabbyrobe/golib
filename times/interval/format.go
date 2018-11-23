@@ -106,7 +106,7 @@ func (i Interval) FormatAfterIn(current Period, prev Period, in *time.Location) 
 			if yrEq {
 				dfmt, tjoin = "02-Jan", " "
 			} else {
-				dfmt, tjoin = "2006-01-01", "T"
+				dfmt, tjoin = "2006-01-02", "T"
 			}
 		}
 
