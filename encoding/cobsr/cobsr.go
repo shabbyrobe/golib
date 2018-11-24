@@ -29,6 +29,8 @@ func MaxEncodedSize(inlen int) int {
 // message. Using MaxEncodedSize() will guarantee the 'into' buffer is
 // large enough.
 //
+// The input and result slices may not overlap.
+//
 func Encode(in []byte, into []byte) (n int, err error) {
 	var searchStartIdx int
 	var intoIdx int
@@ -80,6 +82,8 @@ func Encode(in []byte, into []byte) (n int, err error) {
 // The 'into' slice must be large enough to hold the resulting decoded
 // message. The decoded message will never be larger than the encoded
 // message.
+//
+// The input and result slices may not overlap.
 //
 func Decode(in []byte, into []byte) (n int, err error) {
 	inLen := len(in)
