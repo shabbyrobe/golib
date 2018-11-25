@@ -39,6 +39,8 @@ func FileHeaderBytes(magic string, bts []byte) (hdr []byte, n int, err error) {
 // FileHeaderRead reads the length-delimited header portion of a file from the
 // supplied io.Reader, if and only if the magic string is present at the start.
 //
+// If an error occurs, all bytes read from the reader are returned as 'hdr'.
+//
 // This API is not stable.
 func FileHeaderRead(magic string, rdr io.Reader) (hdr []byte, n int, err error) {
 	magicLen := len(magic)
@@ -49,14 +51,14 @@ func FileHeaderRead(magic string, rdr io.Reader) (hdr []byte, n int, err error) 
 	rn, err := io.ReadFull(rdr, bts)
 	n += rn
 	if rn != expected {
-		return nil, n, errors.Errorf("iotools: file header short read preamble")
+		return bts, n, errors.Errorf("iotools: file header short read preamble")
 	} else if err != nil {
-		return nil, n, err
+		return bts, n, err
 	}
 
 	for i := 0; i < magicLen; i++ {
 		if bts[i] != magic[i] {
-			err = fmt.Errorf("iotools: file header expected magic in first %d bytes of file", fileHeaderLengthBytes)
+			return bts, n, fmt.Errorf("iotools: file header expected magic in first %d bytes of file", fileHeaderLengthBytes)
 		}
 	}
 
@@ -66,9 +68,9 @@ func FileHeaderRead(magic string, rdr io.Reader) (hdr []byte, n int, err error) 
 		rn, err = io.ReadFull(rdr, hdr)
 		n += rn
 		if uint32(rn) != hlen {
-			return nil, n, errors.Errorf("iotools: file header short read")
+			return bts, n, errors.Errorf("iotools: file header short read")
 		} else if err != nil {
-			return nil, n, err
+			return bts, n, err
 		}
 	}
 	return hdr, n, nil
