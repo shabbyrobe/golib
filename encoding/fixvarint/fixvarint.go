@@ -169,6 +169,121 @@ done:
 	return x, n
 }
 
+// UvarintTurbo is an experimental replacement for Uvarint. It's substantially
+// faster for larger input at the cost of being truly disgusting to read.
+func UvarintTurbo(buf []byte) (uint64, int) {
+	var x uint64
+
+	zeros := (buf[0] >> 3) & 0xF
+	x = uint64(buf[0] & 0x7)
+
+	n := 1
+	if buf[0] < 0x80 {
+		goto done
+	}
+
+	if buf[1] < 0x80 {
+		x, n = x|uint64(buf[1])<<3, 2
+		goto done
+	} else {
+		x |= uint64(buf[1]&0x7f) << 3
+	}
+
+	if buf[2] < 0x80 {
+		x, n = x|uint64(buf[2])<<10, 3
+		goto done
+	} else {
+		x |= uint64(buf[2]&0x7f) << 10
+	}
+
+	if buf[3] < 0x80 {
+		x, n = x|uint64(buf[3])<<17, 4
+		goto done
+	} else {
+		x |= uint64(buf[3]&0x7f) << 17
+	}
+
+	if buf[4] < 0x80 {
+		x, n = x|uint64(buf[4])<<24, 5
+		goto done
+	} else {
+		x |= uint64(buf[4]&0x7f) << 24
+	}
+
+	if buf[5] < 0x80 {
+		x, n = x|uint64(buf[5])<<31, 6
+		goto done
+	} else {
+		x |= uint64(buf[5]&0x7f) << 31
+	}
+
+	if buf[6] < 0x80 {
+		x, n = x|uint64(buf[6])<<38, 7
+		goto done
+	} else {
+		x |= uint64(buf[6]&0x7f) << 38
+	}
+
+	if buf[7] < 0x80 {
+		x, n = x|uint64(buf[7])<<45, 8
+		goto done
+	} else {
+		x |= uint64(buf[7]&0x7f) << 45
+	}
+
+	if buf[8] < 0x80 {
+		x, n = x|uint64(buf[8])<<52, 9
+		goto done
+	} else {
+		x |= uint64(buf[8]&0x7f) << 52
+	}
+
+	if buf[9] < 0x80 {
+		x, n = x|uint64(buf[9])<<59, 10
+		goto done
+	} else {
+		x |= uint64(buf[9]&0x7f) << 59
+	}
+
+	return 0, -11
+
+done:
+	switch zeros {
+	case 1:
+		x *= 1e1
+	case 2:
+		x *= 1e2
+	case 3:
+		x *= 1e3
+	case 4:
+		x *= 1e4
+	case 5:
+		x *= 1e5
+	case 6:
+		x *= 1e6
+	case 7:
+		x *= 1e7
+	case 8:
+		x *= 1e8
+	case 9:
+		x *= 1e9
+	case 10:
+		x *= 1e10
+	case 11:
+		x *= 1e11
+	case 12:
+		x *= 1e12
+	case 13:
+		x *= 1e13
+	case 14:
+		x *= 1e14
+	case 15:
+		x *= 1e15
+	}
+
+	return x, n
+}
+
 // PutVarint encodes an int64 into buf and returns the number of bytes written.
 // If the buffer is too small, PutVarint will panic.
 func PutVarint(buf []byte, x int64) int {
@@ -302,6 +417,127 @@ func Varint(buf []byte) (v int64, n int) {
 		ux |= uint64(b&0x7f) << s
 		s += 7
 	}
+
+done:
+	ix = int64(ux >> 1)
+	if ux&1 != 0 {
+		ix = ^ix
+	}
+
+	switch zeros {
+	case 1:
+		ix *= 1e1
+	case 2:
+		ix *= 1e2
+	case 3:
+		ix *= 1e3
+	case 4:
+		ix *= 1e4
+	case 5:
+		ix *= 1e5
+	case 6:
+		ix *= 1e6
+	case 7:
+		ix *= 1e7
+	case 8:
+		ix *= 1e8
+	case 9:
+		ix *= 1e9
+	case 10:
+		ix *= 1e10
+	case 11:
+		ix *= 1e11
+	case 12:
+		ix *= 1e12
+	case 13:
+		ix *= 1e13
+	case 14:
+		ix *= 1e14
+	case 15:
+		ix *= 1e15
+	}
+
+	return ix, n
+}
+
+// VarintTurbo is an experimental replacement for Varint. It's substantially
+// faster for larger input at the cost of being truly disgusting to read.
+func VarintTurbo(buf []byte) (int64, int) {
+	var ix int64
+	var ux uint64
+
+	zeros := (buf[0] >> 3) & 0xF
+	ux = uint64(buf[0] & 0x7)
+
+	n := 1
+	if buf[0] < 0x80 {
+		goto done
+	}
+
+	if buf[1] < 0x80 {
+		ux, n = ux|uint64(buf[1])<<3, 2
+		goto done
+	} else {
+		ux |= uint64(buf[1]&0x7f) << 3
+	}
+
+	if buf[2] < 0x80 {
+		ux, n = ux|uint64(buf[2])<<10, 3
+		goto done
+	} else {
+		ux |= uint64(buf[2]&0x7f) << 10
+	}
+
+	if buf[3] < 0x80 {
+		ux, n = ux|uint64(buf[3])<<17, 4
+		goto done
+	} else {
+		ux |= uint64(buf[3]&0x7f) << 17
+	}
+
+	if buf[4] < 0x80 {
+		ux, n = ux|uint64(buf[4])<<24, 5
+		goto done
+	} else {
+		ux |= uint64(buf[4]&0x7f) << 24
+	}
+
+	if buf[5] < 0x80 {
+		ux, n = ux|uint64(buf[5])<<31, 6
+		goto done
+	} else {
+		ux |= uint64(buf[5]&0x7f) << 31
+	}
+
+	if buf[6] < 0x80 {
+		ux, n = ux|uint64(buf[6])<<38, 7
+		goto done
+	} else {
+		ux |= uint64(buf[6]&0x7f) << 38
+	}
+
+	if buf[7] < 0x80 {
+		ux, n = ux|uint64(buf[7])<<45, 8
+		goto done
+	} else {
+		ux |= uint64(buf[7]&0x7f) << 45
+	}
+
+	if buf[8] < 0x80 {
+		ux, n = ux|uint64(buf[8])<<52, 9
+		goto done
+	} else {
+		ux |= uint64(buf[8]&0x7f) << 52
+	}
+
+	if buf[9] < 0x80 {
+		ux, n = ux|uint64(buf[9])<<59, 10
+		goto done
+	} else {
+		ux |= uint64(buf[9]&0x7f) << 59
+	}
+
+	return 0, -11
 
 done:
 	ix = int64(ux >> 1)
