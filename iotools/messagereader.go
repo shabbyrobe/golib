@@ -36,6 +36,8 @@ func (pr *BytePrefixMessageReader) ReadNext() (out []byte, n int, err error) {
 again:
 	if pr.bufPos >= pr.bufLen {
 		n, err := io.ReadFull(pr.rdr, pr.buf)
+		pr.bufLen = n
+		pr.bufPos = 0
 
 		if err != nil {
 			if err == io.ErrUnexpectedEOF {
@@ -49,7 +51,6 @@ again:
 		} else if n == 0 {
 			return nil, 0, nil
 		}
-		pr.bufLen = n
 	}
 
 	msgLen := int(pr.buf[pr.bufPos])

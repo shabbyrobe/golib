@@ -2,6 +2,7 @@ package iotools
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"testing"
 
@@ -63,6 +64,47 @@ func TestBytePrefixMessageReaderReadEmpty(t *testing.T) {
 		i++
 	}
 	tt.MustEqual(i, 0)
+}
+
+func TestBytePrefixMessageReaderSplitRead(t *testing.T) {
+	// Creates a buffer of messages, all 255 bytes long, except
+	// for the first one. We test all possible combinations of the
+	// first message's length. This ensures that the split between
+	// the two ReadFull calls will land on every possible byte index
+	// in the middle of a single message.
+	for i := 1; i < 256; i++ {
+		t.Run(fmt.Sprintf("sz=%db", i), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			msgs := make([]byte, 1024)
+			msgs[0] = byte(i)
+			lens := []int{i}
+
+			for j := i + 1; j < 1024; j += 256 {
+				cur := 255
+				if 1024-j < 255 {
+					cur = 1024 - j - 1
+				}
+				msgs[j] = byte(cur)
+				if cur > 0 {
+					lens = append(lens, cur)
+				}
+			}
+
+			// 512 is the shortest allowable scratch:
+			pr := NewBytePrefixMessageReader(bytes.NewReader(msgs), make([]byte, 512))
+			var result []int
+			for {
+				_, n, err := pr.ReadNext()
+				if err == io.EOF {
+					break
+				}
+				tt.MustOK(err)
+				result = append(result, n)
+			}
+
+			tt.MustEqual(lens, result)
+		})
+	}
 }
 
 var BenchBytePrefixMessageReaderResult int
