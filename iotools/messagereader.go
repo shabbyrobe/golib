@@ -54,7 +54,7 @@ again:
 		goto again
 	}
 
-	if pr.bufPos+msgLen >= pr.bufLen {
+	for pr.bufPos+msgLen > pr.bufLen {
 		left := pr.bufLen - pr.bufPos
 		copy(pr.buf, pr.buf[pr.bufPos:pr.bufPos+left])
 
