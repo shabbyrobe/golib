@@ -35,19 +35,14 @@ func NewBytePrefixMessageReader(rdr io.Reader, scratch []byte) *BytePrefixMessag
 func (pr *BytePrefixMessageReader) ReadNext() (out []byte, n int, err error) {
 again:
 	if pr.bufPos >= pr.bufLen {
-		n, err := io.ReadFull(pr.rdr, pr.buf)
+		n, err := pr.rdr.Read(pr.buf)
 		pr.bufLen = n
 		pr.bufPos = 0
 
-		if err != nil {
-			if err == io.ErrUnexpectedEOF {
-				// Skip, next time we ReadFull we should get io.EOF.
-			} else if err == io.EOF {
-				return nil, 0, err
-			} else {
-				return nil, 0, errors.WithStack(err)
-			}
-
+		if err == io.EOF {
+			return nil, 0, io.EOF // EOF is used to allow users to terminate the loop
+		} else if err != nil {
+			return nil, 0, errors.Wrap(err, "iotools: messagereader read failed")
 		} else if n == 0 {
 			return nil, 0, nil
 		}
@@ -63,18 +58,16 @@ again:
 		left := pr.bufLen - pr.bufPos
 		copy(pr.buf, pr.buf[pr.bufPos:pr.bufPos+left])
 
-		n, err := io.ReadFull(pr.rdr, pr.buf[left:])
+		n, err := pr.rdr.Read(pr.buf[left:])
 		pr.bufLen = n + left
 
 		if err != nil {
-			if err == io.ErrUnexpectedEOF {
-				// Skip, next time we ReadFull we should get io.EOF.
-			} else if err == io.EOF {
+			if err == io.EOF {
 				if pr.bufLen == 0 {
-					return nil, 0, nil
+					return nil, 0, io.EOF // EOF is used to allow users to terminate the loop
 				}
 			} else {
-				return nil, 0, errors.WithStack(err)
+				return nil, 0, errors.Wrap(err, "iotools: messagereader read failed")
 			}
 
 		} else if n == 0 {
@@ -85,7 +78,7 @@ again:
 	}
 
 	if pr.bufLen < msgLen {
-		return nil, 0, errors.Errorf("short message read; expected %d bytes, found %d", msgLen, pr.bufLen)
+		return nil, 0, errors.Errorf("iotools: short message read; expected %d bytes, found %d", msgLen, pr.bufLen)
 	}
 
 	out = pr.buf[pr.bufPos : pr.bufPos+msgLen]
