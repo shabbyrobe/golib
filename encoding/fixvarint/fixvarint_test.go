@@ -352,7 +352,7 @@ func benchmarkDecodeUintTurbo(b *testing.B, buf []byte) {
 }
 
 func BenchmarkDecodeUintTurbo1(b *testing.B) { benchmarkDecodeUintTurbo(b, []byte{0x7f}) }
-func BenchmarkDecodeUintTurbo2(b *testing.B) { benchmarkDecodeUintTurbo(b, []byte{0xff, 0x7f}) }
+func BenchmarkDecodeUintTurbo(b *testing.B)  { benchmarkDecodeUintTurbo(b, []byte{0xff, 0x7f}) }
 func BenchmarkDecodeUintTurbo3(b *testing.B) { benchmarkDecodeUintTurbo(b, []byte{0xff, 0xff, 0x7f}) }
 func BenchmarkDecodeUintTurbo4(b *testing.B) {
 	benchmarkDecodeUintTurbo(b, []byte{0xff, 0xff, 0xff, 0x7f})
@@ -401,4 +401,41 @@ func BenchmarkDecodeInt8(b *testing.B) {
 }
 func BenchmarkDecodeInt9(b *testing.B) {
 	benchmarkDecodeInt(b, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f})
+}
+
+var BenchmarkDecodeIntTurboResult int64
+
+func benchmarkDecodeIntTurbo(b *testing.B, buf []byte) {
+	for i := 0; i < b.N; i++ {
+		v, _ := VarintTurbo(buf)
+		BenchmarkDecodeIntTurboResult += v
+	}
+}
+
+func BenchmarkDecodeIntTurbo1(b *testing.B) {
+	benchmarkDecodeIntTurbo(b, []byte{0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+}
+func BenchmarkDecodeIntTurbo(b *testing.B) {
+	benchmarkDecodeIntTurbo(b, []byte{0xff, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+}
+func BenchmarkDecodeIntTurbo3(b *testing.B) {
+	benchmarkDecodeIntTurbo(b, []byte{0xff, 0xff, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+}
+func BenchmarkDecodeIntTurbo4(b *testing.B) {
+	benchmarkDecodeIntTurbo(b, []byte{0xff, 0xff, 0xff, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+}
+func BenchmarkDecodeIntTurbo5(b *testing.B) {
+	benchmarkDecodeIntTurbo(b, []byte{0xff, 0xff, 0xff, 0xff, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00})
+}
+func BenchmarkDecodeIntTurbo6(b *testing.B) {
+	benchmarkDecodeIntTurbo(b, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0x00, 0x00, 0x00, 0x00})
+}
+func BenchmarkDecodeIntTurbo7(b *testing.B) {
+	benchmarkDecodeIntTurbo(b, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0x00, 0x00, 0x00})
+}
+func BenchmarkDecodeIntTurbo8(b *testing.B) {
+	benchmarkDecodeIntTurbo(b, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0x00, 0x00})
+}
+func BenchmarkDecodeIntTurbo9(b *testing.B) {
+	benchmarkDecodeIntTurbo(b, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0x00})
 }

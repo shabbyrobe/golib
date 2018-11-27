@@ -133,39 +133,9 @@ func Uvarint(buf []byte) (uint64, int) {
 	}
 
 done:
-	switch zeros {
-	case 1:
-		x *= 1e1
-	case 2:
-		x *= 1e2
-	case 3:
-		x *= 1e3
-	case 4:
-		x *= 1e4
-	case 5:
-		x *= 1e5
-	case 6:
-		x *= 1e6
-	case 7:
-		x *= 1e7
-	case 8:
-		x *= 1e8
-	case 9:
-		x *= 1e9
-	case 10:
-		x *= 1e10
-	case 11:
-		x *= 1e11
-	case 12:
-		x *= 1e12
-	case 13:
-		x *= 1e13
-	case 14:
-		x *= 1e14
-	case 15:
-		x *= 1e15
+	if zeros > 0 {
+		x *= zumul[zeros]
 	}
-
 	return x, n
 }
 
@@ -185,100 +155,103 @@ func UvarintTurbo(buf []byte) (uint64, int) {
 	if buf[1] < 0x80 {
 		x, n = x|uint64(buf[1])<<3, 2
 		goto done
-	} else {
-		x |= uint64(buf[1]&0x7f) << 3
 	}
 
 	if buf[2] < 0x80 {
-		x, n = x|uint64(buf[2])<<10, 3
+		x = x |
+			(uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]) << 10)
+		n = 3
 		goto done
-	} else {
-		x |= uint64(buf[2]&0x7f) << 10
 	}
 
 	if buf[3] < 0x80 {
-		x, n = x|uint64(buf[3])<<17, 4
+		x = x |
+			(uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]) << 17)
+		n = 4
 		goto done
-	} else {
-		x |= uint64(buf[3]&0x7f) << 17
 	}
 
 	if buf[4] < 0x80 {
-		x, n = x|uint64(buf[4])<<24, 5
+		x = x |
+			(uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]&0x7f) << 17) |
+			(uint64(buf[4]) << 24)
+		n = 5
 		goto done
-	} else {
-		x |= uint64(buf[4]&0x7f) << 24
 	}
 
 	if buf[5] < 0x80 {
-		x, n = x|uint64(buf[5])<<31, 6
+		x = x |
+			(uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]&0x7f) << 17) |
+			(uint64(buf[4]&0x7f) << 24) |
+			(uint64(buf[5]) << 31)
+		n = 6
 		goto done
-	} else {
-		x |= uint64(buf[5]&0x7f) << 31
 	}
 
 	if buf[6] < 0x80 {
-		x, n = x|uint64(buf[6])<<38, 7
+		x = x | (uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]&0x7f) << 17) |
+			(uint64(buf[4]&0x7f) << 24) |
+			(uint64(buf[5]&0x7f) << 31) |
+			(uint64(buf[6]) << 38)
+		n = 7
 		goto done
-	} else {
-		x |= uint64(buf[6]&0x7f) << 38
 	}
 
 	if buf[7] < 0x80 {
-		x, n = x|uint64(buf[7])<<45, 8
+		x = x | (uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]&0x7f) << 17) |
+			(uint64(buf[4]&0x7f) << 24) |
+			(uint64(buf[5]&0x7f) << 31) |
+			(uint64(buf[6]&0x7f) << 38) |
+			(uint64(buf[7]) << 45)
+		n = 8
 		goto done
-	} else {
-		x |= uint64(buf[7]&0x7f) << 45
 	}
 
 	if buf[8] < 0x80 {
-		x, n = x|uint64(buf[8])<<52, 9
+		x = x |
+			(uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]&0x7f) << 17) |
+			(uint64(buf[4]&0x7f) << 24) |
+			(uint64(buf[5]&0x7f) << 31) |
+			(uint64(buf[6]&0x7f) << 38) |
+			(uint64(buf[7]&0x7f) << 45) |
+			(uint64(buf[8]) << 52)
+		n = 9
 		goto done
-	} else {
-		x |= uint64(buf[8]&0x7f) << 52
 	}
 
 	if buf[9] < 0x80 {
-		x, n = x|uint64(buf[9])<<59, 10
+		x = x |
+			(uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]&0x7f) << 17) |
+			(uint64(buf[4]&0x7f) << 24) |
+			(uint64(buf[5]&0x7f) << 31) |
+			(uint64(buf[6]&0x7f) << 38) |
+			(uint64(buf[7]&0x7f) << 45) |
+			(uint64(buf[8]&0x7f) << 52) |
+			(uint64(buf[9]) << 59)
+		n = 10
 		goto done
-	} else {
-		x |= uint64(buf[9]&0x7f) << 59
 	}
 
 	return 0, -11
 
 done:
-	switch zeros {
-	case 1:
-		x *= 1e1
-	case 2:
-		x *= 1e2
-	case 3:
-		x *= 1e3
-	case 4:
-		x *= 1e4
-	case 5:
-		x *= 1e5
-	case 6:
-		x *= 1e6
-	case 7:
-		x *= 1e7
-	case 8:
-		x *= 1e8
-	case 9:
-		x *= 1e9
-	case 10:
-		x *= 1e10
-	case 11:
-		x *= 1e11
-	case 12:
-		x *= 1e12
-	case 13:
-		x *= 1e13
-	case 14:
-		x *= 1e14
-	case 15:
-		x *= 1e15
+	if zeros > 0 {
+		x *= zumul[zeros]
 	}
 
 	return x, n
@@ -424,37 +397,8 @@ done:
 		ix = ^ix
 	}
 
-	switch zeros {
-	case 1:
-		ix *= 1e1
-	case 2:
-		ix *= 1e2
-	case 3:
-		ix *= 1e3
-	case 4:
-		ix *= 1e4
-	case 5:
-		ix *= 1e5
-	case 6:
-		ix *= 1e6
-	case 7:
-		ix *= 1e7
-	case 8:
-		ix *= 1e8
-	case 9:
-		ix *= 1e9
-	case 10:
-		ix *= 1e10
-	case 11:
-		ix *= 1e11
-	case 12:
-		ix *= 1e12
-	case 13:
-		ix *= 1e13
-	case 14:
-		ix *= 1e14
-	case 15:
-		ix *= 1e15
+	if zeros > 0 {
+		ix *= zmul[zeros]
 	}
 
 	return ix, n
@@ -477,64 +421,96 @@ func VarintTurbo(buf []byte) (int64, int) {
 	if buf[1] < 0x80 {
 		ux, n = ux|uint64(buf[1])<<3, 2
 		goto done
-	} else {
-		ux |= uint64(buf[1]&0x7f) << 3
 	}
 
 	if buf[2] < 0x80 {
-		ux, n = ux|uint64(buf[2])<<10, 3
+		ux = ux |
+			(uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]) << 10)
+		n = 3
 		goto done
-	} else {
-		ux |= uint64(buf[2]&0x7f) << 10
 	}
 
 	if buf[3] < 0x80 {
-		ux, n = ux|uint64(buf[3])<<17, 4
+		ux = ux |
+			(uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]) << 17)
+		n = 4
 		goto done
-	} else {
-		ux |= uint64(buf[3]&0x7f) << 17
 	}
 
 	if buf[4] < 0x80 {
-		ux, n = ux|uint64(buf[4])<<24, 5
+		ux = ux |
+			(uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]&0x7f) << 17) |
+			(uint64(buf[4]) << 24)
+		n = 5
 		goto done
-	} else {
-		ux |= uint64(buf[4]&0x7f) << 24
 	}
 
 	if buf[5] < 0x80 {
-		ux, n = ux|uint64(buf[5])<<31, 6
+		ux = ux |
+			(uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]&0x7f) << 17) |
+			(uint64(buf[4]&0x7f) << 24) |
+			(uint64(buf[5]) << 31)
+		n = 6
 		goto done
-	} else {
-		ux |= uint64(buf[5]&0x7f) << 31
 	}
 
 	if buf[6] < 0x80 {
-		ux, n = ux|uint64(buf[6])<<38, 7
+		ux = ux | (uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]&0x7f) << 17) |
+			(uint64(buf[4]&0x7f) << 24) |
+			(uint64(buf[5]&0x7f) << 31) |
+			(uint64(buf[6]) << 38)
+		n = 7
 		goto done
-	} else {
-		ux |= uint64(buf[6]&0x7f) << 38
 	}
 
 	if buf[7] < 0x80 {
-		ux, n = ux|uint64(buf[7])<<45, 8
+		ux = ux | (uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]&0x7f) << 17) |
+			(uint64(buf[4]&0x7f) << 24) |
+			(uint64(buf[5]&0x7f) << 31) |
+			(uint64(buf[6]&0x7f) << 38) |
+			(uint64(buf[7]) << 45)
+		n = 8
 		goto done
-	} else {
-		ux |= uint64(buf[7]&0x7f) << 45
 	}
 
 	if buf[8] < 0x80 {
-		ux, n = ux|uint64(buf[8])<<52, 9
+		ux = ux |
+			(uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]&0x7f) << 17) |
+			(uint64(buf[4]&0x7f) << 24) |
+			(uint64(buf[5]&0x7f) << 31) |
+			(uint64(buf[6]&0x7f) << 38) |
+			(uint64(buf[7]&0x7f) << 45) |
+			(uint64(buf[8]) << 52)
+		n = 9
 		goto done
-	} else {
-		ux |= uint64(buf[8]&0x7f) << 52
 	}
 
 	if buf[9] < 0x80 {
-		ux, n = ux|uint64(buf[9])<<59, 10
+		ux = ux |
+			(uint64(buf[1]&0x7f) << 3) |
+			(uint64(buf[2]&0x7f) << 10) |
+			(uint64(buf[3]&0x7f) << 17) |
+			(uint64(buf[4]&0x7f) << 24) |
+			(uint64(buf[5]&0x7f) << 31) |
+			(uint64(buf[6]&0x7f) << 38) |
+			(uint64(buf[7]&0x7f) << 45) |
+			(uint64(buf[8]&0x7f) << 52) |
+			(uint64(buf[9]) << 59)
+		n = 10
 		goto done
-	} else {
-		ux |= uint64(buf[9]&0x7f) << 59
 	}
 
 	return 0, -11
@@ -545,40 +521,16 @@ done:
 		ix = ^ix
 	}
 
-	switch zeros {
-	case 1:
-		ix *= 1e1
-	case 2:
-		ix *= 1e2
-	case 3:
-		ix *= 1e3
-	case 4:
-		ix *= 1e4
-	case 5:
-		ix *= 1e5
-	case 6:
-		ix *= 1e6
-	case 7:
-		ix *= 1e7
-	case 8:
-		ix *= 1e8
-	case 9:
-		ix *= 1e9
-	case 10:
-		ix *= 1e10
-	case 11:
-		ix *= 1e11
-	case 12:
-		ix *= 1e12
-	case 13:
-		ix *= 1e13
-	case 14:
-		ix *= 1e14
-	case 15:
-		ix *= 1e15
+	if zeros > 0 {
+		ix *= zmul[zeros]
 	}
 
 	return ix, n
 }
 
-var overflow = errors.New("fixvarint: varint overflows a 64-bit integer")
+var (
+	zmul  = [...]int64{0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15}
+	zumul = [...]uint64{0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15}
+
+	overflow = errors.New("fixvarint: varint overflows a 64-bit integer")
+)
