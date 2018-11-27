@@ -126,7 +126,7 @@ again:
 		}
 	}
 
-	msgLen := int(binary.LittleEndian.Uint16(pr.buf))
+	msgLen := int(binary.LittleEndian.Uint16(pr.buf[pr.bufPos:]))
 	pr.bufPos += 2
 	if msgLen == 0 {
 		goto again
