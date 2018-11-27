@@ -2,6 +2,7 @@ package iotools
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"testing"
@@ -9,7 +10,7 @@ import (
 	"github.com/shabbyrobe/golib/assert"
 )
 
-func TestBytePrefixMessageReader(t *testing.T) {
+func TestMessageReaderBytePrefix(t *testing.T) {
 	tt := assert.WrapTB(t)
 
 	buf := []byte{}
@@ -31,7 +32,7 @@ func TestBytePrefixMessageReader(t *testing.T) {
 	maxScratch := len(buf) + 2
 	scratch := make([]byte, maxScratch)
 	for scratchSize := maxScratch - 256 - 10; scratchSize <= maxScratch; scratchSize++ {
-		pr := NewBytePrefixMessageReader(bytes.NewReader(buf), scratch[:scratchSize])
+		pr := NewMessageReaderBytePrefix(bytes.NewReader(buf), scratch[:scratchSize])
 		i := 0
 		for {
 			out, n, err := pr.ReadNext()
@@ -49,10 +50,10 @@ func TestBytePrefixMessageReader(t *testing.T) {
 	}
 }
 
-func TestBytePrefixMessageReaderReadEmpty(t *testing.T) {
+func TestMessageReaderBytePrefixReadEmpty(t *testing.T) {
 	tt := assert.WrapTB(t)
 
-	pr := NewBytePrefixMessageReader(bytes.NewReader([]byte{}), nil)
+	pr := NewMessageReaderBytePrefix(bytes.NewReader([]byte{}), nil)
 	i := 0
 	for {
 		out, n, err := pr.ReadNext()
@@ -66,7 +67,7 @@ func TestBytePrefixMessageReaderReadEmpty(t *testing.T) {
 	tt.MustEqual(i, 0)
 }
 
-func TestBytePrefixMessageReaderSplitRead(t *testing.T) {
+func TestMessageReaderBytePrefixSplitRead(t *testing.T) {
 	// Creates a buffer of messages, all 255 bytes long, except
 	// for the first one. We test all possible combinations of the
 	// first message's length. This ensures that the split between
@@ -91,7 +92,7 @@ func TestBytePrefixMessageReaderSplitRead(t *testing.T) {
 			}
 
 			// 512 is the shortest allowable scratch:
-			pr := NewBytePrefixMessageReader(bytes.NewReader(msgs), make([]byte, 512))
+			pr := NewMessageReaderBytePrefix(bytes.NewReader(msgs), make([]byte, 512))
 			var result []int
 			for {
 				_, n, err := pr.ReadNext()
@@ -107,9 +108,9 @@ func TestBytePrefixMessageReaderSplitRead(t *testing.T) {
 	}
 }
 
-var BenchBytePrefixMessageReaderResult int
+var BenchMessageReaderBytePrefixResult int
 
-func BenchmarkBytePrefixMessageReader(b *testing.B) {
+func BenchmarkMessageReaderBytePrefix(b *testing.B) {
 	buf := []byte{}
 
 	for k := 0; k < 16; k++ {
@@ -125,13 +126,55 @@ func BenchmarkBytePrefixMessageReader(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		pr := NewBytePrefixMessageReader(bytes.NewReader(buf), nil)
+		pr := NewMessageReaderBytePrefix(bytes.NewReader(buf), nil)
 		for {
 			_, n, err := pr.ReadNext()
 			if err == io.EOF {
 				break
 			}
-			BenchBytePrefixMessageReaderResult += n
+			BenchMessageReaderBytePrefixResult += n
 		}
 	}
+}
+
+func TestMessageReaderShortPrefix(t *testing.T) {
+	scratch := make([]byte, 65536)
+	in := make([]byte, 65538)
+	for i := 1; i < 65536; i += 128 {
+		buf := in[:i+2]
+
+		tt := assert.WrapTB(t)
+		binary.LittleEndian.PutUint16(buf, uint16(i))
+		pr := NewMessageReaderShortPrefix(bytes.NewReader(buf), scratch)
+		if i > 2 {
+			buf[3] = 1
+		}
+
+		out, n, err := pr.ReadNext()
+		tt.MustOK(err)
+		tt.MustEqual(buf[2:], out)
+		tt.MustEqual(i, n)
+
+		out, n, err = pr.ReadNext()
+		tt.MustEqual(io.EOF, err)
+		tt.MustEqual(0, len(out))
+		tt.MustEqual(0, n)
+	}
+}
+
+func TestMessageReaderShortPrefixReadEmpty(t *testing.T) {
+	tt := assert.WrapTB(t)
+
+	pr := NewMessageReaderShortPrefix(bytes.NewReader([]byte{}), nil)
+	i := 0
+	for {
+		out, n, err := pr.ReadNext()
+		if err == io.EOF {
+			break
+		}
+		tt.MustEqual([]byte{}, out)
+		tt.MustEqual(0, n)
+		i++
+	}
+	tt.MustEqual(i, 0)
 }

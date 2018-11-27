@@ -1,19 +1,20 @@
 package iotools
 
 import (
+	"encoding/binary"
 	"io"
 
 	"github.com/pkg/errors"
 )
 
-type BytePrefixMessageReader struct {
+type MessageReaderBytePrefix struct {
 	rdr    io.Reader
 	buf    []byte
 	bufPos int
 	bufLen int
 }
 
-func NewBytePrefixMessageReader(rdr io.Reader, scratch []byte) *BytePrefixMessageReader {
+func NewMessageReaderBytePrefix(rdr io.Reader, scratch []byte) *MessageReaderBytePrefix {
 	if len(scratch) == 0 {
 		scratch = make([]byte, 65536)
 	}
@@ -24,7 +25,7 @@ func NewBytePrefixMessageReader(rdr io.Reader, scratch []byte) *BytePrefixMessag
 		panic("scratch must be 512 bytes or more")
 	}
 
-	return &BytePrefixMessageReader{
+	return &MessageReaderBytePrefix{
 		rdr: rdr,
 		buf: scratch,
 	}
@@ -32,7 +33,7 @@ func NewBytePrefixMessageReader(rdr io.Reader, scratch []byte) *BytePrefixMessag
 
 // ReadNext returns a slice containing the next message and the length of the
 // message. The memory returned is valid only until the next call to ReadNext.
-func (pr *BytePrefixMessageReader) ReadNext() (out []byte, n int, err error) {
+func (pr *MessageReaderBytePrefix) ReadNext() (out []byte, n int, err error) {
 again:
 	if pr.bufPos >= pr.bufLen {
 		n, err := pr.rdr.Read(pr.buf)
@@ -50,6 +51,83 @@ again:
 
 	msgLen := int(pr.buf[pr.bufPos])
 	pr.bufPos++
+	if msgLen == 0 {
+		goto again
+	}
+
+	for pr.bufPos+msgLen > pr.bufLen {
+		left := pr.bufLen - pr.bufPos
+		copy(pr.buf, pr.buf[pr.bufPos:pr.bufPos+left])
+
+		n, err := pr.rdr.Read(pr.buf[left:])
+		pr.bufLen = n + left
+
+		if err != nil {
+			if err == io.EOF {
+				if pr.bufLen == 0 {
+					return nil, 0, io.EOF // EOF is used to allow users to terminate the loop
+				}
+			} else {
+				return nil, 0, errors.Wrap(err, "iotools: messagereader read failed")
+			}
+
+		} else if n == 0 {
+			return nil, 0, nil
+		}
+
+		pr.bufPos = 0
+	}
+
+	if pr.bufLen < msgLen {
+		return nil, 0, errors.Errorf("iotools: short message read; expected %d bytes, found %d", msgLen, pr.bufLen)
+	}
+
+	out = pr.buf[pr.bufPos : pr.bufPos+msgLen]
+	pr.bufPos += msgLen
+	return out, msgLen, nil
+}
+
+type MessageReaderShortPrefix struct {
+	rdr    io.Reader
+	buf    []byte
+	bufPos int
+	bufLen int
+}
+
+func NewMessageReaderShortPrefix(rdr io.Reader, scratch []byte) *MessageReaderShortPrefix {
+	if len(scratch) == 0 {
+		scratch = make([]byte, 65536)
+	} else if len(scratch) < 65536 {
+		panic("scratch must be >= 65536 or nil")
+	}
+	return &MessageReaderShortPrefix{
+		rdr: rdr,
+		buf: scratch,
+	}
+}
+
+// ReadNext returns a slice containing the next message and the length of the
+// message. The memory returned is valid only until the next call to ReadNext.
+func (pr *MessageReaderShortPrefix) ReadNext() (out []byte, n int, err error) {
+again:
+	if pr.bufPos >= pr.bufLen {
+		n, err := io.ReadAtLeast(pr.rdr, pr.buf, 2)
+		pr.bufLen = n
+		pr.bufPos = 0
+
+		// io.UnexpectedEOF is an error here - it means a short length read.
+
+		if err == io.EOF {
+			return nil, 0, io.EOF // EOF is used to allow users to terminate the loop
+		} else if err != nil {
+			return nil, 0, errors.Wrap(err, "iotools: messagereader read failed")
+		} else if n == 0 {
+			return nil, 0, nil
+		}
+	}
+
+	msgLen := int(binary.LittleEndian.Uint16(pr.buf))
+	pr.bufPos += 2
 	if msgLen == 0 {
 		goto again
 	}
