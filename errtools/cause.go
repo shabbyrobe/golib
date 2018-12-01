@@ -1,6 +1,6 @@
 package errtools
 
-// This is very similar to github.com/pkg/errors.Cause
+// This is very similar to github.com/pkg/errors.Cause but protects against infinite loops.
 
 type Causer interface {
 	Cause() error

@@ -26,7 +26,7 @@ func FileHeaderBytes(magic string, bts []byte) (hdr []byte, n int, err error) {
 
 	for i := 0; i < magicLen; i++ {
 		if bts[i] != magic[i] {
-			err = fmt.Errorf("iotools: file header expected magic in first %d bytes of file", fileHeaderLengthBytes)
+			err = fmt.Errorf("iotools: file header expected magic %q in first %d bytes of file", magic, fileHeaderLengthBytes)
 			return
 		}
 	}
@@ -58,7 +58,7 @@ func FileHeaderRead(magic string, rdr io.Reader) (hdr []byte, n int, err error) 
 
 	for i := 0; i < magicLen; i++ {
 		if bts[i] != magic[i] {
-			return bts, n, fmt.Errorf("iotools: file header expected magic in first %d bytes of file", fileHeaderLengthBytes)
+			return bts, n, fmt.Errorf("iotools: file header expected magic %q in first %d bytes of file", magic, fileHeaderLengthBytes)
 		}
 	}
 
