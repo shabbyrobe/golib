@@ -10,7 +10,7 @@ import (
 	"github.com/shabbyrobe/golib/assert"
 )
 
-const FuzzIterations = 100000
+const FuzzIterations = 1e6
 
 func assertUint(tt assert.T, v uint64, scratch []byte) {
 	tt.Helper()
