@@ -1,6 +1,9 @@
 package iotools
 
 import (
+	"crypto/rand"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/shabbyrobe/golib/assert"
@@ -85,5 +88,56 @@ func TestSequentialBufferedWriterAt(t *testing.T) {
 		lwa.assertWrites(tt, bwa, []byte{5, 6}, 5)
 		lwa.assertWrites(tt, bwa, []byte{6, 7}, 6, writeEvent{p: []byte{5, 6}, at: 5})
 		lwa.assertFlush(tt, bwa, writeEvent{p: []byte{6, 7}, at: 6})
+	})
+}
+
+func BenchmarkSequentialBufferedWriterAt(b *testing.B) {
+	b.Run("baseline", func(b *testing.B) {
+		f, err := ioutil.TempFile("", "")
+		if err != nil {
+			panic(err)
+		}
+		defer os.Remove(f.Name())
+
+		input := make([]byte, 64)
+		rand.Read(input)
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			offset := int64((i % 1000) * 64)
+			if _, err := f.WriteAt(input, offset); err != nil {
+				panic(err)
+			}
+		}
+	})
+
+	b.Run("writerat", func(b *testing.B) {
+		f, err := ioutil.TempFile("", "")
+		if err != nil {
+			panic(err)
+		}
+		defer os.Remove(f.Name())
+
+		input := make([]byte, 64)
+		rand.Read(input)
+		b.ResetTimer()
+
+		batchSize := 1000
+
+		var bw = NewSequentialBufferedWriterAt(f, 8192)
+		cur := 0
+		for i := 0; i < b.N; i++ {
+			offset := int64(cur * 64)
+			if _, err := bw.WriteAt(input, offset); err != nil {
+				panic(err)
+			}
+			cur++
+			if cur >= batchSize {
+				if err := bw.Flush(); err != nil {
+					panic(err)
+				}
+				cur = 0
+			}
+		}
 	})
 }

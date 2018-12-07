@@ -90,8 +90,8 @@ func (wr *SequentialBufferedWriterAt) Flush() error {
 		if _, err := wr.w.WriteAt(wr.buffer[:wr.len], wr.start); err != nil {
 			return err
 		}
+		wr.len = 0
 	}
-	wr.len = 0
 	wr.start = -1
 	wr.left = wr.max
 	return nil

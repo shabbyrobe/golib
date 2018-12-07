@@ -59,4 +59,33 @@ func TestFullyBufferedWriterAt(t *testing.T) {
 			{op: "write", p: []byte{1, 2, 0, 4, 5}},
 		}, tbw.events)
 	})
+
+	t.Run("refresh", func(t *testing.T) {
+		tt := assert.WrapTB(t)
+
+		buf := []byte{1, 2, 3, 4}
+		rdr := bytes.NewReader(buf)
+		var tbw testBufferedWriterDestination
+		bwa := NewFullyBufferedWriterAt(rdr, &tbw)
+		assertWriteAt(tt, bwa, []byte{9, 9}, 0)
+
+		tt.MustOK(bwa.Flush())
+		tt.MustEqual([]writeEvent{
+			{op: "truncate"},
+			{op: "write", p: []byte{9, 9, 3, 4}},
+		}, tbw.events)
+
+		buf[2] = 9
+		into := make([]byte, 4)
+		n, err := bwa.ReadAt(into, 0)
+		tt.MustOK(err)
+		tt.MustEqual(4, n)
+		tt.MustEqual([]byte{9, 9, 3, 4}, into)
+		tt.MustOK(bwa.Refresh())
+
+		n, err = bwa.ReadAt(into, 0)
+		tt.MustOK(err)
+		tt.MustEqual(4, n)
+		tt.MustEqual([]byte{1, 2, 9, 4}, into)
+	})
 }
