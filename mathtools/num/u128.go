@@ -1,19 +1,14 @@
 package num
 
 import (
+	"fmt"
 	"math/big"
 	"math/bits"
-	"math/rand"
 )
 
 type U128 struct {
 	lo, hi uint64
 }
-
-const (
-	maxUint64Float = float64(maxUint64) + 1
-	maxUint64      = 1<<64 - 1
-)
 
 var MaxU128 = U128{lo: maxUint64, hi: maxUint64}
 
@@ -22,19 +17,23 @@ func U128From32(v uint32) U128 { return U128{hi: 0, lo: uint64(v)} }
 func U128From16(v uint16) U128 { return U128{hi: 0, lo: uint64(v)} }
 func U128From8(v uint8) U128   { return U128{hi: 0, lo: uint64(v)} }
 
+func U128FromString(s string) (out U128, err error) {
+	b, ok := new(big.Int).SetString(s, 10)
+	if !ok {
+		return out, fmt.Errorf("num: u128 string %q invalid", s)
+	}
+	return U128FromBigInt(b), nil
+}
+
 func U128FromBigInt(v *big.Int) (out U128) {
 	if v.Sign() < 0 {
 		return out
 	}
 
-	tmp := new(big.Int).Set(v).Rsh(v, 64)
-	out.lo = v.Uint64()
-	out.hi = tmp.Uint64()
+	var a, b big.Int
+	out.lo = b.And(v, bigLoMask).Uint64()
+	out.hi = a.Rsh(v, 64).Uint64()
 	return out
-}
-
-func RandU128From(rand *rand.Rand) (out U128) {
-	return U128{hi: rand.Uint64(), lo: rand.Uint64()}
 }
 
 func U128FromFloat32(f float32) U128 { return U128FromFloat64(float64(f)) }
@@ -42,13 +41,16 @@ func U128FromFloat32(f float32) U128 { return U128FromFloat64(float64(f)) }
 func U128FromFloat64(f float64) U128 {
 	if f <= 0 {
 		return U128{}
-	} else if f <= maxUint64 {
+	} else if f <= maxUint64Float {
 		return U128{lo: uint64(f)}
 	} else {
-		// FIXME: dunno about this.
 		return U128{hi: uint64(f / maxUint64Float), lo: uint64(f)}
 	}
 }
+
+// func RandU128From(rand *rand.Rand) (out U128) {
+//     return U128{hi: rand.Uint64(), lo: rand.Uint64()}
+// }
 
 func (u U128) String() string {
 	v := u.AsBigInt() // This is good enough for now
@@ -65,7 +67,18 @@ func (u U128) IntoBigInt(b *big.Int) {
 }
 
 func (u U128) AsBigInt() (b big.Int) {
-	u.IntoBigInt(&b)
+	b.SetUint64(u.hi)
+	b.Lsh(&b, 64)
+
+	var lo big.Int
+	lo.SetUint64(u.lo)
+	b.Add(&b, &lo)
+	return b
+}
+
+func (u U128) AsBigFloat() (b big.Float) {
+	i := u.AsBigInt()
+	b.SetInt(&i)
 	return b
 }
 
@@ -79,25 +92,40 @@ func (u U128) AsFloat64() float64 {
 	}
 }
 
+func (u U128) AsI128() I128 {
+	return I128{lo: u.lo, hi: int64(u.hi)}
+}
+
+// AsUint64 truncates the U128 to fit in a uint64.
+func (u U128) AsUint64() uint64 {
+	return u.lo
+}
+
 func (u U128) Inc() (v U128) {
 	v.lo = u.lo + 1
-	v.hi = u.hi + ((v.lo^u.lo)&v.lo)>>63
+	v.hi = u.hi
+	if u.lo > v.lo {
+		v.hi++
+	}
 	return v
 }
 
 func (u U128) Dec() (v U128) {
 	v.lo = u.lo - 1
-	v.hi = u.hi - ((v.lo^u.lo)&v.lo)>>63
+	v.hi = u.hi
+	if u.lo < v.lo {
+		v.hi--
+	}
 	return v
 }
 
-func (u U128) Add(n U128) U128 {
-	lo := u.lo + n.lo
-	hi := u.hi + n.hi
-	if u.lo > lo {
-		hi++
+func (u U128) Add(n U128) (v U128) {
+	v.lo = u.lo + n.lo
+	v.hi = u.hi + n.hi
+	if u.lo > v.lo {
+		v.hi++
 	}
-	return U128{hi: hi, lo: lo}
+	return v
 }
 
 func (u U128) Sub(n U128) (v U128) {
@@ -222,6 +250,27 @@ func (u U128) Rsh(n uint) (v U128) {
 		v.lo = (u.lo >> n) | (u.hi << (64 - n))
 		return v
 	}
+}
+
+func (u U128) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + u.String() + `"`), nil
+}
+
+func (u *U128) UnmarshalJSON(bts []byte) (err error) {
+	if bts[0] == '"' {
+		ln := len(bts)
+		if bts[ln-1] != '"' {
+			return fmt.Errorf("num: u128 invalid JSON %q", string(bts))
+		}
+		bts = bts[1 : ln-2]
+	}
+
+	v, err := U128FromString(string(bts))
+	if err != nil {
+		return err
+	}
+	*u = v
+	return nil
 }
 
 func (u U128) Mul(n U128) (dest U128) {
