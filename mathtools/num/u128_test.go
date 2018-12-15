@@ -2,7 +2,6 @@ package num
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 	"testing"
 
@@ -25,7 +24,7 @@ func TestU128Add(t *testing.T) {
 	}{
 		{u64(1), u64(2), u64(3)},
 		{u64(10), u64(3), u64(13)},
-		{u64(math.MaxUint64), u64(1), u128s("18446744073709551616")},
+		{u64(maxUint64), u64(1), u128s("18446744073709551616")},
 		{u128s("18446744073709551615"), u128s("18446744073709551615"), u128s("36893488147419103230")},
 	} {
 		t.Run(fmt.Sprintf("%s+%s=%s", tc.a, tc.b, tc.c), func(t *testing.T) {
@@ -38,12 +37,12 @@ func TestU128Add(t *testing.T) {
 func TestU128Mul(t *testing.T) {
 	tt := assert.WrapTB(t)
 
-	u := U128From64(math.MaxUint64)
-	v := u.Mul(U128From64(math.MaxUint64))
+	u := U128From64(maxUint64)
+	v := u.Mul(U128From64(maxUint64))
 
 	var v1, v2 big.Int
-	v1.SetUint64(math.MaxUint64)
-	v2.SetUint64(math.MaxUint64)
+	v1.SetUint64(maxUint64)
+	v2.SetUint64(maxUint64)
 	tt.MustEqual(v.String(), v1.Mul(&v1, &v2).String())
 }
 
@@ -78,21 +77,21 @@ var BenchUResult U128
 var BenchIntResult int
 
 func BenchmarkU128Mul(b *testing.B) {
-	u := U128From64(math.MaxUint64)
+	u := U128From64(maxUint64)
 	for i := 0; i < b.N; i++ {
 		BenchUResult = u.Mul(u)
 	}
 }
 
 func BenchmarkU128Add(b *testing.B) {
-	u := U128From64(math.MaxUint64)
+	u := U128From64(maxUint64)
 	for i := 0; i < b.N; i++ {
 		BenchUResult = u.Add(u)
 	}
 }
 
 func BenchmarkU128Div(b *testing.B) {
-	u := U128From64(math.MaxUint64)
+	u := U128From64(maxUint64)
 	by := U128From64(121525124)
 	for i := 0; i < b.N; i++ {
 		BenchUResult, _ = u.DivMod(by)
@@ -100,16 +99,44 @@ func BenchmarkU128Div(b *testing.B) {
 }
 
 func BenchmarkU128CmpEqual(b *testing.B) {
-	u := U128From64(math.MaxUint64)
-	n := U128From64(math.MaxUint64)
+	u := U128From64(maxUint64)
+	n := U128From64(maxUint64)
 	for i := 0; i < b.N; i++ {
 		BenchIntResult = u.Cmp(n)
 	}
 }
 
+func BenchmarkU128Lsh(b *testing.B) {
+	for _, tc := range []struct {
+		in U128
+		sh uint
+	}{
+		{u64(maxUint64), 1},
+		{u64(maxUint64), 2},
+		{u64(maxUint64), 8},
+		{u64(maxUint64), 64},
+		{u64(maxUint64), 126},
+		{u64(maxUint64), 127},
+		{u64(maxUint64), 128},
+		{MaxU128, 1},
+		{MaxU128, 2},
+		{MaxU128, 8},
+		{MaxU128, 64},
+		{MaxU128, 126},
+		{MaxU128, 127},
+		{MaxU128, 128},
+	} {
+		b.Run(fmt.Sprintf("%s>>%d", tc.in, tc.sh), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				BenchUResult = tc.in.Lsh(tc.sh)
+			}
+		})
+	}
+}
+
 func BenchmarkBigIntMul(b *testing.B) {
 	var max big.Int
-	max.SetUint64(math.MaxUint64)
+	max.SetUint64(maxUint64)
 
 	for i := 0; i < b.N; i++ {
 		var dest big.Int
@@ -119,7 +146,7 @@ func BenchmarkBigIntMul(b *testing.B) {
 
 func BenchmarkBigIntAdd(b *testing.B) {
 	var max big.Int
-	max.SetUint64(math.MaxUint64)
+	max.SetUint64(maxUint64)
 
 	for i := 0; i < b.N; i++ {
 		var dest big.Int
@@ -128,7 +155,7 @@ func BenchmarkBigIntAdd(b *testing.B) {
 }
 
 func BenchmarkBigIntDiv(b *testing.B) {
-	u := new(big.Int).SetUint64(math.MaxUint64)
+	u := new(big.Int).SetUint64(maxUint64)
 	by := new(big.Int).SetUint64(121525124)
 	for i := 0; i < b.N; i++ {
 		var z big.Int
@@ -138,8 +165,8 @@ func BenchmarkBigIntDiv(b *testing.B) {
 
 func BenchmarkBigIntCmpEqual(b *testing.B) {
 	var v1, v2 big.Int
-	v1.SetUint64(math.MaxUint64)
-	v2.SetUint64(math.MaxUint64)
+	v1.SetUint64(maxUint64)
+	v2.SetUint64(maxUint64)
 
 	for i := 0; i < b.N; i++ {
 		BenchIntResult = v1.Cmp(&v2)
