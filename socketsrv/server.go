@@ -8,7 +8,7 @@ import (
 	"time"
 
 	service "github.com/shabbyrobe/go-service"
-	"github.com/shabbyrobe/golib/incrementer"
+	"github.com/shabbyrobe/golib/mathtools/incrementer"
 )
 
 // TODO(bw): Remove go-service from this package entirely.

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shabbyrobe/golib/incrementer"
+	"github.com/shabbyrobe/golib/mathtools/incrementer"
 )
 
 var (
