@@ -12,6 +12,10 @@ type I128 struct {
 var MaxI128 = I128{hi: maxInt64, lo: maxUint64}
 var MinI128 = I128{hi: minInt64, lo: 0}
 
+func I128FromRaw(hi, lo uint64) I128 {
+	return I128{hi: int64(hi), lo: lo}
+}
+
 func I128From64(v int64) I128 {
 	var hi int64
 	if v < 0 {
@@ -44,11 +48,9 @@ func I128From8(v int8) I128 {
 	return I128{hi: hi, lo: uint64(int64(v))}
 }
 
-var bigLoMask = new(big.Int).SetUint64(maxUint64)
-
 func I128FromBigInt(v *big.Int) (out I128) {
 	var a, b big.Int
-	out.lo = b.And(v, bigLoMask).Uint64()
+	out.lo = b.And(v, maxBigUint64).Uint64()
 	out.hi = a.Rsh(v, 64).Int64()
 	return out
 }
@@ -75,9 +77,7 @@ func I128FromFloat64(f float64) I128 {
 	}
 }
 
-// func RandI128From(rand *rand.Rand) (out I128) {
-//     return I128{hi: rand.Int63(), lo: rand.Uint64()}
-// }
+func (i I128) Raw() (hi uint64, lo uint64) { return uint64(i.hi), i.lo }
 
 func (i I128) String() string {
 	v := i.AsBigInt() // This is good enough for now
@@ -113,7 +113,6 @@ func (i I128) AsFloat64() float64 {
 }
 
 func (i I128) AsBigFloat() (b big.Float) {
-	// FIXME: build big.Float directly
 	v := i.AsBigInt()
 	b.SetInt(&v)
 	return b
@@ -162,6 +161,17 @@ func (i I128) Neg() (v I128) {
 		v.hi--
 	}
 	return v
+}
+
+func (i I128) Abs() I128 {
+	if i.hi < 0 {
+		i.hi = -i.hi
+		i.lo = -i.lo
+		if i.lo > 0 {
+			i.hi--
+		}
+	}
+	return i
 }
 
 func (i I128) Cmp(n I128) int {
@@ -253,7 +263,17 @@ func (i I128) Mul(n I128) (dest I128) {
 	return dest
 }
 
-func (i I128) DivMod(by I128) (q, r I128) {
+// QuoRem returns the quotient q and remainder r for y != 0. If y == 0, a
+// division-by-zero run-time panic occurs.
+//
+// QuoRem implements T-division and modulus (like Go):
+//
+//	q = x/y      with the result truncated to zero
+//	r = x - y*q
+//
+// U128 does not support big.Int.DivMod()-style Euclidean division.
+//
+func (i I128) QuoRem(by I128) (q, r I128) {
 	qSign, rSign := 1, 1
 	if i.LessThan(zeroI128) {
 		qSign, rSign = -1, -1
@@ -264,7 +284,7 @@ func (i I128) DivMod(by I128) (q, r I128) {
 		by = by.Neg()
 	}
 
-	qu, ru := i.AsU128().DivMod(by.AsU128())
+	qu, ru := i.AsU128().QuoRem(by.AsU128())
 	q, r = qu.AsI128(), ru.AsI128()
 	if qSign < 0 {
 		q = q.Neg()
@@ -275,14 +295,20 @@ func (i I128) DivMod(by I128) (q, r I128) {
 	return q, r
 }
 
-func (i I128) Mod(by I128) (r I128) {
+// Quo returns the quotient x/y for y != 0. If y == 0, a division-by-zero
+// run-time panic occurs. Quo implements truncated division (like Go); see
+// QuoRem for more details.
+func (i I128) Quo(by I128) (q I128) {
 	// FIXME: can do much better than this.
-	_, r = i.DivMod(by)
-	return r
+	q, _ = i.QuoRem(by)
+	return q
 }
 
-func (i I128) Div(by I128) (q I128) {
+// Rem returns the remainder of x%y for y != 0. If y == 0, a division-by-zero
+// run-time panic occurs. Rem implements truncated modulus (like Go); see
+// QuoRem for more details.
+func (i I128) Rem(by I128) (r I128) {
 	// FIXME: can do much better than this.
-	q, _ = i.DivMod(by)
-	return q
+	_, r = i.QuoRem(by)
+	return r
 }

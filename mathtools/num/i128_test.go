@@ -20,6 +20,16 @@ func i128s(s string) I128 {
 	return I128FromBigInt(b)
 }
 
+func TestI128FromSize(t *testing.T) {
+	tt := assert.WrapTB(t)
+	tt.MustEqual(I128From8(127), i128s("127"))
+	tt.MustEqual(I128From8(-128), i128s("-128"))
+	tt.MustEqual(I128From16(32767), i128s("32767"))
+	tt.MustEqual(I128From16(-32768), i128s("-32768"))
+	tt.MustEqual(I128From32(2147483647), i128s("2147483647"))
+	tt.MustEqual(I128From32(-2147483648), i128s("-2147483648"))
+}
+
 func TestI128Add(t *testing.T) {
 	for idx, tc := range []struct {
 		a, b, c I128
@@ -106,7 +116,7 @@ func TestI128Div(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%s÷%s=%s,%s", tc.i, tc.by, tc.q, tc.r), func(t *testing.T) {
 			tt := assert.WrapTB(t)
-			q, r := tc.i.DivMod(tc.by)
+			q, r := tc.i.QuoRem(tc.by)
 			tt.MustEqual(tc.q.String(), q.String())
 			tt.MustEqual(tc.r.String(), r.String())
 
