@@ -554,10 +554,8 @@ func (f fuzzI128) Neg() error {
 }
 
 func TestFuzzU128(t *testing.T) {
-	fuzzIterations := 40000
-
-	var runFuzzOps = allFuzzOps
-	var source = &rando{rng: rand.New(rand.NewSource(0))} // Classic rando!
+	var runFuzzOps = fuzzOpsActive
+	var source = &rando{rng: rand.New(rand.NewSource(fuzzSeed))} // Classic rando!
 	var totalFailures int
 
 	for _, fuzzImpl := range []fuzzOps{
