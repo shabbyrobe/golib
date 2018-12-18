@@ -5,13 +5,14 @@ import (
 )
 
 const (
-	maxUint64Float    = float64(maxUint64) + 1
-	maxUint64NegFloat = -(float64(maxUint64) + 1)
-	maxUint64         = 1<<64 - 1
+	maxUint64Float  = float64(maxUint64)     // (1<<64) - 1
+	wrapUint64Float = float64(maxUint64) + 1 // 1 << 64
 
-	maxInt64Float = float64(maxInt64) + 1
+	maxUint64     = 1<<64 - 1
 	maxInt64      = 1<<63 - 1
 	minInt64      = -1 << 63
+	maxInt64Float = float64(maxInt64) + 1
+	minInt64Float = float64(minInt64)
 )
 
 var (
@@ -28,4 +29,7 @@ var (
 
 	// wrapBigU128 is 1 << 128, used to simulate over/underflow:
 	wrapBigU128, _ = new(big.Int).SetString("340282366920938463463374607431768211456", 10)
+
+	// wrapBigU64 is 1 << 64:
+	wrapBigU64, _ = new(big.Int).SetString("18446744073709551616", 10)
 )

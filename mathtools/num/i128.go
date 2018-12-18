@@ -1,6 +1,7 @@
 package num
 
 import (
+	"math"
 	"math/big"
 )
 
@@ -62,17 +63,21 @@ func I128FromFloat64(f float64) I128 {
 		return I128{}
 
 	} else if f < 0 {
-		if f >= maxUint64NegFloat {
+		if f >= minInt64Float {
 			return I128{hi: -1, lo: uint64(-f)}
 		} else {
-			return I128{hi: int64(f / maxUint64Float), lo: uint64(f)}
+			// Mod is super duper slooooowwwwwww but I haven't found a faster way
+			// to do this yet:
+			lo := math.Mod(f, wrapUint64Float)
+			return I128{hi: int64(f / wrapUint64Float), lo: uint64(lo)}
 		}
 
 	} else {
 		if f <= maxUint64Float {
 			return I128{lo: uint64(f)}
 		} else {
-			return I128{hi: int64(f / maxUint64Float), lo: uint64(f)}
+			lo := math.Mod(f, wrapUint64Float)
+			return I128{hi: int64(f / wrapUint64Float), lo: uint64(lo)}
 		}
 	}
 }
@@ -93,8 +98,13 @@ func (i I128) IntoBigInt(b *big.Int) {
 	b.Add(b, &lo)
 }
 
-func (i I128) AsBigInt() (b big.Int) {
-	i.IntoBigInt(&b)
+func (i I128) AsBigInt() (b *big.Int) {
+	b = new(big.Int).SetInt64(i.hi)
+	b.Lsh(b, 64)
+
+	var lo big.Int
+	lo.SetUint64(i.lo)
+	b.Add(b, &lo)
 	return b
 }
 
@@ -112,9 +122,9 @@ func (i I128) AsFloat64() float64 {
 	}
 }
 
-func (i I128) AsBigFloat() (b big.Float) {
+func (i I128) AsBigFloat() (b *big.Float) {
 	v := i.AsBigInt()
-	b.SetInt(&v)
+	b.SetInt(v)
 	return b
 }
 

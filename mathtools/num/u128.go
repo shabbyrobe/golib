@@ -2,6 +2,7 @@ package num
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"math/bits"
 )
@@ -45,7 +46,10 @@ func U128FromFloat64(f float64) U128 {
 	} else if f <= maxUint64Float {
 		return U128{lo: uint64(f)}
 	} else {
-		return U128{hi: uint64(f / maxUint64Float), lo: uint64(f)}
+		// Mod is super duper slooooowwwwwww but I haven't found a faster way
+		// to do this yet:
+		lo := math.Mod(f, wrapUint64Float)
+		return U128{hi: uint64(f / wrapUint64Float), lo: uint64(lo)}
 	}
 }
 
@@ -79,10 +83,8 @@ func (u U128) AsBigInt() (b *big.Int) {
 	return b
 }
 
-func (u U128) AsBigFloat() (b big.Float) {
-	i := u.AsBigInt()
-	b.SetInt(i)
-	return b
+func (u U128) AsBigFloat() (b *big.Float) {
+	return new(big.Float).SetInt(u.AsBigInt())
 }
 
 func (u U128) AsFloat64() float64 {
@@ -91,7 +93,7 @@ func (u U128) AsFloat64() float64 {
 	} else if u.hi == 0 {
 		return float64(u.lo)
 	} else {
-		return (float64(u.hi) * maxUint64Float) + float64(u.lo)
+		return (float64(u.hi) * wrapUint64Float) + float64(u.lo)
 	}
 }
 

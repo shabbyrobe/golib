@@ -4,15 +4,28 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"strings"
 	"testing"
 )
 
 type fuzzOp string
 
+// This is the equivalent of passing -num.fuzziter=10000 to 'go test':
+const fuzzDefaultIterations = 10000
+
+// FIXME: This does not scale with the size of the input number.
+var floatDiffLimit, _ = new(big.Float).SetString("1e-15")
+
+// These ops are all enabled by default. You can instead pass them explicitly
+// on the command line like so: '-num.fuzzop=add -num.fuzzop=sub'
+//
+// If you add a new op, search for the string 'NEWOP' in this file for all the
+// places you need to update.
 const (
 	fuzzAbs              fuzzOp = "abs"
 	fuzzAdd              fuzzOp = "add"
 	fuzzAnd              fuzzOp = "and"
+	fuzzAsFloat64        fuzzOp = "asfloat64"
 	fuzzCmp              fuzzOp = "cmp"
 	fuzzDec              fuzzOp = "dec"
 	fuzzEqual            fuzzOp = "equal"
@@ -33,10 +46,15 @@ const (
 	fuzzXor              fuzzOp = "xor"
 )
 
+// allFuzzOps are active by default.
+//
+// NEWOP: Update this list if a NEW op is added otherwise it won't be
+// enabled by default.
 var allFuzzOps = []fuzzOp{
 	fuzzAbs,
 	fuzzAdd,
 	fuzzAnd,
+	fuzzAsFloat64,
 	fuzzCmp,
 	fuzzDec,
 	fuzzEqual,
@@ -165,6 +183,33 @@ func checkEqualU128(u U128, b *big.Int) error {
 	return nil
 }
 
+func checkFloatU128(orig *big.Int, u U128, b *big.Int) error {
+	return checkFloatCommon(orig, u.AsBigInt(), u.String(), b)
+}
+
+func checkFloatI128(orig *big.Int, i I128, b *big.Int) error {
+	return checkFloatCommon(orig, i.AsBigInt(), i.String(), b)
+}
+
+func checkFloatCommon(orig, val *big.Int, valstr string, b *big.Int) error {
+	diff := new(big.Int).Set(val)
+	diff.Sub(diff, b)
+
+	difff := new(big.Float).SetInt(diff)
+	if orig.Cmp(big0) == 0 {
+		difff.SetInt(orig)
+	} else {
+		difff.Quo(difff, new(big.Float).SetInt(orig))
+	}
+
+	if difff.Abs(difff).Cmp(floatDiffLimit) > 0 {
+		return fmt.Errorf("|u128(%s) - big(%s)| = %s, > %s", valstr, b.String(),
+			strings.TrimRight(fmt.Sprintf("%.20f", difff), "0"),
+			strings.TrimRight(fmt.Sprintf("%.20f", floatDiffLimit), "0"))
+	}
+	return nil
+}
+
 func checkEqualI128(i I128, b *big.Int) error {
 	if i.String() != b.String() {
 		return fmt.Errorf("i128(%s) != big(%s)", i.String(), b.String())
@@ -172,12 +217,14 @@ func checkEqualI128(i I128, b *big.Int) error {
 	return nil
 }
 
+// NEWOP: update this interface if a new op is added.
 type fuzzOps interface {
 	Name() string // Not an op
 
 	Abs() error
 	Add() error
 	And() error
+	AsFloat64() error
 	Cmp() error
 	Dec() error
 	Equal() error
@@ -387,6 +434,17 @@ func (f fuzzU128) Neg() error {
 	return nil // nothing to do here
 }
 
+func (f fuzzU128) AsFloat64() error {
+	b1 := f.source.BigU128()
+	u1 := U128FromBigInt(b1)
+	bf := new(big.Float).SetInt(b1)
+	rbf, _ := bf.Float64()
+	ruf := u1.AsFloat64()
+	rb, _ := new(big.Float).SetFloat64(rbf).Int(new(big.Int))
+	ru := U128FromFloat64(ruf)
+	return checkFloatU128(b1, ru, rb)
+}
+
 type fuzzI128 struct {
 	source *rando
 }
@@ -449,13 +507,26 @@ func (f fuzzI128) Sub() error {
 }
 
 func (f fuzzI128) Mul() error {
-	// b1, b2 := f.source.BigI128(), f.source.BigI128()
-	// u1, u2 := I128FromBigInt(b1), I128FromBigInt(b2)
-	// rb := new(big.Int).Mul(b1, b2)
-	// // FIXME: simulate overflow
-	// ru := u1.Mul(u2)
-	// return checkEqualI128(ru, rb)
-	return nil // FIXME: reactivate
+	b1, b2 := f.source.BigI128(), f.source.BigI128()
+	u1, u2 := I128FromBigInt(b1), I128FromBigInt(b2)
+	rb := new(big.Int).Mul(b1, b2)
+
+	if rb.Cmp(maxBigI128) > 0 {
+		// simulate overflow
+		gap := new(big.Int)
+		gap.Sub(rb, minBigI128)
+		r := new(big.Int).Rem(gap, wrapBigU128)
+		rb = r.Add(r, minBigI128)
+	} else if rb.Cmp(minBigI128) < 0 {
+		// simulate underflow
+		gap := new(big.Int).Set(rb)
+		gap.Sub(maxBigI128, gap)
+		r := new(big.Int).Rem(gap, wrapBigU128)
+		rb = r.Sub(maxBigI128, r)
+	}
+
+	ru := u1.Mul(u2)
+	return checkEqualI128(ru, rb)
 }
 
 func (f fuzzI128) Quo() error {
@@ -535,6 +606,17 @@ func (f fuzzI128) LessOrEqualTo() error {
 	return checkEqualBool(b1.Cmp(b2) <= 0, u1.LessOrEqualTo(u2))
 }
 
+func (f fuzzI128) AsFloat64() error {
+	b1 := f.source.BigI128()
+	i1 := I128FromBigInt(b1)
+	bf := new(big.Float).SetInt(b1)
+	rbf, _ := bf.Float64()
+	rif := i1.AsFloat64()
+	rb, _ := new(big.Float).SetFloat64(rbf).Int(new(big.Int))
+	ri := I128FromFloat64(rif)
+	return checkFloatI128(b1, ri, rb)
+}
+
 // Bitwise operations on I128 are not supported:
 func (f fuzzI128) And() error { return nil }
 func (f fuzzI128) Or() error  { return nil }
@@ -553,7 +635,7 @@ func (f fuzzI128) Neg() error {
 	return checkEqualI128(ru, rb)
 }
 
-func TestFuzzU128(t *testing.T) {
+func TestFuzz(t *testing.T) {
 	var runFuzzOps = fuzzOpsActive
 	var source = &rando{rng: rand.New(rand.NewSource(fuzzSeed))} // Classic rando!
 	var totalFailures int
@@ -569,6 +651,9 @@ func TestFuzzU128(t *testing.T) {
 				source.Clear()
 
 				var err error
+
+				// NEWOP: add a new branch here in alphabetical order if a new
+				// op is added.
 				switch op {
 				case fuzzAbs:
 					err = fuzzImpl.Abs()
@@ -576,6 +661,8 @@ func TestFuzzU128(t *testing.T) {
 					err = fuzzImpl.Add()
 				case fuzzAnd:
 					err = fuzzImpl.And()
+				case fuzzAsFloat64:
+					err = fuzzImpl.AsFloat64()
 				case fuzzCmp:
 					err = fuzzImpl.Cmp()
 				case fuzzDec:
@@ -637,23 +724,37 @@ func TestFuzzU128(t *testing.T) {
 }
 
 func (op fuzzOp) Print(operands ...*big.Int) string {
+	// NEWOP: please add a human-readale format for your op here; this is used
+	// for reporting errors and should show the operation, i.e. "2 + 2".
+	//
+	// It should be safe to assume the appropriate number of operands are set
+	// in 'operands'; if not, it's a bug to be fixed elsewhere.
 	switch op {
+	case fuzzAsFloat64:
+		return fmt.Sprintf("float64(%d)", operands[0])
+
 	case fuzzInc, fuzzDec:
 		return fmt.Sprintf("%d%s", operands[0], op.String())
+
 	case fuzzNeg:
 		return fmt.Sprintf("-%d", operands[0])
+
 	case fuzzAbs:
 		return fmt.Sprintf("|%d|", operands[0])
+
 	case fuzzAdd, fuzzSub, fuzzCmp, fuzzEqual, fuzzGreaterThan, fuzzGreaterOrEqualTo,
 		fuzzLessThan, fuzzLessOrEqualTo, fuzzAnd, fuzzOr, fuzzXor, fuzzLsh, fuzzRsh,
-		fuzzMul, fuzzQuo, fuzzRem, fuzzQuoRem:
+		fuzzMul, fuzzQuo, fuzzRem, fuzzQuoRem: // simple binary case:
 		return fmt.Sprintf("%d %s %d", operands[0], op.String(), operands[1])
+
 	default:
 		return string(op)
 	}
 }
 
 func (op fuzzOp) String() string {
+	// NEWOP: please add a short string representation of this op, as if
+	// the operands were in a sum.
 	switch op {
 	case fuzzAbs:
 		return "|x|"
@@ -661,6 +762,8 @@ func (op fuzzOp) String() string {
 		return "+"
 	case fuzzAnd:
 		return "&"
+	case fuzzAsFloat64:
+		return "float64()"
 	case fuzzCmp:
 		return "<=>"
 	case fuzzDec:

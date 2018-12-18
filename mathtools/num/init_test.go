@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	fuzzIterations = 10000
+	fuzzIterations = fuzzDefaultIterations
 	fuzzOpsActive  = allFuzzOps
 	fuzzSeed       int64
 )

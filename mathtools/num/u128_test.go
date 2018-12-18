@@ -4,8 +4,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
+	"regexp"
 	"testing"
 
 	"github.com/shabbyrobe/golib/assert"
@@ -159,6 +161,26 @@ func TestU128Div(t *testing.T) {
 	}
 }
 
+func TestU128AsFloat(t *testing.T) {
+	for _, tc := range []struct {
+		a   U128
+		out string
+	}{
+		{u128s("2384067163226812360730"), "2384067163226812448768"},
+	} {
+		t.Run(fmt.Sprintf("float64(%s)=%s", tc.a, tc.out), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			tt.MustEqual(tc.out, cleanFloatStr(fmt.Sprintf("%f", tc.a.AsFloat64())))
+		})
+	}
+}
+
+var trimFloatPattern = regexp.MustCompile(`(\.0+$|(\.\d+[1-9])\0+$)`)
+
+func cleanFloatStr(str string) string {
+	return trimFloatPattern.ReplaceAllString(str, "$2")
+}
+
 func TestU128Rsh(t *testing.T) {
 	for _, tc := range []struct {
 		u  U128
@@ -243,7 +265,7 @@ func TestU128Float64Random(t *testing.T) {
 		diff := DifferenceU128(u, r)
 
 		ubig, diffBig := u.AsBigFloat(), diff.AsBigFloat()
-		pct := new(big.Float).Quo(&diffBig, &ubig)
+		pct := new(big.Float).Quo(diffBig, ubig)
 
 		tt.MustAssert(pct.Cmp(limit) < 0, "%s", pct)
 	}
@@ -269,7 +291,7 @@ var (
 	BenchUResult        U128
 	BenchIntResult      int
 	BenchFloatResult    float64
-	BenchBigFloatResult big.Float
+	BenchBigFloatResult *big.Float
 )
 
 func BenchmarkU128Mul(b *testing.B) {
@@ -330,17 +352,28 @@ func BenchmarkU128Lsh(b *testing.B) {
 	}
 }
 
-func BenchmarkAsBigFloat(b *testing.B) {
+func BenchmarkU128AsBigFloat(b *testing.B) {
 	n := u128s("36893488147419103230")
 	for i := 0; i < b.N; i++ {
 		BenchBigFloatResult = n.AsBigFloat()
 	}
 }
 
-func BenchmarkAsFloat(b *testing.B) {
+func BenchmarkU128AsFloat(b *testing.B) {
 	n := u128s("36893488147419103230")
 	for i := 0; i < b.N; i++ {
 		BenchFloatResult = n.AsFloat64()
+	}
+}
+
+func BenchmarkU128FromFloat(b *testing.B) {
+	for _, pow := range []float64{1, 63, 64, 65, 127, 128} {
+		b.Run(fmt.Sprintf("**%d", int(pow)), func(b *testing.B) {
+			f := math.Pow(2, pow)
+			for i := 0; i < b.N; i++ {
+				BenchUResult = U128FromFloat64(f)
+			}
+		})
 	}
 }
 

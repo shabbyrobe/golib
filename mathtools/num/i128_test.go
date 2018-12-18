@@ -123,9 +123,9 @@ func TestI128Div(t *testing.T) {
 			iBig := tc.i.AsBigInt()
 			byBig := tc.by.AsBigInt()
 
-			qBig, rBig := new(big.Int).Set(&iBig), new(big.Int).Set(&iBig)
-			qBig = qBig.Div(qBig, &byBig)
-			rBig = rBig.Mod(rBig, &byBig)
+			qBig, rBig := new(big.Int).Set(iBig), new(big.Int).Set(iBig)
+			qBig = qBig.Div(qBig, byBig)
+			rBig = rBig.Mod(rBig, byBig)
 
 			tt.MustEqual(tc.q.String(), qBig.String())
 			tt.MustEqual(tc.r.String(), rBig.String())
@@ -159,8 +159,8 @@ func TestI128Float64Random(t *testing.T) {
 		r := I128FromFloat64(f)
 		diff := DifferenceI128(num, r)
 
-		ubig, diffBig := num.AsBigFloat(), diff.AsBigFloat()
-		pct := new(big.Float).Quo(&diffBig, &ubig)
+		ibig, diffBig := num.AsBigFloat(), diff.AsBigFloat()
+		pct := new(big.Float).Quo(diffBig, ibig)
 		// spew.Dump(num, f, r, pct, "---")
 
 		tt.MustAssert(pct.Cmp(limit) < 0, "%f", pct)
