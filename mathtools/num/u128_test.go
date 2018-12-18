@@ -368,7 +368,7 @@ func BenchmarkU128AsFloat(b *testing.B) {
 
 func BenchmarkU128FromFloat(b *testing.B) {
 	for _, pow := range []float64{1, 63, 64, 65, 127, 128} {
-		b.Run(fmt.Sprintf("**%d", int(pow)), func(b *testing.B) {
+		b.Run(fmt.Sprintf("pow%d", int(pow)), func(b *testing.B) {
 			f := math.Pow(2, pow)
 			for i := 0; i < b.N; i++ {
 				BenchUResult = U128FromFloat64(f)

@@ -123,9 +123,7 @@ func (i I128) AsFloat64() float64 {
 }
 
 func (i I128) AsBigFloat() (b *big.Float) {
-	v := i.AsBigInt()
-	b.SetInt(v)
-	return b
+	return new(big.Float).SetInt(i.AsBigInt())
 }
 
 func (i I128) Inc() (v I128) {

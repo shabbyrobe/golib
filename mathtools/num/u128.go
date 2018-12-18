@@ -2,7 +2,6 @@ package num
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 	"math/bits"
 )
@@ -48,7 +47,9 @@ func U128FromFloat64(f float64) U128 {
 	} else {
 		// Mod is super duper slooooowwwwwww but I haven't found a faster way
 		// to do this yet:
-		lo := math.Mod(f, wrapUint64Float)
+		// lo := math.Mod(f, wrapUint64Float)
+
+		lo := mod(f, wrapUint64Float)
 		return U128{hi: uint64(f / wrapUint64Float), lo: uint64(lo)}
 	}
 }
