@@ -7,7 +7,9 @@
 
 package num
 
-import "math"
+import (
+	"math"
+)
 
 const (
 	mask  = 0x7FF
@@ -15,6 +17,8 @@ const (
 	bias  = 1023
 )
 
+// mod is a very slimmed-down approximation of math.Mod, but without
+// support for any of the things we don't need here:
 func mod(x, y float64) float64 {
 	yfr, yexp := frexp(y)
 	neg := false
@@ -37,6 +41,8 @@ func mod(x, y float64) float64 {
 	return r
 }
 
+// frexp is a very slimmed-down approximation of math.Frexp, but without
+// support for any of the things we don't need here:
 func frexp(f float64) (frac float64, exp int) {
 	bits := math.Float64bits(f)
 	exp += int((bits>>shift)&mask) - bias + 1
@@ -46,6 +52,8 @@ func frexp(f float64) (frac float64, exp int) {
 	return
 }
 
+// ldexp is a very slimmed-down approximation of math.Ldexp, but without
+// support for any of the things we don't need here:
 func ldexp(frac float64, exp int) float64 {
 	x := math.Float64bits(frac)
 	exp += int(x>>shift)&mask - bias

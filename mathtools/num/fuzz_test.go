@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
-	"strings"
 	"testing"
 )
 
@@ -12,9 +11,6 @@ type fuzzOp string
 
 // This is the equivalent of passing -num.fuzziter=10000 to 'go test':
 const fuzzDefaultIterations = 10000
-
-// FIXME: This does not scale with the size of the input number.
-var floatDiffLimit, _ = new(big.Float).SetString("1e-15")
 
 // These ops are all enabled by default. You can instead pass them explicitly
 // on the command line like so: '-num.fuzzop=add -num.fuzzop=sub'
@@ -73,6 +69,34 @@ var allFuzzOps = []fuzzOp{
 	fuzzRsh,
 	fuzzSub,
 	fuzzXor,
+}
+
+// NEWOP: update this interface if a new op is added.
+type fuzzOps interface {
+	Name() string // Not an op
+
+	Abs() error
+	Add() error
+	And() error
+	AsFloat64() error
+	Cmp() error
+	Dec() error
+	Equal() error
+	GreaterOrEqualTo() error
+	GreaterThan() error
+	Inc() error
+	LessOrEqualTo() error
+	LessThan() error
+	Lsh() error
+	Mul() error
+	Neg() error
+	Or() error
+	Quo() error
+	QuoRem() error
+	Rem() error
+	Rsh() error
+	Sub() error
+	Xor() error
 }
 
 // classic rando!
@@ -157,11 +181,6 @@ func (r *rando) BigI128() *big.Int {
 	}
 }
 
-var (
-	big0 = new(big.Int).SetInt64(0)
-	big1 = new(big.Int).SetInt64(1)
-)
-
 func checkEqualInt(u int, b int) error {
 	if u != b {
 		return fmt.Errorf("u128(%v) != big(%v)", u, b)
@@ -204,8 +223,8 @@ func checkFloatCommon(orig, val *big.Int, valstr string, b *big.Int) error {
 
 	if difff.Abs(difff).Cmp(floatDiffLimit) > 0 {
 		return fmt.Errorf("|u128(%s) - big(%s)| = %s, > %s", valstr, b.String(),
-			strings.TrimRight(fmt.Sprintf("%.20f", difff), "0"),
-			strings.TrimRight(fmt.Sprintf("%.20f", floatDiffLimit), "0"))
+			cleanFloatStr(fmt.Sprintf("%.20f", difff)),
+			cleanFloatStr(fmt.Sprintf("%.20f", floatDiffLimit)))
 	}
 	return nil
 }
@@ -215,34 +234,6 @@ func checkEqualI128(i I128, b *big.Int) error {
 		return fmt.Errorf("i128(%s) != big(%s)", i.String(), b.String())
 	}
 	return nil
-}
-
-// NEWOP: update this interface if a new op is added.
-type fuzzOps interface {
-	Name() string // Not an op
-
-	Abs() error
-	Add() error
-	And() error
-	AsFloat64() error
-	Cmp() error
-	Dec() error
-	Equal() error
-	GreaterOrEqualTo() error
-	GreaterThan() error
-	Inc() error
-	LessOrEqualTo() error
-	LessThan() error
-	Lsh() error
-	Mul() error
-	Neg() error
-	Or() error
-	Quo() error
-	QuoRem() error
-	Rem() error
-	Rsh() error
-	Sub() error
-	Xor() error
 }
 
 type fuzzU128 struct {
@@ -607,17 +598,14 @@ func (f fuzzI128) LessOrEqualTo() error {
 }
 
 func (f fuzzI128) AsFloat64() error {
-	/*
-		b1 := f.source.BigI128()
-		i1 := I128FromBigInt(b1)
-		bf := new(big.Float).SetInt(b1)
-		rbf, _ := bf.Float64()
-		rif := i1.AsFloat64()
-		rb, _ := new(big.Float).SetFloat64(rbf).Int(new(big.Int))
-		ri := I128FromFloat64(rif)
-		return checkFloatI128(b1, ri, rb)
-	*/
-	return nil
+	b1 := f.source.BigI128()
+	i1 := I128FromBigInt(b1)
+	bf := new(big.Float).SetInt(b1)
+	rbf, _ := bf.Float64()
+	rif := i1.AsFloat64()
+	rb, _ := new(big.Float).SetFloat64(rbf).Int(new(big.Int))
+	ri := I128FromFloat64(rif)
+	return checkFloatI128(b1, ri, rb)
 }
 
 // Bitwise operations on I128 are not supported:

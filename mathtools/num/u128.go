@@ -44,13 +44,11 @@ func U128FromFloat64(f float64) U128 {
 		return U128{}
 	} else if f <= maxUint64Float {
 		return U128{lo: uint64(f)}
-	} else {
-		// Mod is super duper slooooowwwwwww but I haven't found a faster way
-		// to do this yet:
-		// lo := math.Mod(f, wrapUint64Float)
-
+	} else if f <= maxU128Float {
 		lo := mod(f, wrapUint64Float)
 		return U128{hi: uint64(f / wrapUint64Float), lo: uint64(lo)}
+	} else {
+		return MaxU128
 	}
 }
 
@@ -327,7 +325,6 @@ func (u U128) Quo(by U128) (q U128) {
 // run-time panic occurs. Rem implements truncated modulus (like Go); see
 // QuoRem for more details.
 func (u U128) Rem(by U128) (r U128) {
-	// FIXME: can do much better than this.
 	_, r = u.QuoRem(by)
 	return r
 }

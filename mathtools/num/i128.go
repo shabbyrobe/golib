@@ -1,7 +1,6 @@
 package num
 
 import (
-	"math"
 	"math/big"
 )
 
@@ -59,16 +58,17 @@ func I128FromBigInt(v *big.Int) (out I128) {
 func I128FromFloat32(f float32) I128 { return I128FromFloat64(float64(f)) }
 
 func I128FromFloat64(f float64) I128 {
+	const spillPos = float64(maxUint64) // (1<<64) - 1
+	const spillNeg = -float64(maxUint64) - 1
+
 	if f == 0 {
 		return I128{}
 
 	} else if f < 0 {
-		if f >= minInt64Float {
+		if f >= spillNeg {
 			return I128{hi: -1, lo: uint64(-f)}
 		} else {
-			// Mod is super duper slooooowwwwwww but I haven't found a faster way
-			// to do this yet:
-			lo := math.Mod(f, wrapUint64Float)
+			lo := mod(f, wrapUint64Float)
 			return I128{hi: int64(f / wrapUint64Float), lo: uint64(lo)}
 		}
 
@@ -76,7 +76,7 @@ func I128FromFloat64(f float64) I128 {
 		if f <= maxUint64Float {
 			return I128{lo: uint64(f)}
 		} else {
-			lo := math.Mod(f, wrapUint64Float)
+			lo := mod(f, wrapUint64Float)
 			return I128{hi: int64(f / wrapUint64Float), lo: uint64(lo)}
 		}
 	}

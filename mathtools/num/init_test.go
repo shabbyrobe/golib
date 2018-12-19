@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -34,6 +35,12 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 	os.Exit(code)
+}
+
+var trimFloatPattern = regexp.MustCompile(`(\.0+$|(\.\d+[1-9])\0+$)`)
+
+func cleanFloatStr(str string) string {
+	return trimFloatPattern.ReplaceAllString(str, "$2")
 }
 
 type StringList []string

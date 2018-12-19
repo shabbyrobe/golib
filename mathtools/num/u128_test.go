@@ -7,7 +7,6 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
-	"regexp"
 	"testing"
 
 	"github.com/shabbyrobe/golib/assert"
@@ -173,12 +172,6 @@ func TestU128AsFloat(t *testing.T) {
 			tt.MustEqual(tc.out, cleanFloatStr(fmt.Sprintf("%f", tc.a.AsFloat64())))
 		})
 	}
-}
-
-var trimFloatPattern = regexp.MustCompile(`(\.0+$|(\.\d+[1-9])\0+$)`)
-
-func cleanFloatStr(str string) string {
-	return trimFloatPattern.ReplaceAllString(str, "$2")
 }
 
 func TestU128Rsh(t *testing.T) {

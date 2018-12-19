@@ -138,11 +138,6 @@ func TestI128Float64Random(t *testing.T) {
 
 	bts := make([]byte, 16)
 
-	// The ratio of the difference between the input number and the output
-	// number relative to the input number after performing the transform
-	// I128(float64(I128)) must not be more than this very reasonable limit:
-	limit := new(big.Float).SetFloat64(0.00000000000001)
-
 	for i := 0; i < 100000; i++ {
 		rand.Read(bts)
 
@@ -163,6 +158,20 @@ func TestI128Float64Random(t *testing.T) {
 		pct := new(big.Float).Quo(diffBig, ibig)
 		// spew.Dump(num, f, r, pct, "---")
 
-		tt.MustAssert(pct.Cmp(limit) < 0, "%f", pct)
+		tt.MustAssert(pct.Cmp(floatDiffLimit) < 0, "%f", pct)
+	}
+}
+
+func TestI128AsFloat(t *testing.T) {
+	for _, tc := range []struct {
+		a   I128
+		out string
+	}{
+		{i128s("-120"), "-120"},
+	} {
+		t.Run(fmt.Sprintf("float64(%s)=%s", tc.a, tc.out), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			tt.MustEqual(tc.out, cleanFloatStr(fmt.Sprintf("%f", tc.a.AsFloat64())))
+		})
 	}
 }
