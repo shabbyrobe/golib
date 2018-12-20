@@ -22,6 +22,8 @@ var (
 	zeroI128 I128
 	zeroU128 U128
 
+	intSize = 32 << (^uint(0) >> 63)
+
 	big0 = new(big.Int).SetInt64(0)
 	big1 = new(big.Int).SetInt64(1)
 

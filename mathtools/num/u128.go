@@ -7,7 +7,7 @@ import (
 )
 
 type U128 struct {
-	lo, hi uint64
+	hi, lo uint64
 }
 
 var MaxU128 = U128{hi: maxUint64, lo: maxUint64}
@@ -31,10 +31,46 @@ func U128FromBigInt(v *big.Int) (out U128) {
 		return out
 	}
 
-	var a, b big.Int
-	out.lo = b.And(v, maxBigUint64).Uint64()
-	out.hi = a.Rsh(v, 64).Uint64()
-	return out
+	words := v.Bits()
+
+	switch intSize {
+	case 64:
+		switch len(words) {
+		case 0:
+			return U128{}
+		case 1:
+			return U128{lo: uint64(words[0])}
+		case 2:
+			return U128{hi: uint64(words[1]), lo: uint64(words[0])}
+		default:
+			return MaxU128
+		}
+
+	case 32:
+		switch len(words) {
+		case 0:
+			return U128{}
+		case 1:
+			return U128{lo: uint64(words[0])}
+		case 2:
+			return U128{lo: (uint64(words[1]) << 32) | (uint64(words[0]))}
+		case 3:
+			return U128{hi: uint64(words[2]), lo: (uint64(words[1]) << 32) | (uint64(words[0]))}
+		case 4:
+			return U128{
+				hi: (uint64(words[3]) << 32) | (uint64(words[2])),
+				lo: (uint64(words[1]) << 32) | (uint64(words[0])),
+			}
+		default:
+			return MaxU128
+		}
+
+	default:
+		var a, b big.Int
+		out.lo = b.And(v, maxBigUint64).Uint64()
+		out.hi = a.Rsh(v, 64).Uint64()
+		return out
+	}
 }
 
 func U128FromFloat32(f float32) U128 { return U128FromFloat64(float64(f)) }
@@ -64,22 +100,46 @@ func (u U128) String() string {
 }
 
 func (u U128) IntoBigInt(b *big.Int) {
-	b.SetUint64(u.hi)
-	b.Lsh(b, 64)
+	switch intSize {
+	case 64:
+		bits := b.Bits()
+		ln := len(bits)
+		if len(bits) < 2 {
+			bits = append(bits, make([]big.Word, 2-ln)...)
+		}
+		bits = bits[:2]
+		bits[0] = big.Word(u.lo)
+		bits[1] = big.Word(u.hi)
+		b.SetBits(bits)
 
-	var lo big.Int
-	lo.SetUint64(u.lo)
-	b.Add(b, &lo)
+	case 32:
+		bits := b.Bits()
+		ln := len(bits)
+		if len(bits) < 4 {
+			bits = append(bits, make([]big.Word, 4-ln)...)
+		}
+		bits = bits[:4]
+		bits[0] = big.Word(u.lo & 0xFFFFFFFF)
+		bits[1] = big.Word(u.lo >> 32)
+		bits[2] = big.Word(u.hi & 0xFFFFFFFF)
+		bits[3] = big.Word(u.hi >> 32)
+		b.SetBits(bits)
+
+	default:
+		if u.hi > 0 {
+			b.SetUint64(u.hi)
+			b.Lsh(b, 64)
+		}
+		var lo big.Int
+		lo.SetUint64(u.lo)
+		b.Add(b, &lo)
+	}
 }
 
 func (u U128) AsBigInt() (b *big.Int) {
-	b = new(big.Int).SetUint64(u.hi)
-	b.Lsh(b, 64)
-
-	var lo big.Int
-	lo.SetUint64(u.lo)
-	b.Add(b, &lo)
-	return b
+	var v big.Int
+	u.IntoBigInt(&v)
+	return &v
 }
 
 func (u U128) AsBigFloat() (b *big.Float) {
@@ -97,7 +157,7 @@ func (u U128) AsFloat64() float64 {
 }
 
 func (u U128) AsI128() I128 {
-	return I128{lo: u.lo, hi: int64(u.hi)}
+	return I128{lo: u.lo, hi: u.hi}
 }
 
 // AsUint64 truncates the U128 to fit in a uint64.
@@ -159,16 +219,7 @@ func (u U128) Equal(n U128) bool {
 }
 
 func (u U128) GreaterThan(n U128) bool {
-	if u.hi > n.hi {
-		return true
-	} else if u.hi < n.hi {
-		return false
-	} else if u.lo > n.lo {
-		return true
-	} else if u.lo < n.lo {
-		return false
-	}
-	return false
+	return u.hi > n.hi || (u.hi == n.hi && u.lo > n.lo)
 }
 
 func (u U128) GreaterOrEqualTo(n U128) bool {
@@ -185,16 +236,7 @@ func (u U128) GreaterOrEqualTo(n U128) bool {
 }
 
 func (u U128) LessThan(n U128) bool {
-	if u.hi > n.hi {
-		return false
-	} else if u.hi < n.hi {
-		return true
-	} else if u.lo > n.lo {
-		return false
-	} else if u.lo < n.lo {
-		return true
-	}
-	return false
+	return u.hi < n.hi || (u.hi == n.hi && u.lo < n.lo)
 }
 
 func (u U128) LessOrEqualTo(n U128) bool {
@@ -400,7 +442,7 @@ func (u U128) trailingZeros() uint {
 }
 
 // Hacker's delight 9-4, divlu:
-func div128by64(u1, u0, v uint64) (q uint64) {
+func quo128by64(u1, u0, v uint64) (q uint64) {
 	var b uint64 = 1 << 32
 	var un1, un0, vn1, vn0, q1, q0, un32, un21, un10, rhat, vs, left, right uint64
 
@@ -542,7 +584,7 @@ func quorem128by128(m, v U128) (q, r U128) {
 		u1 := m.Rsh(1)
 
 		var q1 U128
-		q1.lo = div128by64(u1.hi, u1.lo, v1.hi)
+		q1.lo = quo128by64(u1.hi, u1.lo, v1.hi)
 		q1 = q1.Rsh(63 - sh)
 
 		if q1.hi|q1.lo != 0 {

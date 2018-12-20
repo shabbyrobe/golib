@@ -8,6 +8,7 @@ import (
 )
 
 type fuzzOp string
+type fuzzType string
 
 // This is the equivalent of passing -num.fuzziter=10000 to 'go test':
 const fuzzDefaultIterations = 10000
@@ -41,6 +42,15 @@ const (
 	fuzzSub              fuzzOp = "sub"
 	fuzzXor              fuzzOp = "xor"
 )
+
+// These types are all enabled by default. You can instead pass them explicitly
+// on the command line like so: '-num.fuzztype=u128 -num.fuzztype=i128'
+const (
+	fuzzTypeU128 fuzzType = "u128"
+	fuzzTypeI128 fuzzType = "i128"
+)
+
+var allFuzzTypes = []fuzzType{fuzzTypeU128, fuzzTypeI128}
 
 // allFuzzOps are active by default.
 //
@@ -183,14 +193,14 @@ func (r *rando) BigI128() *big.Int {
 
 func checkEqualInt(u int, b int) error {
 	if u != b {
-		return fmt.Errorf("u128(%v) != big(%v)", u, b)
+		return fmt.Errorf("128(%v) != big(%v)", u, b)
 	}
 	return nil
 }
 
 func checkEqualBool(u bool, b bool) error {
 	if u != b {
-		return fmt.Errorf("u128(%v) != big(%v)", u, b)
+		return fmt.Errorf("128(%v) != big(%v)", u, b)
 	}
 	return nil
 }
@@ -564,37 +574,37 @@ func (f fuzzI128) QuoRem() error {
 func (f fuzzI128) Cmp() error {
 	b1, b2 := f.source.BigI128(), f.source.BigI128()
 	u1, u2 := I128FromBigInt(b1), I128FromBigInt(b2)
-	return checkEqualInt(b1.Cmp(b2), u1.Cmp(u2))
+	return checkEqualInt(u1.Cmp(u2), b1.Cmp(b2))
 }
 
 func (f fuzzI128) Equal() error {
 	b1, b2 := f.source.BigI128(), f.source.BigI128()
 	u1, u2 := I128FromBigInt(b1), I128FromBigInt(b2)
-	return checkEqualBool(b1.Cmp(b2) == 0, u1.Equal(u2))
+	return checkEqualBool(u1.Equal(u2), b1.Cmp(b2) == 0)
 }
 
 func (f fuzzI128) GreaterThan() error {
 	b1, b2 := f.source.BigI128(), f.source.BigI128()
 	u1, u2 := I128FromBigInt(b1), I128FromBigInt(b2)
-	return checkEqualBool(b1.Cmp(b2) > 0, u1.GreaterThan(u2))
+	return checkEqualBool(u1.GreaterThan(u2), b1.Cmp(b2) > 0)
 }
 
 func (f fuzzI128) GreaterOrEqualTo() error {
 	b1, b2 := f.source.BigI128(), f.source.BigI128()
 	u1, u2 := I128FromBigInt(b1), I128FromBigInt(b2)
-	return checkEqualBool(b1.Cmp(b2) >= 0, u1.GreaterOrEqualTo(u2))
+	return checkEqualBool(u1.GreaterOrEqualTo(u2), b1.Cmp(b2) >= 0)
 }
 
 func (f fuzzI128) LessThan() error {
 	b1, b2 := f.source.BigI128(), f.source.BigI128()
 	u1, u2 := I128FromBigInt(b1), I128FromBigInt(b2)
-	return checkEqualBool(b1.Cmp(b2) < 0, u1.LessThan(u2))
+	return checkEqualBool(u1.LessThan(u2), b1.Cmp(b2) < 0)
 }
 
 func (f fuzzI128) LessOrEqualTo() error {
 	b1, b2 := f.source.BigI128(), f.source.BigI128()
 	u1, u2 := I128FromBigInt(b1), I128FromBigInt(b2)
-	return checkEqualBool(b1.Cmp(b2) <= 0, u1.LessOrEqualTo(u2))
+	return checkEqualBool(u1.LessOrEqualTo(u2), b1.Cmp(b2) <= 0)
 }
 
 func (f fuzzI128) AsFloat64() error {
@@ -627,14 +637,29 @@ func (f fuzzI128) Neg() error {
 }
 
 func TestFuzz(t *testing.T) {
+	// fuzzOpsActive comes from the -num.fuzzop flag, in TestMain:
 	var runFuzzOps = fuzzOpsActive
+
+	// fuzzTypesActive comes from the -num.fuzzop flag, in TestMain:
+	var runFuzzTypes = fuzzTypesActive
+
 	var source = &rando{rng: rand.New(rand.NewSource(fuzzSeed))} // Classic rando!
 	var totalFailures int
 
-	for _, fuzzImpl := range []fuzzOps{
-		&fuzzI128{source: source},
-		&fuzzU128{source: source},
-	} {
+	var fuzzTypes []fuzzOps
+
+	for _, fuzzType := range runFuzzTypes {
+		switch fuzzType {
+		case fuzzTypeU128:
+			fuzzTypes = append(fuzzTypes, &fuzzU128{source: source})
+		case fuzzTypeI128:
+			fuzzTypes = append(fuzzTypes, &fuzzI128{source: source})
+		default:
+			panic("unknown fuzz type")
+		}
+	}
+
+	for _, fuzzImpl := range fuzzTypes {
 		var failures = make([]int, len(runFuzzOps))
 
 		for opIdx, op := range runFuzzOps {

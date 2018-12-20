@@ -14,6 +14,8 @@ import (
 
 var u64 = U128From64
 
+func bigU64(u uint64) *big.Int { return new(big.Int).SetUint64(u) }
+
 func u128s(s string) U128 {
 	b, err := U128FromString(s)
 	if err != nil {
@@ -40,6 +42,48 @@ func TestU128FromSize(t *testing.T) {
 	tt.MustEqual(U128From8(255), u128s("255"))
 	tt.MustEqual(U128From16(65535), u128s("65535"))
 	tt.MustEqual(U128From32(4294967295), u128s("4294967295"))
+}
+
+func TestU128AsBigInt(t *testing.T) {
+	for idx, tc := range []struct {
+		a U128
+		b *big.Int
+	}{
+		{U128{0, 2}, bigU64(2)},
+		{U128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFE}, bigsx("FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFE")},
+		{U128{0x1, 0x0}, bigs("18446744073709551616")},
+		{U128{0x1, 0xFFFFFFFFFFFFFFFF}, bigs("36893488147419103231")}, // (1<<65) - 1
+		{U128{0x1, 0x8AC7230489E7FFFF}, bigs("28446744073709551615")},
+		{U128{0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}, bigs("170141183460469231731687303715884105727")},
+		{U128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}, bigsx("FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF")},
+		{U128{0x8000000000000000, 0}, bigsx("8000000000000000 0000000000000000")},
+	} {
+		t.Run(fmt.Sprintf("%d/%d,%d=%s", idx, tc.a.hi, tc.a.lo, tc.b), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			v := tc.a.AsBigInt()
+			tt.MustAssert(tc.b.Cmp(v) == 0, "found: %s", v)
+		})
+	}
+}
+
+func TestU128FromBigInt(t *testing.T) {
+	for idx, tc := range []struct {
+		a *big.Int
+		b U128
+	}{
+		{bigU64(2), u64(2)},
+		{bigs("18446744073709551616"), U128{hi: 0x1, lo: 0x0}},                // 1 << 64
+		{bigs("36893488147419103231"), U128{hi: 0x1, lo: 0xFFFFFFFFFFFFFFFF}}, // (1<<65) - 1
+		{bigs("28446744073709551615"), u128s("28446744073709551615")},
+		{bigs("170141183460469231731687303715884105727"), u128s("170141183460469231731687303715884105727")},
+		{bigsx("FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF"), U128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}},
+	} {
+		t.Run(fmt.Sprintf("%d/%s=%d,%d", idx, tc.a, tc.b.lo, tc.b.hi), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			v := U128FromBigInt(tc.a)
+			tt.MustAssert(tc.b.Cmp(v) == 0, "found: (%d, %d), expected (%d, %d)", v.hi, v.lo, tc.b.hi, tc.b.lo)
+		})
+	}
 }
 
 func TestU128Add(t *testing.T) {
@@ -206,7 +250,7 @@ func TestU128Rsh(t *testing.T) {
 }
 
 func TestU128Lsh(t *testing.T) {
-	for _, tc := range []struct {
+	for idx, tc := range []struct {
 		u  U128
 		by uint
 		r  U128
@@ -227,7 +271,7 @@ func TestU128Lsh(t *testing.T) {
 		{u: u128s("176613673099733424757078556036831904"), by: 75, r: u128s("6672275922101419229538799409302378069369212160007284457472")},
 		{u: u128s("40625"), by: 55, r: u128s("1463669878895411200000")},
 	} {
-		t.Run(fmt.Sprintf("%s<<%d=%s", tc.u, tc.by, tc.r), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d/%s<<%d=%s", idx, tc.u, tc.by, tc.r), func(t *testing.T) {
 			tt := assert.WrapTB(t)
 
 			ub := tc.u.AsBigInt()
@@ -283,8 +327,10 @@ func TestU128MarshalJSON(t *testing.T) {
 var (
 	BenchUResult        U128
 	BenchIntResult      int
+	BenchBoolResult     bool
 	BenchFloatResult    float64
 	BenchBigFloatResult *big.Float
+	BenchBigIntResult   *big.Int
 )
 
 func BenchmarkU128Mul(b *testing.B) {
@@ -370,6 +416,65 @@ func BenchmarkU128FromFloat(b *testing.B) {
 	}
 }
 
+func BenchmarkU128FromBigInt(b *testing.B) {
+	for _, bi := range []*big.Int{
+		bigsx("0"),
+		bigsx("fedcba98"),
+		bigsx("fedcba9876543210"),
+		bigsx("fedcba9876543210fedcba98"),
+		bigsx("fedcba9876543210fedcba9876543210"),
+	} {
+		b.Run(fmt.Sprintf("%x", bi), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				BenchUResult = U128FromBigInt(bi)
+			}
+		})
+	}
+}
+
+func BenchmarkU128AsBigInt(b *testing.B) {
+	u := U128{lo: 0xFEDCBA9876543210, hi: 0xFEDCBA9876543210}
+	BenchBigIntResult = new(big.Int)
+
+	for i := uint(0); i <= 128; i += 32 {
+		v := u.Rsh(128 - i)
+		b.Run(fmt.Sprintf("%x,%x", v.hi, v.lo), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				BenchBigIntResult = v.AsBigInt()
+			}
+		})
+	}
+}
+
+func BenchmarkU128IntoBigInt(b *testing.B) {
+	u := U128{lo: 0xFEDCBA9876543210, hi: 0xFEDCBA9876543210}
+	BenchBigIntResult = new(big.Int)
+
+	for i := uint(0); i <= 128; i += 32 {
+		v := u.Rsh(128 - i)
+		b.Run(fmt.Sprintf("%x,%x", v.hi, v.lo), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				v.IntoBigInt(BenchBigIntResult)
+			}
+		})
+	}
+}
+
+func BenchmarkU128LessThan(b *testing.B) {
+	for _, iv := range []struct {
+		a, b U128
+	}{
+		{u64(1), u64(1)},
+		{u64(2), u64(1)},
+		{u64(1), u64(2)},
+	} {
+		b.Run(fmt.Sprintf("%s<%s", iv.a, iv.b), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				BenchBoolResult = iv.a.LessThan(iv.b)
+			}
+		})
+	}
+}
 func BenchmarkBigIntMul(b *testing.B) {
 	var max big.Int
 	max.SetUint64(maxUint64)
