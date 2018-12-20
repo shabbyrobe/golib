@@ -46,6 +46,12 @@ var (
 	// wrapBigU64 is 1 << 64:
 	wrapBigU64, _ = new(big.Int).SetString("18446744073709551616", 10)
 
+	// wrapOverBigI128 is 1 << 127, used to simulate over/underflow:
+	wrapOverBigI128, _ = new(big.Int).SetString("0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", 0)
+
+	// wrapUnderBigI128 is -(1 << 127) - 1, used to simulate over/underflow:
+	wrapUnderBigI128, _ = new(big.Int).SetString("-170141183460469231731687303715884105729", 0)
+
 	// This specifies the maximum error allowed between the float64 version of a
 	// 128-bit u?int and the result of the same operation performed by big.Float.
 	//

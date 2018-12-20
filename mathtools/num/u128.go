@@ -70,8 +70,11 @@ func U128FromBigInt(v *big.Int) (out U128, accurate bool) {
 
 func U128FromFloat32(f float32) U128 { return U128FromFloat64(float64(f)) }
 
+// U128FromFloat64 creates a U128 from a float64. Any fractional portion
+// will be truncated towards zero. Floats outside the bounds of a U128
+// may be discarded or clamped. NaN is treated as 0.
 func U128FromFloat64(f float64) U128 {
-	if f <= 0 {
+	if f <= 0 || f != f { // f != f == isnan
 		return U128{}
 	} else if f <= maxUint64Float {
 		return U128{lo: uint64(f)}

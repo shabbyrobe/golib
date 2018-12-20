@@ -480,8 +480,10 @@ func (f fuzzI128) Add() error {
 	b1, b2 := f.source.BigI128(), f.source.BigI128()
 	u1, u2 := accI128FromBigInt(b1), accI128FromBigInt(b2)
 	rb := new(big.Int).Add(b1, b2)
-	if rb.Cmp(maxBigI128) > 0 {
+	if rb.Cmp(wrapOverBigI128) >= 0 {
 		rb = new(big.Int).Sub(rb, wrapBigU128) // simulate overflow
+	} else if rb.Cmp(wrapUnderBigI128) <= 0 {
+		rb = new(big.Int).Add(rb, wrapBigU128) // simulate underflow
 	}
 	ru := u1.Add(u2)
 	return checkEqualI128(ru, rb)
@@ -491,8 +493,10 @@ func (f fuzzI128) Sub() error {
 	b1, b2 := f.source.BigI128(), f.source.BigI128()
 	u1, u2 := accI128FromBigInt(b1), accI128FromBigInt(b2)
 	rb := new(big.Int).Sub(b1, b2)
-	if rb.Cmp(minBigI128) < 0 {
-		rb = new(big.Int).Add(wrapBigU128, rb) // simulate underflow
+	if rb.Cmp(wrapOverBigI128) >= 0 {
+		rb = new(big.Int).Sub(rb, wrapBigU128) // simulate overflow
+	} else if rb.Cmp(wrapUnderBigI128) <= 0 {
+		rb = new(big.Int).Add(rb, wrapBigU128) // simulate underflow
 	}
 	ru := u1.Sub(u2)
 	return checkEqualI128(ru, rb)

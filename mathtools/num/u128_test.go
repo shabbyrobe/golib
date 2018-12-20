@@ -290,27 +290,95 @@ func TestU128Lsh(t *testing.T) {
 	}
 }
 
-func TestU128Float64Random(t *testing.T) {
+func TestU128AsFloat64Random(t *testing.T) {
 	tt := assert.WrapTB(t)
 
 	bts := make([]byte, 16)
 
-	// The percentage of the difference between the input number and the output
-	// number relative to the input number after performing the transform
-	// U128(float64(U128)) must not be more than this very reasonable limit:
-	limit := new(big.Float).SetFloat64(0.00000000000001)
+	for i := 0; i < 10000; i++ {
+		rand.Read(bts)
+
+		num := U128{}
+		num.lo = binary.LittleEndian.Uint64(bts)
+		num.hi = binary.LittleEndian.Uint64(bts[8:])
+
+		af := num.AsFloat64()
+		bf := new(big.Float).SetFloat64(af)
+		rf := num.AsBigFloat()
+
+		diff := new(big.Float).Sub(rf, bf)
+		pct := new(big.Float).Quo(diff, rf)
+		tt.MustAssert(pct.Cmp(floatDiffLimit) < 0, "%s: %.20f > %.20f", num, diff, floatDiffLimit)
+	}
+}
+
+func TestU128AsFloat64(t *testing.T) {
+	for _, tc := range []struct {
+		a U128
+	}{
+		{u128s("120")},
+		{u128s("12034267329883109062163657840918528")},
+		{MaxU128},
+	} {
+		t.Run(fmt.Sprintf("float64(%s)", tc.a), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+
+			af := tc.a.AsFloat64()
+			bf := new(big.Float).SetFloat64(af)
+			rf := tc.a.AsBigFloat()
+
+			diff := new(big.Float).Sub(rf, bf)
+			pct := new(big.Float).Quo(diff, rf)
+			tt.MustAssert(pct.Cmp(floatDiffLimit) < 0, "%s: %.20f > %.20f", tc.a, diff, floatDiffLimit)
+		})
+	}
+}
+
+func TestU128FromFloat64Random(t *testing.T) {
+	tt := assert.WrapTB(t)
+
+	bts := make([]byte, 16)
 
 	for i := 0; i < 10000; i++ {
-		u := randU128(bts)
+		rand.Read(bts)
 
-		f := u.AsFloat64()
-		r := U128FromFloat64(f)
-		diff := DifferenceU128(u, r)
+		num := U128{}
+		num.lo = binary.LittleEndian.Uint64(bts)
+		num.hi = binary.LittleEndian.Uint64(bts[8:])
+		rbf := num.AsBigFloat()
 
-		ubig, diffBig := u.AsBigFloat(), diff.AsBigFloat()
-		pct := new(big.Float).Quo(diffBig, ubig)
+		rf, _ := rbf.Float64()
+		rn := U128FromFloat64(rf)
+		diff := DifferenceU128(num, rn)
 
-		tt.MustAssert(pct.Cmp(limit) < 0, "%s", pct)
+		ibig, diffBig := num.AsBigFloat(), diff.AsBigFloat()
+		pct := new(big.Float).Quo(diffBig, ibig)
+		tt.MustAssert(pct.Cmp(floatDiffLimit) < 0, "%s: %.20f > %.20f", num, pct, floatDiffLimit)
+	}
+}
+
+func TestU128FromFloat64(t *testing.T) {
+	for idx, tc := range []struct {
+		f   float64
+		out U128
+	}{
+		{math.NaN(), u128s("0")},
+		{math.Inf(0), MaxU128},
+		{math.Inf(-1), u128s("0")},
+	} {
+		t.Run(fmt.Sprintf("%d/fromfloat64(%f)==%s", idx, tc.f, tc.out), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+
+			rn := U128FromFloat64(tc.f)
+			diff := DifferenceU128(tc.out, rn)
+
+			ibig, diffBig := tc.out.AsBigFloat(), diff.AsBigFloat()
+			pct := new(big.Float).SetFloat64(0)
+			if diff != zeroU128 {
+				pct.Quo(diffBig, ibig)
+			}
+			tt.MustAssert(pct.Cmp(floatDiffLimit) < 0, "%s: %.20f > %.20f", tc.out, pct, floatDiffLimit)
+		})
 	}
 }
 

@@ -49,7 +49,7 @@ func I128FromFloat64(f float64) (out I128) {
 	const spillPos = float64(maxUint64) // (1<<64) - 1
 	const spillNeg = -float64(maxUint64) - 1
 
-	if f == 0 {
+	if f == 0 || f != f { // f != f == isnan
 		return out
 
 	} else if f < 0 {
