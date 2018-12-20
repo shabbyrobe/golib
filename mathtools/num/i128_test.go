@@ -247,7 +247,7 @@ func TestI128Div(t *testing.T) {
 	}
 }
 
-func TestI128Float64Random(t *testing.T) {
+func TestI128AsFloat64Random(t *testing.T) {
 	tt := assert.WrapTB(t)
 
 	bts := make([]byte, 16)
@@ -259,29 +259,58 @@ func TestI128Float64Random(t *testing.T) {
 		num.lo = binary.LittleEndian.Uint64(bts)
 		num.hi = binary.LittleEndian.Uint64(bts[8:])
 
-		f := num.AsFloat64()
-		r := I128FromFloat64(f)
-		diff := DifferenceI128(num, r)
+		af := num.AsFloat64()
+		bf := new(big.Float).SetFloat64(af)
+		rf := num.AsBigFloat()
 
-		ibig, diffBig := num.AsBigFloat(), diff.AsBigFloat()
-		pct := new(big.Float).Quo(diffBig, ibig)
-		// spew.Dump(num, f, r, pct, "---")
-
-		tt.MustAssert(pct.Cmp(floatDiffLimit) < 0, "%f", pct)
+		diff := new(big.Float).Sub(rf, bf)
+		pct := new(big.Float).Quo(diff, rf)
+		tt.MustAssert(pct.Cmp(floatDiffLimit) < 0, "%s: %.20f > %.20f", num, diff, floatDiffLimit)
 	}
 }
 
-func TestI128AsFloat(t *testing.T) {
+func TestI128AsFloat64(t *testing.T) {
 	for _, tc := range []struct {
-		a   I128
-		out string
+		a I128
 	}{
-		{i128s("-120"), "-120"},
+		{i128s("-120")},
+		{i128s("12034267329883109062163657840918528")},
+		{MaxI128},
 	} {
-		t.Run(fmt.Sprintf("float64(%s)=%s", tc.a, tc.out), func(t *testing.T) {
+		t.Run(fmt.Sprintf("float64(%s)", tc.a), func(t *testing.T) {
 			tt := assert.WrapTB(t)
-			tt.MustEqual(tc.out, cleanFloatStr(fmt.Sprintf("%f", tc.a.AsFloat64())))
+
+			af := tc.a.AsFloat64()
+			bf := new(big.Float).SetFloat64(af)
+			rf := tc.a.AsBigFloat()
+
+			diff := new(big.Float).Sub(rf, bf)
+			pct := new(big.Float).Quo(diff, rf)
+			tt.MustAssert(pct.Cmp(floatDiffLimit) < 0, "%s: %.20f > %.20f", tc.a, diff, floatDiffLimit)
 		})
+	}
+}
+
+func TestI128FromFloat64Random(t *testing.T) {
+	tt := assert.WrapTB(t)
+
+	bts := make([]byte, 16)
+
+	for i := 0; i < 100000; i++ {
+		rand.Read(bts)
+
+		num := I128{}
+		num.lo = binary.LittleEndian.Uint64(bts)
+		num.hi = binary.LittleEndian.Uint64(bts[8:])
+		rbf := num.AsBigFloat()
+
+		rf, _ := rbf.Float64()
+		rn := I128FromFloat64(rf)
+		diff := DifferenceI128(num, rn)
+
+		ibig, diffBig := num.AsBigFloat(), diff.AsBigFloat()
+		pct := new(big.Float).Quo(diffBig, ibig)
+		tt.MustAssert(pct.Cmp(floatDiffLimit) < 0, "%s: %.20f > %.20f", num, pct, floatDiffLimit)
 	}
 }
 
