@@ -84,7 +84,7 @@ func TestU128FromBigInt(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%d/%s=%d,%d", idx, tc.a, tc.b.lo, tc.b.hi), func(t *testing.T) {
 			tt := assert.WrapTB(t)
-			v := accU128FromBigInt(tc.a)
+			v, _ := U128FromBigInt(tc.a)
 			tt.MustAssert(tc.b.Cmp(v) == 0, "found: (%d, %d), expected (%d, %d)", v.hi, v.lo, tc.b.hi, tc.b.lo)
 		})
 	}

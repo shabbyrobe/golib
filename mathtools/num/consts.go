@@ -5,17 +5,22 @@ import (
 )
 
 const (
+	maxUint64 = 1<<64 - 1
+	maxInt64  = 1<<63 - 1
+	minInt64  = -1 << 63
+
+	minInt64Float  = float64(minInt64)     // -(1<<63)
+	maxInt64Float  = float64(maxInt64)     // (1<<63) - 1
+	wrapInt64Float = float64(maxInt64) + 1 // 1 << 63
+
 	maxUint64Float  = float64(maxUint64)     // (1<<64) - 1
 	wrapUint64Float = float64(maxUint64) + 1 // 1 << 64
 
-	maxU128Float = float64(340282366920938463463374607431768211455) // (1<<128) - 1
-	maxI128Float = float64(170141183460469231731687303715884105727) // (1<<127) - 1
+	maxU128Float = float64(340282366920938463463374607431768211455)  // (1<<128) - 1
+	maxI128Float = float64(170141183460469231731687303715884105727)  // (1<<127) - 1
+	minI128Float = float64(-170141183460469231731687303715884105728) // -(1<<127)
 
-	maxUint64     = 1<<64 - 1
-	maxInt64      = 1<<63 - 1
-	minInt64      = -1 << 63
-	maxInt64Float = float64(maxInt64) + 1
-	minInt64Float = float64(minInt64)
+	intSize = 32 << (^uint(0) >> 63)
 )
 
 var (
@@ -25,8 +30,6 @@ var (
 
 	zeroI128 I128
 	zeroU128 U128
-
-	intSize = 32 << (^uint(0) >> 63)
 
 	big0 = new(big.Int).SetInt64(0)
 	big1 = new(big.Int).SetInt64(1)

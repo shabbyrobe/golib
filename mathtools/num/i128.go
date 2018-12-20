@@ -45,11 +45,39 @@ func I128FromBigInt(v *big.Int) (out I128, accurate bool) {
 
 func I128FromFloat32(f float32) I128 { return I128FromFloat64(float64(f)) }
 
-func I128FromFloat64(f float64) I128 {
+func I128FromFloat64(f float64) (out I128) {
 	const spillPos = float64(maxUint64) // (1<<64) - 1
 	const spillNeg = -float64(maxUint64) - 1
-	return I128{}
+
+	if f == 0 {
+		return out
+
+	} else if f < 0 {
+		if f >= spillNeg {
+			return I128{hi: maxUint64, lo: uint64(f)}
+		} else if f >= minI128Float {
+			f = -f
+			lo := mod(f, wrapInt64Float)
+			return I128{hi: ^uint64(f / wrapUint64Float), lo: ^uint64(lo)}
+		} else {
+			return MinI128
+		}
+
+	} else {
+		if f <= spillPos {
+			return I128{lo: uint64(f)}
+		} else if f <= maxI128Float {
+			lo := mod(f, wrapInt64Float)
+			return I128{hi: uint64(f / wrapUint64Float), lo: uint64(lo)}
+		} else {
+			return MaxI128
+		}
+	}
+
 	/*
+		const spillPos = float64(maxUint64) // (1<<64) - 1
+		const spillNeg = -float64(maxUint64) - 1
+
 		if f == 0 {
 			return I128{}
 
