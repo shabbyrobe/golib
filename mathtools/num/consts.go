@@ -9,9 +9,8 @@ const (
 	maxInt64  = 1<<63 - 1
 	minInt64  = -1 << 63
 
-	minInt64Float  = float64(minInt64)     // -(1<<63)
-	maxInt64Float  = float64(maxInt64)     // (1<<63) - 1
-	wrapInt64Float = float64(maxInt64) + 1 // 1 << 63
+	minInt64Float = float64(minInt64) // -(1<<63)
+	maxInt64Float = float64(maxInt64) // (1<<63) - 1
 
 	maxUint64Float  = float64(maxUint64)     // (1<<64) - 1
 	wrapUint64Float = float64(maxUint64) + 1 // 1 << 64

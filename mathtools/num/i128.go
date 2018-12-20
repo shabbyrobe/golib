@@ -57,7 +57,7 @@ func I128FromFloat64(f float64) (out I128) {
 			return I128{hi: maxUint64, lo: uint64(f)}
 		} else if f >= minI128Float {
 			f = -f
-			lo := mod(f, wrapInt64Float)
+			lo := mod(f, wrapUint64Float)
 			return I128{hi: ^uint64(f / wrapUint64Float), lo: ^uint64(lo)}
 		} else {
 			return MinI128
@@ -67,7 +67,7 @@ func I128FromFloat64(f float64) (out I128) {
 		if f <= spillPos {
 			return I128{lo: uint64(f)}
 		} else if f <= maxI128Float {
-			lo := mod(f, wrapInt64Float)
+			lo := mod(f, wrapUint64Float)
 			return I128{hi: uint64(f / wrapUint64Float), lo: uint64(lo)}
 		} else {
 			return MaxI128

@@ -26,6 +26,7 @@ const (
 	fuzzCmp              fuzzOp = "cmp"
 	fuzzDec              fuzzOp = "dec"
 	fuzzEqual            fuzzOp = "equal"
+	fuzzFromFloat64      fuzzOp = "fromfloat64"
 	fuzzGreaterOrEqualTo fuzzOp = "gte"
 	fuzzGreaterThan      fuzzOp = "gt"
 	fuzzInc              fuzzOp = "inc"
@@ -64,6 +65,7 @@ var allFuzzOps = []fuzzOp{
 	fuzzCmp,
 	fuzzDec,
 	fuzzEqual,
+	fuzzFromFloat64,
 	fuzzGreaterOrEqualTo,
 	fuzzGreaterThan,
 	fuzzInc,
@@ -92,6 +94,7 @@ type fuzzOps interface {
 	Cmp() error
 	Dec() error
 	Equal() error
+	FromFloat64() error
 	GreaterOrEqualTo() error
 	GreaterThan() error
 	Inc() error
@@ -118,15 +121,6 @@ type rando struct {
 func (r *rando) Operands() []*big.Int { return r.operands }
 func (r *rando) Clear()               { r.operands = r.operands[:0] }
 
-func (r *rando) U128() U128 {
-	bits := uint(r.rng.Intn(128))
-	if bits <= 64 {
-		return U128{lo: r.rng.Uint64() & ((1 << bits) - 1)}
-	} else {
-		return U128{hi: r.rng.Uint64() & ((1 << bits) - 1), lo: r.rng.Uint64()}
-	}
-}
-
 func (r *rando) Intn(n int) int {
 	v := int(r.rng.Intn(n))
 	r.operands = append(r.operands, new(big.Int).SetInt64(int64(v)))
@@ -140,55 +134,41 @@ func (r *rando) Uintn(n int) uint {
 }
 
 func (r *rando) BigU128() *big.Int {
-	var v big.Int
-
-	// FIXME: actually profile the distribution of this to make sure it's doing
-	// what's expected of it:
-	bits := uint(r.rng.Intn(128))
-	if bits <= 64 {
-		n := r.rng.Uint64() & ((1 << bits) - 1)
-		v.SetUint64(n)
-		r.operands = append(r.operands, &v)
-		return &v
-
+	var v = new(big.Int)
+	bits := r.rng.Intn(129) - 1 // 128 bits, +1 for "0 bits"
+	if bits < 0 {
+		return v // "-1 bits" == "0"
+	} else if bits <= 64 {
+		v = v.Rand(r.rng, maxBigUint64)
 	} else {
-		hi := r.rng.Uint64() & ((1 << (bits - 64)) - 1)
-		v.SetUint64(hi).
-			Lsh(&v, 64).
-			Add(&v, new(big.Int).SetUint64(r.rng.Uint64()))
-		r.operands = append(r.operands, &v)
-		return &v
+		v = v.Rand(r.rng, maxBigU128)
 	}
+	v.And(v, masks[bits])
+	v.SetBit(v, bits, 1)
+	r.operands = append(r.operands, v)
+	return v
 }
 
 func (r *rando) BigI128() *big.Int {
-	var v big.Int
-
-	// FIXME: actually profile the distribution of this to make sure it's doing
-	// what's expected of it:
-	bits := uint(r.rng.Intn(127))
 	neg := r.rng.Intn(2) == 1
 
-	if bits <= 64 {
-		n := r.rng.Uint64() & ((1 << bits) - 1)
-		v.SetUint64(n)
-		if neg {
-			v.Neg(&v)
-		}
-		r.operands = append(r.operands, &v)
-		return &v
-
+	var v = new(big.Int)
+	bits := r.rng.Intn(128) - 1 // 127 bits, 1 sign bit (skipped), +1 for "0 bits"
+	if bits < 0 {
+		return v
+	} else if bits <= 64 {
+		v = v.Rand(r.rng, maxBigUint64)
 	} else {
-		hi := r.rng.Uint64() & ((1 << (bits - 64)) - 1)
-		v.SetUint64(hi).
-			Lsh(&v, 64).
-			Add(&v, new(big.Int).SetUint64(r.rng.Uint64()))
-		if neg {
-			v.Neg(&v)
-		}
-		r.operands = append(r.operands, &v)
-		return &v
+		v = v.Rand(r.rng, maxBigU128)
 	}
+	v.And(v, masks[bits])
+	v.SetBit(v, bits, 1)
+	if neg {
+		v.Neg(v)
+	}
+
+	r.operands = append(r.operands, v)
+	return v
 }
 
 func checkEqualInt(u int, b int) error {
@@ -212,11 +192,7 @@ func checkEqualU128(u U128, b *big.Int) error {
 	return nil
 }
 
-func checkFloatU128(orig *big.Int, u U128, b *big.Int) error {
-	return checkFloatCommon(orig, u.AsBigInt(), u.String(), b)
-}
-
-func checkFloatI128(orig *big.Int, result float64, bf *big.Float) error {
+func checkFloat(orig *big.Int, result float64, bf *big.Float) error {
 	diff := new(big.Float).SetFloat64(result)
 	diff.Sub(diff, bf)
 	diff.Abs(diff)
@@ -229,25 +205,6 @@ func checkFloatI128(orig *big.Int, result float64, bf *big.Float) error {
 	if (isZero && result != 0) || diff.Abs(diff).Cmp(floatDiffLimit) > 0 {
 		return fmt.Errorf("|128(%f) - big(%f)| = %s, > %s", result, bf,
 			cleanFloatStr(fmt.Sprintf("%.20f", diff)),
-			cleanFloatStr(fmt.Sprintf("%.20f", floatDiffLimit)))
-	}
-	return nil
-}
-
-func checkFloatCommon(orig, val *big.Int, valstr string, b *big.Int) error {
-	diff := new(big.Int).Set(val)
-	diff.Sub(diff, b)
-
-	difff := new(big.Float).SetInt(diff)
-	if orig.Cmp(big0) == 0 {
-		difff.SetInt(orig)
-	} else {
-		difff.Quo(difff, new(big.Float).SetInt(orig))
-	}
-
-	if difff.Abs(difff).Cmp(floatDiffLimit) > 0 {
-		return fmt.Errorf("|u128(%s) - big(%s)| = %s, > %s", valstr, b.String(),
-			cleanFloatStr(fmt.Sprintf("%.20f", difff)),
 			cleanFloatStr(fmt.Sprintf("%.20f", floatDiffLimit)))
 	}
 	return nil
@@ -453,11 +410,31 @@ func (f fuzzU128) AsFloat64() error {
 	b1 := f.source.BigU128()
 	u1 := accU128FromBigInt(b1)
 	bf := new(big.Float).SetInt(b1)
-	rbf, _ := bf.Float64()
 	ruf := u1.AsFloat64()
-	rb, _ := new(big.Float).SetFloat64(rbf).Int(new(big.Int))
-	ru := U128FromFloat64(ruf)
-	return checkFloatU128(b1, ru, rb)
+	return checkFloat(b1, ruf, bf)
+}
+
+func (f fuzzU128) FromFloat64() error {
+	b1 := f.source.BigU128()
+	u1 := accU128FromBigInt(b1)
+	bf1 := new(big.Float).SetInt(b1)
+	f1, _ := bf1.Float64()
+	r1 := U128FromFloat64(f1)
+
+	diff := DifferenceU128(u1, r1)
+
+	isZero := b1.Cmp(big0) == 0
+	if isZero {
+		return checkEqualU128(r1, b1)
+	} else {
+		difff := new(big.Float).Quo(diff.AsBigFloat(), bf1)
+		if difff.Cmp(floatDiffLimit) > 0 {
+			return fmt.Errorf("|128(%s) - big(%s)| = %s, > %s", r1, b1,
+				cleanFloatStr(fmt.Sprintf("%s", diff)),
+				cleanFloatStr(fmt.Sprintf("%.20f", floatDiffLimit)))
+		}
+	}
+	return nil
 }
 
 type fuzzI128 struct {
@@ -626,7 +603,30 @@ func (f fuzzI128) AsFloat64() error {
 	i1 := accI128FromBigInt(b1)
 	bf := new(big.Float).SetInt(b1)
 	rif := i1.AsFloat64()
-	return checkFloatI128(b1, rif, bf)
+	return checkFloat(b1, rif, bf)
+}
+
+func (f fuzzI128) FromFloat64() error {
+	b1 := f.source.BigI128()
+	i1 := accI128FromBigInt(b1)
+	bf1 := new(big.Float).SetInt(b1)
+	f1, _ := bf1.Float64()
+	r1 := I128FromFloat64(f1)
+
+	diff := DifferenceI128(i1, r1)
+
+	isZero := b1.Cmp(big0) == 0
+	if isZero {
+		return checkEqualI128(r1, b1)
+	} else {
+		difff := new(big.Float).Quo(diff.AsBigFloat(), bf1)
+		if difff.Cmp(floatDiffLimit) > 0 {
+			return fmt.Errorf("|128(%s) - big(%s)| = %s, > %s", r1, b1,
+				cleanFloatStr(fmt.Sprintf("%s", diff)),
+				cleanFloatStr(fmt.Sprintf("%.20f", floatDiffLimit)))
+		}
+	}
+	return nil
 }
 
 // Bitwise operations on I128 are not supported:
@@ -696,6 +696,8 @@ func TestFuzz(t *testing.T) {
 					err = fuzzImpl.Dec()
 				case fuzzEqual:
 					err = fuzzImpl.Equal()
+				case fuzzFromFloat64:
+					err = fuzzImpl.FromFloat64()
 				case fuzzGreaterOrEqualTo:
 					err = fuzzImpl.GreaterOrEqualTo()
 				case fuzzGreaterThan:
@@ -760,6 +762,9 @@ func (op fuzzOp) Print(operands ...*big.Int) string {
 	case fuzzAsFloat64:
 		return fmt.Sprintf("float64(%d)", operands[0])
 
+	case fuzzFromFloat64:
+		return fmt.Sprintf("fromfloat64(%d)", operands[0])
+
 	case fuzzInc, fuzzDec:
 		return fmt.Sprintf("%d%s", operands[0], op.String())
 
@@ -797,6 +802,8 @@ func (op fuzzOp) String() string {
 		return "--"
 	case fuzzEqual:
 		return "=="
+	case fuzzFromFloat64:
+		return "fromfloat64()"
 	case fuzzGreaterThan:
 		return ">"
 	case fuzzGreaterOrEqualTo:
@@ -829,5 +836,20 @@ func (op fuzzOp) String() string {
 		return "^"
 	default:
 		return string(op)
+	}
+}
+
+// masks contains a pre-calculated set of 128-bit masks for use when generating
+// random U128s/I128s. It's used to ensure we generate an even distribution of
+// bit sizes.
+var masks [128]*big.Int
+
+func init() {
+	for i := 0; i < 128; i++ {
+		bi := new(big.Int)
+		for b := 0; b <= i; b++ {
+			bi.SetBit(bi, b, 1)
+		}
+		masks[i] = bi
 	}
 }
