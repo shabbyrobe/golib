@@ -10,66 +10,61 @@ type U128 struct {
 	hi, lo uint64
 }
 
-var MaxU128 = U128{hi: maxUint64, lo: maxUint64}
-
 func U128FromRaw(hi, lo uint64) U128 { return U128{hi: hi, lo: lo} }
 func U128From64(v uint64) U128       { return U128{hi: 0, lo: v} }
 func U128From32(v uint32) U128       { return U128{hi: 0, lo: uint64(v)} }
 func U128From16(v uint16) U128       { return U128{hi: 0, lo: uint64(v)} }
 func U128From8(v uint8) U128         { return U128{hi: 0, lo: uint64(v)} }
 
-func U128FromString(s string) (out U128, err error) {
-	b, ok := new(big.Int).SetString(s, 10)
+func U128FromString(s string) (out U128, accurate bool, err error) {
+	b, ok := new(big.Int).SetString(s, 0)
 	if !ok {
-		return out, fmt.Errorf("num: u128 string %q invalid", s)
+		return out, false, fmt.Errorf("num: u128 string %q invalid", s)
 	}
-	return U128FromBigInt(b), nil
+	out, accurate = U128FromBigInt(b)
+	return out, accurate, nil
 }
 
-func U128FromBigInt(v *big.Int) (out U128) {
+// U128FromBigInt creates a U128 from a big.Int
+func U128FromBigInt(v *big.Int) (out U128, accurate bool) {
 	if v.Sign() < 0 {
-		return out
+		return out, false
 	}
 
 	words := v.Bits()
 
 	switch intSize {
 	case 64:
-		switch len(words) {
+		lw := len(words)
+		switch lw {
 		case 0:
-			return U128{}
+			return U128{}, true
 		case 1:
-			return U128{lo: uint64(words[0])}
-		case 2:
-			return U128{hi: uint64(words[1]), lo: uint64(words[0])}
+			return U128{lo: uint64(words[0])}, true
 		default:
-			return MaxU128
+			return U128{hi: uint64(words[1]), lo: uint64(words[0])}, lw == 2
 		}
 
 	case 32:
-		switch len(words) {
+		lw := len(words)
+		switch lw {
 		case 0:
-			return U128{}
+			return U128{}, true
 		case 1:
-			return U128{lo: uint64(words[0])}
+			return U128{lo: uint64(words[0])}, true
 		case 2:
-			return U128{lo: (uint64(words[1]) << 32) | (uint64(words[0]))}
+			return U128{lo: (uint64(words[1]) << 32) | (uint64(words[0]))}, true
 		case 3:
-			return U128{hi: uint64(words[2]), lo: (uint64(words[1]) << 32) | (uint64(words[0]))}
-		case 4:
+			return U128{hi: uint64(words[2]), lo: (uint64(words[1]) << 32) | (uint64(words[0]))}, true
+		default:
 			return U128{
 				hi: (uint64(words[3]) << 32) | (uint64(words[2])),
 				lo: (uint64(words[1]) << 32) | (uint64(words[0])),
-			}
-		default:
-			return MaxU128
+			}, lw == 4
 		}
 
 	default:
-		var a, b big.Int
-		out.lo = b.And(v, maxBigUint64).Uint64()
-		out.hi = a.Rsh(v, 64).Uint64()
-		return out
+		panic("num: unsupported bit size")
 	}
 }
 
@@ -88,9 +83,10 @@ func U128FromFloat64(f float64) U128 {
 	}
 }
 
-// func RandU128From(rand *rand.Rand) (out U128) {
-//     return U128{hi: rand.Uint64(), lo: rand.Uint64()}
-// }
+// RandU128 generates an unsigned 128-bit random integer from an external source.
+func RandU128(source RandSource) (out U128) {
+	return U128{hi: source.Uint64(), lo: source.Uint64()}
+}
 
 func (u U128) Raw() (hi, lo uint64) { return u.hi, u.lo }
 
@@ -653,7 +649,7 @@ func (u U128) MarshalText() ([]byte, error) {
 }
 
 func (u *U128) UnmarshalText(bts []byte) (err error) {
-	v, err := U128FromString(string(bts))
+	v, _, err := U128FromString(string(bts))
 	if err != nil {
 		return err
 	}
@@ -674,7 +670,7 @@ func (u *U128) UnmarshalJSON(bts []byte) (err error) {
 		bts = bts[1 : ln-1]
 	}
 
-	v, err := U128FromString(string(bts))
+	v, _, err := U128FromString(string(bts))
 	if err != nil {
 		return err
 	}

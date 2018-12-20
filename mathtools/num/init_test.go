@@ -2,7 +2,9 @@ package num
 
 import (
 	"flag"
+	"fmt"
 	"log"
+	"math/big"
 	"os"
 	"regexp"
 	"strings"
@@ -51,6 +53,22 @@ var trimFloatPattern = regexp.MustCompile(`(\.0+$|(\.\d+[1-9])\0+$)`)
 
 func cleanFloatStr(str string) string {
 	return trimFloatPattern.ReplaceAllString(str, "$2")
+}
+
+func accU128FromBigInt(b *big.Int) U128 {
+	u, acc := U128FromBigInt(b)
+	if !acc {
+		panic(fmt.Errorf("num: inaccurate conversion to U128 in fuzz tester for %s", b))
+	}
+	return u
+}
+
+func accI128FromBigInt(b *big.Int) I128 {
+	i, acc := I128FromBigInt(b)
+	if !acc {
+		panic(fmt.Errorf("num: inaccurate conversion to I128 in fuzz tester for %s", b))
+	}
+	return i
 }
 
 type StringList []string

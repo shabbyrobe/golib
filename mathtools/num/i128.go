@@ -9,11 +9,6 @@ type I128 struct {
 	lo uint64
 }
 
-var (
-	MaxI128 = I128{hi: 0x7FFFFFFFFFFFFFFF, lo: 0xFFFFFFFFFFFFFFFF}
-	MinI128 = I128{hi: 0x8000000000000000, lo: 0}
-)
-
 const (
 	signBit  = 0x8000000000000000
 	signMask = 0x7FFFFFFFFFFFFFFF
@@ -35,7 +30,7 @@ func I128From32(v int32) I128 { return I128From64(int64(v)) }
 func I128From16(v int16) I128 { return I128From64(int64(v)) }
 func I128From8(v int8) I128   { return I128From64(int64(v)) }
 
-func I128FromBigInt(v *big.Int) (out I128) {
+func I128FromBigInt(v *big.Int) (out I128, accurate bool) {
 	neg := v.Cmp(big0) < 0
 	var a, b big.Int
 	if neg {
@@ -45,7 +40,7 @@ func I128FromBigInt(v *big.Int) (out I128) {
 	}
 	out.lo = b.And(&a, maxBigUint64).Uint64()
 	out.hi = a.Rsh(&a, 64).Uint64()
-	return out
+	return out, v.Cmp(minBigI128) >= 0 && v.Cmp(maxBigI128) <= 0
 }
 
 func I128FromFloat32(f float32) I128 { return I128FromFloat64(float64(f)) }
@@ -75,6 +70,12 @@ func I128FromFloat64(f float64) I128 {
 			}
 		}
 	*/
+}
+
+// RandI128 generates a positive signed 128-bit random integer from an external
+// source.
+func RandI128(source RandSource) (out I128) {
+	return I128{hi: source.Uint64() & maxInt64, lo: source.Uint64()}
 }
 
 func (i I128) Raw() (hi uint64, lo uint64) { return uint64(i.hi), i.lo }

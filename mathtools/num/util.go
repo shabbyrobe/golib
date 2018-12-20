@@ -1,5 +1,9 @@
 package num
 
+type RandSource interface {
+	Uint64() uint64
+}
+
 // DifferenceU128 subtracts the smaller of a and b from the larger.
 func DifferenceU128(a, b U128) U128 {
 	if a.hi > b.hi {
@@ -53,21 +57,3 @@ func DifferenceI128(a, b I128) I128 {
 	}
 	return I128{}
 }
-
-/*
-func LargerI128(a, b I128) I128 {
-	cmp := a.Cmp(b)
-	if cmp > 0 {
-		return a
-	}
-	return b
-}
-
-func SmallerI128(a, b I128) I128 {
-	cmp := a.Cmp(b)
-	if cmp < 0 {
-		return a
-	}
-	return b
-}
-*/

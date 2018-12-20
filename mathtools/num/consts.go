@@ -19,6 +19,10 @@ const (
 )
 
 var (
+	MaxI128 = I128{hi: 0x7FFFFFFFFFFFFFFF, lo: 0xFFFFFFFFFFFFFFFF}
+	MinI128 = I128{hi: 0x8000000000000000, lo: 0}
+	MaxU128 = U128{hi: maxUint64, lo: maxUint64}
+
 	zeroI128 I128
 	zeroU128 U128
 

@@ -14,10 +14,8 @@ import (
 var i64 = I128From64
 
 func bigI64(i int64) *big.Int { return new(big.Int).SetInt64(i) }
-func bigs(s string) *big.Int  { v, _ := new(big.Int).SetString(s, 10); return v }
-
-func bigsx(s string) *big.Int {
-	v, _ := new(big.Int).SetString(strings.Replace(s, " ", "", -1), 16)
+func bigs(s string) *big.Int {
+	v, _ := new(big.Int).SetString(strings.Replace(s, " ", "", -1), 0)
 	return v
 }
 
@@ -26,7 +24,11 @@ func i128s(s string) I128 {
 	if !ok {
 		panic(s)
 	}
-	return I128FromBigInt(b)
+	i, acc := I128FromBigInt(b)
+	if !acc {
+		panic(fmt.Errorf("num: inaccurate i128 %s", s))
+	}
+	return i
 }
 
 func i128sx(s string) I128 {
@@ -35,7 +37,11 @@ func i128sx(s string) I128 {
 	if !ok {
 		panic(s)
 	}
-	return I128FromBigInt(b)
+	i, acc := I128FromBigInt(b)
+	if !acc {
+		panic(fmt.Errorf("num: inaccurate i128 %s", s))
+	}
+	return i
 }
 
 func TestI128FromSize(t *testing.T) {
@@ -86,7 +92,7 @@ func TestI128FromBigInt(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%d/%s=%d,%d", idx, tc.a, tc.b.lo, tc.b.hi), func(t *testing.T) {
 			tt := assert.WrapTB(t)
-			v := I128FromBigInt(tc.a)
+			v := accI128FromBigInt(tc.a)
 			tt.MustAssert(tc.b.Cmp(v) == 0, "found: (%d, %d), expected (%d, %d)", v.hi, v.lo, tc.b.hi, tc.b.lo)
 		})
 	}

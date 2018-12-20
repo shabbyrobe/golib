@@ -17,9 +17,12 @@ var u64 = U128From64
 func bigU64(u uint64) *big.Int { return new(big.Int).SetUint64(u) }
 
 func u128s(s string) U128 {
-	b, err := U128FromString(s)
+	b, acc, err := U128FromString(s)
 	if err != nil {
 		panic(err)
+	}
+	if !acc {
+		panic(fmt.Errorf("num: inaccurate u128 %s", s))
 	}
 	return b
 }
@@ -50,13 +53,13 @@ func TestU128AsBigInt(t *testing.T) {
 		b *big.Int
 	}{
 		{U128{0, 2}, bigU64(2)},
-		{U128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFE}, bigsx("FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFE")},
+		{U128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFE}, bigs("0xFFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFE")},
 		{U128{0x1, 0x0}, bigs("18446744073709551616")},
 		{U128{0x1, 0xFFFFFFFFFFFFFFFF}, bigs("36893488147419103231")}, // (1<<65) - 1
 		{U128{0x1, 0x8AC7230489E7FFFF}, bigs("28446744073709551615")},
 		{U128{0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}, bigs("170141183460469231731687303715884105727")},
-		{U128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}, bigsx("FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF")},
-		{U128{0x8000000000000000, 0}, bigsx("8000000000000000 0000000000000000")},
+		{U128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}, bigs("0x FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF")},
+		{U128{0x8000000000000000, 0}, bigs("0x 8000000000000000 0000000000000000")},
 	} {
 		t.Run(fmt.Sprintf("%d/%d,%d=%s", idx, tc.a.hi, tc.a.lo, tc.b), func(t *testing.T) {
 			tt := assert.WrapTB(t)
@@ -76,11 +79,12 @@ func TestU128FromBigInt(t *testing.T) {
 		{bigs("36893488147419103231"), U128{hi: 0x1, lo: 0xFFFFFFFFFFFFFFFF}}, // (1<<65) - 1
 		{bigs("28446744073709551615"), u128s("28446744073709551615")},
 		{bigs("170141183460469231731687303715884105727"), u128s("170141183460469231731687303715884105727")},
-		{bigsx("FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF"), U128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}},
+		{bigs("0x FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF"), U128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}},
+		{bigs("0x FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFFF"), MaxU128},
 	} {
 		t.Run(fmt.Sprintf("%d/%s=%d,%d", idx, tc.a, tc.b.lo, tc.b.hi), func(t *testing.T) {
 			tt := assert.WrapTB(t)
-			v := U128FromBigInt(tc.a)
+			v := accU128FromBigInt(tc.a)
 			tt.MustAssert(tc.b.Cmp(v) == 0, "found: (%d, %d), expected (%d, %d)", v.hi, v.lo, tc.b.hi, tc.b.lo)
 		})
 	}
@@ -262,13 +266,13 @@ func TestU128Lsh(t *testing.T) {
 		// These cases were found by the fuzzer:
 		{u: u128s("5080864651895"), by: 57, r: u128s("732229764895815899943471677440")},
 		{u: u128s("63669103"), by: 85, r: u128s("2463079120908903847397520463364096")},
-		{u: u128s("2465608830469196860151950841431"), by: 104, r: u128s("50008488221956801743883323727223890761457150435029728043728896")},
-		{u: u128s("377509308958315595850564"), by: 58, r: u128s("108809650121828068156972983880952227823616")},
-		{u: u128s("8504691434450337657905929307096"), by: 74, r: u128s("160649079108787355396833790150802372769627880516747264")},
-		{u: u128s("11595557904603123290159404941902684322"), by: 50, r: u128s("13055437564580908863505186908351446169053281206140928")},
+		{u: u128s("0x1f1ecfd29cb51500c1a0699657"), by: 104, r: u128s("0x69965700000000000000000000000000")},
+		{u: u128s("0x4ff0d215cf8c26f26344"), by: 58, r: u128s("0xc348573e309bc98d1000000000000000")},
+		{u: u128s("0x6b5823decd7ef067f78e8cc3d8"), by: 74, r: u128s("0xc19fde3a330f60000000000000000000")},
+		{u: u128s("0x8b93924e1f7b6ac551d66f18ab520a2"), by: 50, r: u128s("0xdab154759bc62ad48288000000000000")},
 		{u: u128s("173760885"), by: 68, r: u128s("51285161209860430747989442560")},
 		{u: u128s("213"), by: 65, r: u128s("7858312975400268988416")},
-		{u: u128s("176613673099733424757078556036831904"), by: 75, r: u128s("6672275922101419229538799409302378069369212160007284457472")},
+		{u: u128s("0x2203b9f3dbe0afa82d80d998641aa0"), by: 75, r: u128s("0x6c06ccc320d500000000000000000000")},
 		{u: u128s("40625"), by: 55, r: u128s("1463669878895411200000")},
 	} {
 		t.Run(fmt.Sprintf("%d/%s<<%d=%s", idx, tc.u, tc.by, tc.r), func(t *testing.T) {
@@ -418,15 +422,15 @@ func BenchmarkU128FromFloat(b *testing.B) {
 
 func BenchmarkU128FromBigInt(b *testing.B) {
 	for _, bi := range []*big.Int{
-		bigsx("0"),
-		bigsx("fedcba98"),
-		bigsx("fedcba9876543210"),
-		bigsx("fedcba9876543210fedcba98"),
-		bigsx("fedcba9876543210fedcba9876543210"),
+		bigs("0"),
+		bigs("0xfedcba98"),
+		bigs("0xfedcba9876543210"),
+		bigs("0xfedcba9876543210fedcba98"),
+		bigs("0xfedcba9876543210fedcba9876543210"),
 	} {
 		b.Run(fmt.Sprintf("%x", bi), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				BenchUResult = U128FromBigInt(bi)
+				BenchUResult, _ = U128FromBigInt(bi)
 			}
 		})
 	}
