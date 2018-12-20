@@ -73,31 +73,6 @@ func I128FromFloat64(f float64) (out I128) {
 			return MaxI128
 		}
 	}
-
-	/*
-		const spillPos = float64(maxUint64) // (1<<64) - 1
-		const spillNeg = -float64(maxUint64) - 1
-
-		if f == 0 {
-			return I128{}
-
-		} else if f < 0 {
-			if f >= spillNeg {
-				return I128{hi: -1, lo: uint64(-f)}
-			} else {
-				lo := mod(f, wrapUint64Float)
-				return I128{hi: int64(f / wrapUint64Float), lo: uint64(lo)}
-			}
-
-		} else {
-			if f <= maxUint64Float {
-				return I128{lo: uint64(f)}
-			} else {
-				lo := mod(f, wrapUint64Float)
-				return I128{hi: int64(f / wrapUint64Float), lo: uint64(lo)}
-			}
-		}
-	*/
 }
 
 // RandI128 generates a positive signed 128-bit random integer from an external
@@ -150,13 +125,30 @@ func (i I128) AsU128() U128 {
 	return U128{lo: i.lo, hi: uint64(i.hi)}
 }
 
+func (i I128) Sign() int {
+	if i == zeroI128 {
+		return 0
+	} else if i.hi&signBit == 0 {
+		return 1
+	}
+	return -1
+}
+
 func (i I128) AsFloat64() float64 {
 	if i.hi == 0 && i.lo == 0 {
 		return 0
-	} else if i.hi == 0 {
-		return float64(i.lo)
+	} else if i.hi&signBit != 0 {
+		if i.hi == maxUint64 {
+			return -float64((^i.lo) + 1)
+		} else {
+			return (-float64(^i.hi) * maxUint64Float) + -float64(^i.lo)
+		}
 	} else {
-		return (float64(i.hi) * maxUint64Float) + float64(i.lo)
+		if i.hi == 0 {
+			return float64(i.lo)
+		} else {
+			return (float64(i.hi) * maxUint64Float) + float64(i.lo)
+		}
 	}
 }
 

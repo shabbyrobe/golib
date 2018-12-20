@@ -216,8 +216,22 @@ func checkFloatU128(orig *big.Int, u U128, b *big.Int) error {
 	return checkFloatCommon(orig, u.AsBigInt(), u.String(), b)
 }
 
-func checkFloatI128(orig *big.Int, i I128, b *big.Int) error {
-	return checkFloatCommon(orig, i.AsBigInt(), i.String(), b)
+func checkFloatI128(orig *big.Int, result float64, bf *big.Float) error {
+	diff := new(big.Float).SetFloat64(result)
+	diff.Sub(diff, bf)
+	diff.Abs(diff)
+
+	isZero := orig.Cmp(big0) == 0
+	if !isZero {
+		diff.Quo(diff, bf)
+	}
+
+	if (isZero && result != 0) || diff.Abs(diff).Cmp(floatDiffLimit) > 0 {
+		return fmt.Errorf("|128(%f) - big(%f)| = %s, > %s", result, bf,
+			cleanFloatStr(fmt.Sprintf("%.20f", diff)),
+			cleanFloatStr(fmt.Sprintf("%.20f", floatDiffLimit)))
+	}
+	return nil
 }
 
 func checkFloatCommon(orig, val *big.Int, valstr string, b *big.Int) error {
@@ -611,11 +625,8 @@ func (f fuzzI128) AsFloat64() error {
 	b1 := f.source.BigI128()
 	i1 := accI128FromBigInt(b1)
 	bf := new(big.Float).SetInt(b1)
-	rbf, _ := bf.Float64()
 	rif := i1.AsFloat64()
-	rb, _ := new(big.Float).SetFloat64(rbf).Int(new(big.Int))
-	ri := I128FromFloat64(rif)
-	return checkFloatI128(b1, ri, rb)
+	return checkFloatI128(b1, rif, bf)
 }
 
 // Bitwise operations on I128 are not supported:

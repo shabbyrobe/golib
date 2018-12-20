@@ -71,20 +71,22 @@ func TestU128AsBigInt(t *testing.T) {
 
 func TestU128FromBigInt(t *testing.T) {
 	for idx, tc := range []struct {
-		a *big.Int
-		b U128
+		a   *big.Int
+		b   U128
+		acc bool
 	}{
-		{bigU64(2), u64(2)},
-		{bigs("18446744073709551616"), U128{hi: 0x1, lo: 0x0}},                // 1 << 64
-		{bigs("36893488147419103231"), U128{hi: 0x1, lo: 0xFFFFFFFFFFFFFFFF}}, // (1<<65) - 1
-		{bigs("28446744073709551615"), u128s("28446744073709551615")},
-		{bigs("170141183460469231731687303715884105727"), u128s("170141183460469231731687303715884105727")},
-		{bigs("0x FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF"), U128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}},
-		{bigs("0x FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFFF"), MaxU128},
+		{bigU64(2), u64(2), true},
+		{bigs("18446744073709551616"), U128{hi: 0x1, lo: 0x0}, true},                // 1 << 64
+		{bigs("36893488147419103231"), U128{hi: 0x1, lo: 0xFFFFFFFFFFFFFFFF}, true}, // (1<<65) - 1
+		{bigs("28446744073709551615"), u128s("28446744073709551615"), true},
+		{bigs("170141183460469231731687303715884105727"), u128s("170141183460469231731687303715884105727"), true},
+		{bigs("0x FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF"), U128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}, true},
+		{bigs("0x FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFFF"), MaxU128, false},
 	} {
 		t.Run(fmt.Sprintf("%d/%s=%d,%d", idx, tc.a, tc.b.lo, tc.b.hi), func(t *testing.T) {
 			tt := assert.WrapTB(t)
-			v, _ := U128FromBigInt(tc.a)
+			v, acc := U128FromBigInt(tc.a)
+			tt.MustEqual(acc, tc.acc)
 			tt.MustAssert(tc.b.Cmp(v) == 0, "found: (%d, %d), expected (%d, %d)", v.hi, v.lo, tc.b.hi, tc.b.lo)
 		})
 	}
@@ -298,7 +300,7 @@ func TestU128Float64Random(t *testing.T) {
 	// U128(float64(U128)) must not be more than this very reasonable limit:
 	limit := new(big.Float).SetFloat64(0.00000000000001)
 
-	for i := 0; i < 100000; i++ {
+	for i := 0; i < 10000; i++ {
 		u := randU128(bts)
 
 		f := u.AsFloat64()
@@ -316,7 +318,7 @@ func TestU128MarshalJSON(t *testing.T) {
 	tt := assert.WrapTB(t)
 	bts := make([]byte, 16)
 
-	for i := 0; i < 20000; i++ {
+	for i := 0; i < 5000; i++ {
 		u := randU128(bts)
 
 		bts, err := json.Marshal(u)
