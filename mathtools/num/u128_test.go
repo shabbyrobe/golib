@@ -173,27 +173,6 @@ func TestU128Div(t *testing.T) {
 		// 3289699161974853443944280720275488 / 9261249991223143249760: u128(48100516172305203) != big(355211139435)
 		// 51044189592896282646990963682604803 / 15356086376658915618524: u128(16290274193854465) != big(3324036368438)
 		// 555579170280843546177 / 21475569273528505412: u128(12) != big(25)
-		// 2949247824660989947922443980 / 302683126529761752263: u128(455939057376533098) != big(9743680)
-		// 971472458247603477981631204590 / 350420: u128(2772305826605587383713792) != big(2772308824403868152450291)
-		// 11096903380546347857972634826445138634 / 42697940829956011330806: u128(2668015570451510) != big(259893174350951)
-		// 2217478155689385033283681835376395 / 40289020034608988764162419152803: u128(8539690) != big(55)
-		// 18142638712496683201489267 / 1365: u128(13281655733070877163520) != big(13291310412085482198893)
-		// 62103722249961132848385208578 / 12388: u128(5013197849935750004473856) != big(5013216197123113726863513)
-		// 1718097515653571439501189267179258857 / 164705935682477192600288: u128(1019612999867505) != big(10431302967524)
-		// 3661431417457026177118536052088 / 12365909340431256211712: u128(19939461649052568) != big(296090753)
-		// 24298963230542467290270140341245 / 421787975024059225589: u128(341633803428111640) != big(57609426226)
-		// 1467621860654665417145484978231305494 / 633124970193674922054836661078187921: u128(1) != big(2)
-		// 2802142065843234774980457 / 620: u128(4519452298058840145920) != big(4519583977166507701581)
-		// 20224588157632265704346736243251064 / 489601690837183261247311421165: u128(167979940) != big(41308)
-		// 23896954878490934294198761890 / 31420116731669012347740838: u128(8434227721305) != big(760)
-		// 3918866837393595579648743745051 / 1949638892805710269373538: u128(4355324532566) != big(2010047)
-		// 21097982161006329403046439215655211 / 68699402632727790927766640881958: u128(4761867) != big(307)
-		// 73935111427887097261995043834539 / 320997938157: u128(221360928884514619392) != big(230328929376877976548)
-		// 1851429540072980778899995824609 / 18: u128(102857196665035250408582283264) != big(102857196670721154383333101367)
-		// 4711594723937775520752870124446537734 / 820496178458499857061155: u128(277610350355589) != big(5742372539491)
-		// 269694753853353588774761351 / 7702535: u128(18446744073709551616) != big(35013765449083138054)
-		// 14054597138817478941697630323 / 78953527: u128(166020696663385964544) != big(178011010690092146759)
-		// 9050696263923660666457960369273779672 / 93657: u128(96636623679206658807759296790528) != big(96636623679208822260567393459899)
 	} {
 		t.Run(fmt.Sprintf("%s÷%s=%s,%s", tc.u, tc.by, tc.q, tc.r), func(t *testing.T) {
 			tt := assert.WrapTB(t)
@@ -403,25 +382,27 @@ func TestU128MarshalJSON(t *testing.T) {
 }
 
 var (
-	BenchUResult        U128
-	BenchIntResult      int
-	BenchBoolResult     bool
-	BenchFloatResult    float64
 	BenchBigFloatResult *big.Float
 	BenchBigIntResult   *big.Int
+	BenchBoolResult     bool
+	BenchFloatResult    float64
+	BenchIntResult      int
+	BenchStringResult   string
+	BenchU128Result     U128
+	BenchUint64Result   uint64
 )
 
 func BenchmarkU128Mul(b *testing.B) {
 	u := U128From64(maxUint64)
 	for i := 0; i < b.N; i++ {
-		BenchUResult = u.Mul(u)
+		BenchU128Result = u.Mul(u)
 	}
 }
 
 func BenchmarkU128Add(b *testing.B) {
 	u := U128From64(maxUint64)
 	for i := 0; i < b.N; i++ {
-		BenchUResult = u.Add(u)
+		BenchU128Result = u.Add(u)
 	}
 }
 
@@ -429,7 +410,7 @@ func BenchmarkU128QuoRem(b *testing.B) {
 	u := U128From64(maxUint64)
 	by := U128From64(121525124)
 	for i := 0; i < b.N; i++ {
-		BenchUResult, _ = u.QuoRem(by)
+		BenchU128Result, _ = u.QuoRem(by)
 	}
 }
 
@@ -463,7 +444,7 @@ func BenchmarkU128Lsh(b *testing.B) {
 	} {
 		b.Run(fmt.Sprintf("%s>>%d", tc.in, tc.sh), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				BenchUResult = tc.in.Lsh(tc.sh)
+				BenchU128Result = tc.in.Lsh(tc.sh)
 			}
 		})
 	}
@@ -488,7 +469,7 @@ func BenchmarkU128FromFloat(b *testing.B) {
 		b.Run(fmt.Sprintf("pow%d", int(pow)), func(b *testing.B) {
 			f := math.Pow(2, pow)
 			for i := 0; i < b.N; i++ {
-				BenchUResult = U128FromFloat64(f)
+				BenchU128Result = U128FromFloat64(f)
 			}
 		})
 	}
@@ -504,7 +485,7 @@ func BenchmarkU128FromBigInt(b *testing.B) {
 	} {
 		b.Run(fmt.Sprintf("%x", bi), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				BenchUResult, _ = U128FromBigInt(bi)
+				BenchU128Result, _ = U128FromBigInt(bi)
 			}
 		})
 	}
@@ -553,6 +534,49 @@ func BenchmarkU128LessThan(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkU128String(b *testing.B) {
+	for _, bi := range []U128{
+		u128s("0"),
+		u128s("0xfedcba98"),
+		u128s("0xfedcba9876543210"),
+		u128s("0xfedcba9876543210fedcba98"),
+		u128s("0xfedcba9876543210fedcba9876543210"),
+	} {
+		b.Run(fmt.Sprintf("%x", bi.AsBigInt()), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				BenchStringResult = bi.String()
+			}
+		})
+	}
+}
+
+var BenchUint641, BenchUint642 uint64 = 12093749018, 18927348917
+
+func BenchmarkUint64Mul(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		BenchUint64Result = BenchUint641 * BenchUint642
+	}
+}
+
+func BenchmarkUint64Add(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		BenchUint64Result = BenchUint641 + BenchUint642
+	}
+}
+
+func BenchmarkUint64Div(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		BenchUint64Result = BenchUint641 / BenchUint642
+	}
+}
+
+func BenchmarkUint64Equal(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		BenchBoolResult = BenchUint641 == BenchUint642
+	}
+}
+
 func BenchmarkBigIntMul(b *testing.B) {
 	var max big.Int
 	max.SetUint64(maxUint64)

@@ -27,6 +27,8 @@ func I128FromString(s string) (out I128, accurate bool, err error) {
 	return out, accurate, nil
 }
 
+// I128FromRaw is the complement to I128.Raw(); it creates an I128 from two
+// uint64s representing the hi and lo bits.
 func I128FromRaw(hi, lo uint64) I128 {
 	return I128{hi: hi, lo: lo}
 }
@@ -94,13 +96,22 @@ func RandI128(source RandSource) (out I128) {
 	return I128{hi: source.Uint64() & maxInt64, lo: source.Uint64()}
 }
 
-func (i I128) Raw() (hi uint64, lo uint64) { return uint64(i.hi), i.lo }
+// Raw returns access to the I128 as a pair of uint64s.
+func (i I128) Raw() (hi uint64, lo uint64) { return i.hi, i.lo }
 
 func (i I128) String() string {
-	v := i.AsBigInt() // This is good enough for now
+	// FIXME: This is good enough for now, but not forever.
+	v := i.AsBigInt()
 	return v.String()
 }
 
+func (i I128) Format(s fmt.State, c rune) {
+	// FIXME: This is good enough for now, but not forever.
+	i.AsBigInt().Format(s, c)
+}
+
+// IntoBigInt copies this I128 into a big.Int, allowing you to retain and
+// recycle memory.
 func (i I128) IntoBigInt(b *big.Int) {
 	neg := i.hi&signBit != 0
 	if i.hi > 0 {
@@ -116,6 +127,7 @@ func (i I128) IntoBigInt(b *big.Int) {
 	}
 }
 
+// AsBigInt allocates a new big.Int and copies this I128 into it.
 func (i I128) AsBigInt() (b *big.Int) {
 	b = new(big.Int)
 	neg := i.hi&signBit != 0
@@ -134,8 +146,10 @@ func (i I128) AsBigInt() (b *big.Int) {
 	return b
 }
 
+// AsU128 performs a direct cast of an I128 to a U128. Negative numbers
+// become values > math.MaxI128.
 func (i I128) AsU128() U128 {
-	return U128{lo: i.lo, hi: uint64(i.hi)}
+	return U128{lo: i.lo, hi: i.hi}
 }
 
 func (i I128) Sign() int {
@@ -209,8 +223,12 @@ func (i I128) Neg() (v I128) {
 	if i.hi == 0 && i.lo == 0 {
 		return v
 	}
-	if i.hi&signBit != 0 {
-		fmt.Println(i)
+
+	if i == MinI128 {
+		// Overflow case: -MinI128 == MinI128
+		return i
+
+	} else if i.hi&signBit != 0 {
 		v.hi = ^i.hi
 		v.lo = ^(i.lo - 1)
 	} else {
@@ -342,8 +360,21 @@ func (i I128) QuoRem(by I128) (q, r I128) {
 // run-time panic occurs. Quo implements truncated division (like Go); see
 // QuoRem for more details.
 func (i I128) Quo(by I128) (q I128) {
-	// FIXME: can do much better than this.
-	q, _ = i.QuoRem(by)
+	qSign := 1
+	if i.LessThan(zeroI128) {
+		qSign = -1
+		i = i.Neg()
+	}
+	if by.LessThan(zeroI128) {
+		qSign = -qSign
+		by = by.Neg()
+	}
+
+	qu := i.AsU128().Quo(by.AsU128())
+	q = qu.AsI128()
+	if qSign < 0 {
+		q = q.Neg()
+	}
 	return q
 }
 
@@ -351,7 +382,6 @@ func (i I128) Quo(by I128) (q I128) {
 // run-time panic occurs. Rem implements truncated modulus (like Go); see
 // QuoRem for more details.
 func (i I128) Rem(by I128) (r I128) {
-	// FIXME: can do much better than this.
 	_, r = i.QuoRem(by)
 	return r
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/bits"
+	"strconv"
 )
 
 type U128 struct {
@@ -101,8 +102,20 @@ func RandU128(source RandSource) (out U128) {
 func (u U128) Raw() (hi, lo uint64) { return u.hi, u.lo }
 
 func (u U128) String() string {
-	v := u.AsBigInt() // This is good enough for now
+	// FIXME: This is good enough for now, but not forever.
+	if u == zeroU128 {
+		return "0"
+	}
+	if u.hi == 0 {
+		return strconv.FormatUint(u.lo, 10)
+	}
+	v := u.AsBigInt()
 	return v.String()
+}
+
+func (u U128) Format(s fmt.State, c rune) {
+	// FIXME: This is good enough for now, but not forever.
+	u.AsBigInt().Format(s, c)
 }
 
 func (u U128) IntoBigInt(b *big.Int) {
@@ -162,6 +175,8 @@ func (u U128) AsFloat64() float64 {
 	}
 }
 
+// AsI128 performs a direct cast of a U128 to an I128, which will interpret it
+// as a two's complement value.
 func (u U128) AsI128() I128 {
 	return I128{lo: u.lo, hi: u.hi}
 }

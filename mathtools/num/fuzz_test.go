@@ -14,7 +14,8 @@ type fuzzType string
 const fuzzDefaultIterations = 10000
 
 // These ops are all enabled by default. You can instead pass them explicitly
-// on the command line like so: '-num.fuzzop=add -num.fuzzop=sub'
+// on the command line like so: '-num.fuzzop=add -num.fuzzop=sub', or you can
+// use the short form '-num.fuzzop=add,sub,mul'.
 //
 // If you add a new op, search for the string 'NEWOP' in this file for all the
 // places you need to update.
@@ -40,6 +41,7 @@ const (
 	fuzzQuoRem           fuzzOp = "quorem"
 	fuzzRem              fuzzOp = "rem"
 	fuzzRsh              fuzzOp = "rsh"
+	fuzzString           fuzzOp = "string"
 	fuzzSub              fuzzOp = "sub"
 	fuzzXor              fuzzOp = "xor"
 )
@@ -79,6 +81,7 @@ var allFuzzOps = []fuzzOp{
 	fuzzQuoRem,
 	fuzzRem,
 	fuzzRsh,
+	fuzzString,
 	fuzzSub,
 	fuzzXor,
 }
@@ -108,6 +111,7 @@ type fuzzOps interface {
 	QuoRem() error
 	Rem() error
 	Rsh() error
+	String() error
 	Sub() error
 	Xor() error
 }
@@ -119,7 +123,13 @@ type rando struct {
 }
 
 func (r *rando) Operands() []*big.Int { return r.operands }
-func (r *rando) Clear()               { r.operands = r.operands[:0] }
+
+func (r *rando) Clear() {
+	for i := range r.operands {
+		r.operands[i] = nil
+	}
+	r.operands = r.operands[:0]
+}
 
 func (r *rando) Intn(n int) int {
 	v := int(r.rng.Intn(n))
@@ -171,6 +181,21 @@ func (r *rando) BigI128() *big.Int {
 	return v
 }
 
+// masks contains a pre-calculated set of 128-bit masks for use when generating
+// random U128s/I128s. It's used to ensure we generate an even distribution of
+// bit sizes.
+var masks [128]*big.Int
+
+func init() {
+	for i := 0; i < 128; i++ {
+		bi := new(big.Int)
+		for b := 0; b <= i; b++ {
+			bi.SetBit(bi, b, 1)
+		}
+		masks[i] = bi
+	}
+}
+
 func checkEqualInt(u int, b int) error {
 	if u != b {
 		return fmt.Errorf("128(%v) != big(%v)", u, b)
@@ -188,6 +213,13 @@ func checkEqualBool(u bool, b bool) error {
 func checkEqualU128(u U128, b *big.Int) error {
 	if u.String() != b.String() {
 		return fmt.Errorf("u128(%s) != big(%s)", u.String(), b.String())
+	}
+	return nil
+}
+
+func checkEqualString(u fmt.Stringer, b fmt.Stringer) error {
+	if u.String() != b.String() {
+		return fmt.Errorf("128(%s) != big(%s)", u.String(), b.String())
 	}
 	return nil
 }
@@ -215,6 +247,205 @@ func checkEqualI128(i I128, b *big.Int) error {
 		return fmt.Errorf("i128(%s) != big(%s)", i.String(), b.String())
 	}
 	return nil
+}
+
+func TestFuzz(t *testing.T) {
+	// fuzzOpsActive comes from the -num.fuzzop flag, in TestMain:
+	var runFuzzOps = fuzzOpsActive
+
+	// fuzzTypesActive comes from the -num.fuzzop flag, in TestMain:
+	var runFuzzTypes = fuzzTypesActive
+
+	var source = &rando{rng: globalRNG} // Classic rando!
+	var totalFailures int
+
+	var fuzzTypes []fuzzOps
+
+	for _, fuzzType := range runFuzzTypes {
+		switch fuzzType {
+		case fuzzTypeU128:
+			fuzzTypes = append(fuzzTypes, &fuzzU128{source: source})
+		case fuzzTypeI128:
+			fuzzTypes = append(fuzzTypes, &fuzzI128{source: source})
+		default:
+			panic("unknown fuzz type")
+		}
+	}
+
+	for _, fuzzImpl := range fuzzTypes {
+		var failures = make([]int, len(runFuzzOps))
+
+		for opIdx, op := range runFuzzOps {
+			for i := 0; i < fuzzIterations; i++ {
+				source.Clear()
+
+				var err error
+
+				// NEWOP: add a new branch here in alphabetical order if a new
+				// op is added.
+				switch op {
+				case fuzzAbs:
+					err = fuzzImpl.Abs()
+				case fuzzAdd:
+					err = fuzzImpl.Add()
+				case fuzzAnd:
+					err = fuzzImpl.And()
+				case fuzzAsFloat64:
+					err = fuzzImpl.AsFloat64()
+				case fuzzCmp:
+					err = fuzzImpl.Cmp()
+				case fuzzDec:
+					err = fuzzImpl.Dec()
+				case fuzzEqual:
+					err = fuzzImpl.Equal()
+				case fuzzFromFloat64:
+					err = fuzzImpl.FromFloat64()
+				case fuzzGreaterOrEqualTo:
+					err = fuzzImpl.GreaterOrEqualTo()
+				case fuzzGreaterThan:
+					err = fuzzImpl.GreaterThan()
+				case fuzzInc:
+					err = fuzzImpl.Inc()
+				case fuzzLessOrEqualTo:
+					err = fuzzImpl.LessOrEqualTo()
+				case fuzzLessThan:
+					err = fuzzImpl.LessThan()
+				case fuzzLsh:
+					err = fuzzImpl.Lsh()
+				case fuzzMul:
+					err = fuzzImpl.Mul()
+				case fuzzNeg:
+					err = fuzzImpl.Neg()
+				case fuzzOr:
+					err = fuzzImpl.Or()
+				case fuzzQuo:
+					err = fuzzImpl.Quo()
+				case fuzzQuoRem:
+					err = fuzzImpl.QuoRem()
+				case fuzzRem:
+					err = fuzzImpl.Rem()
+				case fuzzRsh:
+					err = fuzzImpl.Rsh()
+				case fuzzString:
+					err = fuzzImpl.String()
+				case fuzzSub:
+					err = fuzzImpl.Sub()
+				case fuzzXor:
+					err = fuzzImpl.Xor()
+				default:
+					panic(fmt.Errorf("unsupported op %q", op))
+				}
+
+				if err != nil {
+					failures[opIdx]++
+					t.Logf("%s: %s\n", op.Print(source.Operands()...), err)
+				}
+			}
+		}
+
+		for opIdx, cnt := range failures {
+			if cnt > 0 {
+				totalFailures += cnt
+				t.Logf("impl %s, op %s: %d/%d failed", fuzzImpl.Name(), string(runFuzzOps[opIdx]), cnt, fuzzIterations)
+			}
+		}
+	}
+
+	if totalFailures > 0 {
+		t.Fail()
+	}
+}
+
+func (op fuzzOp) Print(operands ...*big.Int) string {
+	// NEWOP: please add a human-readale format for your op here; this is used
+	// for reporting errors and should show the operation, i.e. "2 + 2".
+	//
+	// It should be safe to assume the appropriate number of operands are set
+	// in 'operands'; if not, it's a bug to be fixed elsewhere.
+	switch op {
+	case fuzzAsFloat64:
+		return fmt.Sprintf("float64(%d)", operands[0])
+
+	case fuzzFromFloat64:
+		return fmt.Sprintf("fromfloat64(%d)", operands[0])
+
+	case fuzzString:
+		return fmt.Sprintf("string(%d)", operands[0])
+
+	case fuzzInc, fuzzDec:
+		return fmt.Sprintf("%d%s", operands[0], op.String())
+
+	case fuzzNeg:
+		return fmt.Sprintf("-%d", operands[0])
+
+	case fuzzAbs:
+		return fmt.Sprintf("|%d|", operands[0])
+
+	case fuzzAdd, fuzzSub, fuzzCmp, fuzzEqual, fuzzGreaterThan, fuzzGreaterOrEqualTo,
+		fuzzLessThan, fuzzLessOrEqualTo, fuzzAnd, fuzzOr, fuzzXor, fuzzLsh, fuzzRsh,
+		fuzzMul, fuzzQuo, fuzzRem, fuzzQuoRem: // simple binary case:
+		return fmt.Sprintf("%d %s %d", operands[0], op.String(), operands[1])
+
+	default:
+		return string(op)
+	}
+}
+
+func (op fuzzOp) String() string {
+	// NEWOP: please add a short string representation of this op, as if
+	// the operands were in a sum.
+	switch op {
+	case fuzzAbs:
+		return "|x|"
+	case fuzzAdd:
+		return "+"
+	case fuzzAnd:
+		return "&"
+	case fuzzAsFloat64:
+		return "float64()"
+	case fuzzCmp:
+		return "<=>"
+	case fuzzDec:
+		return "--"
+	case fuzzEqual:
+		return "=="
+	case fuzzFromFloat64:
+		return "fromfloat64()"
+	case fuzzGreaterThan:
+		return ">"
+	case fuzzGreaterOrEqualTo:
+		return ">="
+	case fuzzInc:
+		return "++"
+	case fuzzLessThan:
+		return "<"
+	case fuzzLessOrEqualTo:
+		return "<="
+	case fuzzLsh:
+		return "<<"
+	case fuzzMul:
+		return "*"
+	case fuzzNeg:
+		return "-"
+	case fuzzOr:
+		return "|"
+	case fuzzQuo:
+		return "/"
+	case fuzzQuoRem:
+		return "/%"
+	case fuzzRem:
+		return "%"
+	case fuzzRsh:
+		return ">>"
+	case fuzzString:
+		return "string"
+	case fuzzSub:
+		return "-"
+	case fuzzXor:
+		return "^"
+	default:
+		return string(op)
+	}
 }
 
 type fuzzU128 struct {
@@ -437,6 +668,12 @@ func (f fuzzU128) FromFloat64() error {
 	return nil
 }
 
+func (f fuzzU128) String() error {
+	b1 := f.source.BigU128()
+	u1 := accU128FromBigInt(b1)
+	return checkEqualString(u1, b1)
+}
+
 type fuzzI128 struct {
 	source *rando
 }
@@ -651,209 +888,8 @@ func (f fuzzI128) Neg() error {
 	return checkEqualI128(ru, rb)
 }
 
-func TestFuzz(t *testing.T) {
-	// fuzzOpsActive comes from the -num.fuzzop flag, in TestMain:
-	var runFuzzOps = fuzzOpsActive
-
-	// fuzzTypesActive comes from the -num.fuzzop flag, in TestMain:
-	var runFuzzTypes = fuzzTypesActive
-
-	var source = &rando{rng: rand.New(rand.NewSource(fuzzSeed))} // Classic rando!
-	var totalFailures int
-
-	var fuzzTypes []fuzzOps
-
-	for _, fuzzType := range runFuzzTypes {
-		switch fuzzType {
-		case fuzzTypeU128:
-			fuzzTypes = append(fuzzTypes, &fuzzU128{source: source})
-		case fuzzTypeI128:
-			fuzzTypes = append(fuzzTypes, &fuzzI128{source: source})
-		default:
-			panic("unknown fuzz type")
-		}
-	}
-
-	for _, fuzzImpl := range fuzzTypes {
-		var failures = make([]int, len(runFuzzOps))
-
-		for opIdx, op := range runFuzzOps {
-			for i := 0; i < fuzzIterations; i++ {
-				source.Clear()
-
-				var err error
-
-				// NEWOP: add a new branch here in alphabetical order if a new
-				// op is added.
-				switch op {
-				case fuzzAbs:
-					err = fuzzImpl.Abs()
-				case fuzzAdd:
-					err = fuzzImpl.Add()
-				case fuzzAnd:
-					err = fuzzImpl.And()
-				case fuzzAsFloat64:
-					err = fuzzImpl.AsFloat64()
-				case fuzzCmp:
-					err = fuzzImpl.Cmp()
-				case fuzzDec:
-					err = fuzzImpl.Dec()
-				case fuzzEqual:
-					err = fuzzImpl.Equal()
-				case fuzzFromFloat64:
-					err = fuzzImpl.FromFloat64()
-				case fuzzGreaterOrEqualTo:
-					err = fuzzImpl.GreaterOrEqualTo()
-				case fuzzGreaterThan:
-					err = fuzzImpl.GreaterThan()
-				case fuzzInc:
-					err = fuzzImpl.Inc()
-				case fuzzLessOrEqualTo:
-					err = fuzzImpl.LessOrEqualTo()
-				case fuzzLessThan:
-					err = fuzzImpl.LessThan()
-				case fuzzLsh:
-					err = fuzzImpl.Lsh()
-				case fuzzMul:
-					err = fuzzImpl.Mul()
-				case fuzzNeg:
-					err = fuzzImpl.Neg()
-				case fuzzOr:
-					err = fuzzImpl.Or()
-				case fuzzQuo:
-					err = fuzzImpl.Quo()
-				case fuzzQuoRem:
-					err = fuzzImpl.QuoRem()
-				case fuzzRem:
-					err = fuzzImpl.Rem()
-				case fuzzRsh:
-					err = fuzzImpl.Rsh()
-				case fuzzSub:
-					err = fuzzImpl.Sub()
-				case fuzzXor:
-					err = fuzzImpl.Xor()
-				default:
-					panic(fmt.Errorf("unsupported op %q", op))
-				}
-
-				if err != nil {
-					failures[opIdx]++
-					t.Logf("%s: %s\n", op.Print(source.Operands()...), err)
-				}
-			}
-		}
-
-		for opIdx, cnt := range failures {
-			if cnt > 0 {
-				totalFailures += cnt
-				t.Logf("impl %s, op %s: %d/%d failed", fuzzImpl.Name(), string(runFuzzOps[opIdx]), cnt, fuzzIterations)
-			}
-		}
-	}
-
-	if totalFailures > 0 {
-		t.Fail()
-	}
-}
-
-func (op fuzzOp) Print(operands ...*big.Int) string {
-	// NEWOP: please add a human-readale format for your op here; this is used
-	// for reporting errors and should show the operation, i.e. "2 + 2".
-	//
-	// It should be safe to assume the appropriate number of operands are set
-	// in 'operands'; if not, it's a bug to be fixed elsewhere.
-	switch op {
-	case fuzzAsFloat64:
-		return fmt.Sprintf("float64(%d)", operands[0])
-
-	case fuzzFromFloat64:
-		return fmt.Sprintf("fromfloat64(%d)", operands[0])
-
-	case fuzzInc, fuzzDec:
-		return fmt.Sprintf("%d%s", operands[0], op.String())
-
-	case fuzzNeg:
-		return fmt.Sprintf("-%d", operands[0])
-
-	case fuzzAbs:
-		return fmt.Sprintf("|%d|", operands[0])
-
-	case fuzzAdd, fuzzSub, fuzzCmp, fuzzEqual, fuzzGreaterThan, fuzzGreaterOrEqualTo,
-		fuzzLessThan, fuzzLessOrEqualTo, fuzzAnd, fuzzOr, fuzzXor, fuzzLsh, fuzzRsh,
-		fuzzMul, fuzzQuo, fuzzRem, fuzzQuoRem: // simple binary case:
-		return fmt.Sprintf("%d %s %d", operands[0], op.String(), operands[1])
-
-	default:
-		return string(op)
-	}
-}
-
-func (op fuzzOp) String() string {
-	// NEWOP: please add a short string representation of this op, as if
-	// the operands were in a sum.
-	switch op {
-	case fuzzAbs:
-		return "|x|"
-	case fuzzAdd:
-		return "+"
-	case fuzzAnd:
-		return "&"
-	case fuzzAsFloat64:
-		return "float64()"
-	case fuzzCmp:
-		return "<=>"
-	case fuzzDec:
-		return "--"
-	case fuzzEqual:
-		return "=="
-	case fuzzFromFloat64:
-		return "fromfloat64()"
-	case fuzzGreaterThan:
-		return ">"
-	case fuzzGreaterOrEqualTo:
-		return ">="
-	case fuzzInc:
-		return "++"
-	case fuzzLessThan:
-		return "<"
-	case fuzzLessOrEqualTo:
-		return "<="
-	case fuzzLsh:
-		return "<<"
-	case fuzzMul:
-		return "*"
-	case fuzzNeg:
-		return "-"
-	case fuzzOr:
-		return "|"
-	case fuzzQuo:
-		return "/"
-	case fuzzQuoRem:
-		return "/%"
-	case fuzzRem:
-		return "%"
-	case fuzzRsh:
-		return ">>"
-	case fuzzSub:
-		return "-"
-	case fuzzXor:
-		return "^"
-	default:
-		return string(op)
-	}
-}
-
-// masks contains a pre-calculated set of 128-bit masks for use when generating
-// random U128s/I128s. It's used to ensure we generate an even distribution of
-// bit sizes.
-var masks [128]*big.Int
-
-func init() {
-	for i := 0; i < 128; i++ {
-		bi := new(big.Int)
-		for b := 0; b <= i; b++ {
-			bi.SetBit(bi, b, 1)
-		}
-		masks[i] = bi
-	}
+func (f fuzzI128) String() error {
+	b1 := f.source.BigI128()
+	i1 := accI128FromBigInt(b1)
+	return checkEqualString(i1, b1)
 }

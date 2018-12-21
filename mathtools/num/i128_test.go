@@ -93,6 +93,11 @@ func TestI128Neg(t *testing.T) {
 		{i64(0), i64(0)},
 		{i64(-2), i64(2)},
 		{i64(2), i64(-2)},
+
+		// hi/lo carry:
+		{I128{lo: 0xFFFFFFFFFFFFFFFF}, I128{hi: 0xFFFFFFFFFFFFFFFF, lo: 1}},
+		{I128{hi: 0xFFFFFFFFFFFFFFFF, lo: 1}, I128{lo: 0xFFFFFFFFFFFFFFFF}},
+
 		{i128s("28446744073709551615"), i128s("-28446744073709551615")},
 		{i128s("-28446744073709551615"), i128s("28446744073709551615")},
 
@@ -104,8 +109,8 @@ func TestI128Neg(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%d/-%s=%s", idx, tc.a, tc.b), func(t *testing.T) {
 			tt := assert.WrapTB(t)
-			fmt.Println(tc.a.Neg(), tc.b)
-			tt.MustAssert(tc.b.Equal(tc.a.Neg()))
+			result := tc.a.Neg()
+			tt.MustAssert(tc.b.Equal(result))
 		})
 	}
 }
@@ -119,9 +124,16 @@ func TestI128Add(t *testing.T) {
 		{i64(-1), i64(1), i64(0)},
 		{i64(1), i64(2), i64(3)},
 		{i64(10), i64(3), i64(13)},
-		{MaxI128, i64(1), MinI128}, // Overflow wraps
-		// {i64(maxInt64), i64(1), i128s("18446744073709551616")}, // lo carries to hi
-		// {i128s("18446744073709551615"), i128s("18446744073709551615"), i128s("36893488147419103230")},
+
+		// Hi/lo carry:
+		{I128{lo: 0xFFFFFFFFFFFFFFFF}, i64(1), I128{hi: 1, lo: 0}},
+		{I128{hi: 1, lo: 0}, i64(-1), I128{lo: 0xFFFFFFFFFFFFFFFF}},
+
+		// Overflow:
+		{I128{hi: 0xFFFFFFFFFFFFFFFF, lo: 0xFFFFFFFFFFFFFFFF}, i64(1), I128{}},
+
+		// Overflow wraps:
+		{MaxI128, i64(1), MinI128},
 	} {
 		t.Run(fmt.Sprintf("%d/%s+%s=%s", idx, tc.a, tc.b, tc.c), func(t *testing.T) {
 			tt := assert.WrapTB(t)
