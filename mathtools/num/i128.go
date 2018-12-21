@@ -1,6 +1,7 @@
 package num
 
 import (
+	"fmt"
 	"math/big"
 )
 
@@ -13,6 +14,18 @@ const (
 	signBit  = 0x8000000000000000
 	signMask = 0x7FFFFFFFFFFFFFFF
 )
+
+// I128FromString creates a I128 from a string. Overflow truncates to
+// MaxI128/MinI128 and sets accurate to 'false'. Only decimal strings are
+// supported.
+func I128FromString(s string) (out I128, accurate bool, err error) {
+	b, ok := new(big.Int).SetString(s, 10)
+	if !ok {
+		return out, false, fmt.Errorf("num: i128 string %q invalid", s)
+	}
+	out, accurate = I128FromBigInt(b)
+	return out, accurate, nil
+}
 
 func I128FromRaw(hi, lo uint64) I128 {
 	return I128{hi: hi, lo: lo}
@@ -197,6 +210,7 @@ func (i I128) Neg() (v I128) {
 		return v
 	}
 	if i.hi&signBit != 0 {
+		fmt.Println(i)
 		v.hi = ^i.hi
 		v.lo = ^(i.lo - 1)
 	} else {

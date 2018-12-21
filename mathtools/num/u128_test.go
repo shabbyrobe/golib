@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
+	"strings"
 	"testing"
 
 	"github.com/shabbyrobe/golib/assert"
@@ -17,14 +18,16 @@ var u64 = U128From64
 func bigU64(u uint64) *big.Int { return new(big.Int).SetUint64(u) }
 
 func u128s(s string) U128 {
-	b, acc, err := U128FromString(s)
-	if err != nil {
-		panic(err)
+	s = strings.Replace(s, " ", "", -1)
+	b, ok := new(big.Int).SetString(s, 0)
+	if !ok {
+		panic(fmt.Errorf("num: u128 string %q invalid", s))
 	}
+	out, acc := U128FromBigInt(b)
 	if !acc {
 		panic(fmt.Errorf("num: inaccurate u128 %s", s))
 	}
-	return b
+	return out
 }
 
 func randU128(scratch []byte) U128 {
@@ -81,6 +84,7 @@ func TestU128FromBigInt(t *testing.T) {
 		{bigs("28446744073709551615"), u128s("28446744073709551615"), true},
 		{bigs("170141183460469231731687303715884105727"), u128s("170141183460469231731687303715884105727"), true},
 		{bigs("0x FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF"), U128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}, true},
+		{bigs("0x 1 0000000000000000 00000000000000000"), MaxU128, false},
 		{bigs("0x FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFF FFFFFFFFFFFFFFFFF"), MaxU128, false},
 	} {
 		t.Run(fmt.Sprintf("%d/%s=%d,%d", idx, tc.a, tc.b.lo, tc.b.hi), func(t *testing.T) {

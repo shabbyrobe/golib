@@ -16,8 +16,10 @@ func U128From32(v uint32) U128       { return U128{hi: 0, lo: uint64(v)} }
 func U128From16(v uint16) U128       { return U128{hi: 0, lo: uint64(v)} }
 func U128From8(v uint8) U128         { return U128{hi: 0, lo: uint64(v)} }
 
+// U128FromString creates a U128 from a string. Overflow truncates to MaxU128
+// and sets accurate to 'false'. Only decimal strings are supported.
 func U128FromString(s string) (out U128, accurate bool, err error) {
-	b, ok := new(big.Int).SetString(s, 0)
+	b, ok := new(big.Int).SetString(s, 10)
 	if !ok {
 		return out, false, fmt.Errorf("num: u128 string %q invalid", s)
 	}
@@ -25,7 +27,8 @@ func U128FromString(s string) (out U128, accurate bool, err error) {
 	return out, accurate, nil
 }
 
-// U128FromBigInt creates a U128 from a big.Int
+// U128FromBigInt creates a U128 from a big.Int. Overflow truncates to MaxU128
+// and sets accurate to 'false'.
 func U128FromBigInt(v *big.Int) (out U128, accurate bool) {
 	if v.Sign() < 0 {
 		return out, false
@@ -41,8 +44,10 @@ func U128FromBigInt(v *big.Int) (out U128, accurate bool) {
 			return U128{}, true
 		case 1:
 			return U128{lo: uint64(words[0])}, true
+		case 2:
+			return U128{hi: uint64(words[1]), lo: uint64(words[0])}, true
 		default:
-			return U128{hi: uint64(words[1]), lo: uint64(words[0])}, lw == 2
+			return MaxU128, false
 		}
 
 	case 32:
@@ -56,11 +61,13 @@ func U128FromBigInt(v *big.Int) (out U128, accurate bool) {
 			return U128{lo: (uint64(words[1]) << 32) | (uint64(words[0]))}, true
 		case 3:
 			return U128{hi: uint64(words[2]), lo: (uint64(words[1]) << 32) | (uint64(words[0]))}, true
-		default:
+		case 4:
 			return U128{
 				hi: (uint64(words[3]) << 32) | (uint64(words[2])),
 				lo: (uint64(words[1]) << 32) | (uint64(words[0])),
-			}, lw == 4
+			}, true
+		default:
+			return MaxU128, false
 		}
 
 	default:

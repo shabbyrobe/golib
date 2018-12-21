@@ -20,20 +20,8 @@ func bigs(s string) *big.Int {
 }
 
 func i128s(s string) I128 {
-	b, ok := new(big.Int).SetString(s, 10)
-	if !ok {
-		panic(s)
-	}
-	i, acc := I128FromBigInt(b)
-	if !acc {
-		panic(fmt.Errorf("num: inaccurate i128 %s", s))
-	}
-	return i
-}
-
-func i128sx(s string) I128 {
-	s = strings.TrimPrefix(s, "0x")
-	b, ok := new(big.Int).SetString(s, 16)
+	s = strings.Replace(s, " ", "", -1)
+	b, ok := new(big.Int).SetString(s, 0)
 	if !ok {
 		panic(s)
 	}
@@ -107,10 +95,16 @@ func TestI128Neg(t *testing.T) {
 		{i64(2), i64(-2)},
 		{i128s("28446744073709551615"), i128s("-28446744073709551615")},
 		{i128s("-28446744073709551615"), i128s("28446744073709551615")},
-		// FIXME: test overflow cases
+
+		// Negating MaxI128 should yield MinI128 + 1:
+		{I128{hi: 0x7FFFFFFFFFFFFFFF, lo: 0xFFFFFFFFFFFFFFFF}, I128{hi: 0x8000000000000000, lo: 1}},
+
+		// Negating MinI128 should yield MinI128:
+		{I128{hi: 0x8000000000000000, lo: 0}, I128{hi: 0x8000000000000000, lo: 0}},
 	} {
 		t.Run(fmt.Sprintf("%d/-%s=%s", idx, tc.a, tc.b), func(t *testing.T) {
 			tt := assert.WrapTB(t)
+			fmt.Println(tc.a.Neg(), tc.b)
 			tt.MustAssert(tc.b.Equal(tc.a.Neg()))
 		})
 	}
@@ -150,8 +144,8 @@ func TestI128Sub(t *testing.T) {
 		{MinI128, i64(1), MaxI128},  // Overflow wraps
 		{MaxI128, i64(-1), MinI128}, // Overflow wraps
 
-		{i128sx("0x10000000000000000"), i64(1), i128sx("0xFFFFFFFFFFFFFFFF")},  // carry down
-		{i128sx("0xFFFFFFFFFFFFFFFF"), i64(-1), i128sx("0x10000000000000000")}, // carry up
+		{i128s("0x10000000000000000"), i64(1), i128s("0xFFFFFFFFFFFFFFFF")},  // carry down
+		{i128s("0xFFFFFFFFFFFFFFFF"), i64(-1), i128s("0x10000000000000000")}, // carry up
 
 		// {i64(maxInt64), i64(1), i128s("18446744073709551616")}, // lo carries to hi
 		// {i128s("18446744073709551615"), i128s("18446744073709551615"), i128s("36893488147419103230")},
@@ -320,7 +314,7 @@ var (
 
 func BenchmarkI128Sub(b *testing.B) {
 	sub := i64(1)
-	for _, iv := range []I128{i64(1), i128sx("0x10000000000000000"), MaxI128} {
+	for _, iv := range []I128{i64(1), i128s("0x10000000000000000"), MaxI128} {
 		b.Run(fmt.Sprintf("%s", iv), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				BenchIResult = iv.Sub(sub)
