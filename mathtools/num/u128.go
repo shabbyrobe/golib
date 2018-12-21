@@ -181,6 +181,11 @@ func (u U128) AsI128() I128 {
 	return I128{lo: u.lo, hi: u.hi}
 }
 
+// IsI128 reports wehether i can be represented in an I128.
+func (u U128) IsI128() bool {
+	return u.hi&signBit == 0
+}
+
 // AsUint64 truncates the U128 to fit in a uint64.
 func (u U128) AsUint64() uint64 {
 	return u.lo

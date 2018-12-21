@@ -152,6 +152,11 @@ func (i I128) AsU128() U128 {
 	return U128{lo: i.lo, hi: i.hi}
 }
 
+// IsU128 reports wehether i can be represented in a U128.
+func (i I128) IsU128() bool {
+	return i.hi&signBit == 0
+}
+
 func (i I128) Sign() int {
 	if i == zeroI128 {
 		return 0
