@@ -161,7 +161,7 @@ func TestU128Mul(t *testing.T) {
 	tt.MustEqual(v.String(), v1.Mul(&v1, &v2).String())
 }
 
-func TestU128Div(t *testing.T) {
+func TestU128QuoRem(t *testing.T) {
 	for _, tc := range []struct {
 		u, by, q, r U128
 	}{
@@ -392,13 +392,6 @@ var (
 	BenchUint64Result   uint64
 )
 
-func BenchmarkU128Mul(b *testing.B) {
-	u := U128From64(maxUint64)
-	for i := 0; i < b.N; i++ {
-		BenchU128Result = u.Mul(u)
-	}
-}
-
 func BenchmarkU128Add(b *testing.B) {
 	u := U128From64(maxUint64)
 	for i := 0; i < b.N; i++ {
@@ -406,20 +399,21 @@ func BenchmarkU128Add(b *testing.B) {
 	}
 }
 
-func BenchmarkU128QuoRem(b *testing.B) {
+func BenchmarkU128Mul(b *testing.B) {
 	u := U128From64(maxUint64)
-	by := U128From64(121525124)
 	for i := 0; i < b.N; i++ {
-		BenchU128Result, _ = u.QuoRem(by)
+		BenchU128Result = u.Mul(u)
 	}
 }
 
-func BenchmarkU128CmpEqual(b *testing.B) {
-	u := U128From64(maxUint64)
-	n := U128From64(maxUint64)
-	for i := 0; i < b.N; i++ {
-		BenchIntResult = u.Cmp(n)
-	}
+func BenchmarkU128Cmp(b *testing.B) {
+	b.Run("equal", func(b *testing.B) {
+		u := U128From64(maxUint64)
+		n := U128From64(maxUint64)
+		for i := 0; i < b.N; i++ {
+			BenchIntResult = u.Cmp(n)
+		}
+	})
 }
 
 func BenchmarkU128Lsh(b *testing.B) {
@@ -445,6 +439,50 @@ func BenchmarkU128Lsh(b *testing.B) {
 		b.Run(fmt.Sprintf("%s>>%d", tc.in, tc.sh), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				BenchU128Result = tc.in.Lsh(tc.sh)
+			}
+		})
+	}
+}
+
+func BenchmarkU128QuoRem(b *testing.B) {
+	for _, bc := range []struct {
+		dividend U128
+		divisor  U128
+	}{
+		// 128-bit divisor lz+tz > 5 branch:
+		{u128s("0x123456789012345678901234567890"), u128s("0xFFFFFFFFFFFFFFF000000")},
+
+		// 128-bit divisor lz+tz <= 5 branch:
+		{u128s("0x12345678901234567890123456789012"), u128s("0x10000000000000000000000000000001")},
+
+		// 128-bit 'cmp == 0' shortcut branch:
+		{u128s("0x1234567890123456"), u128s("0x1234567890123456")},
+	} {
+		b.Run("", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				BenchU128Result, _ = bc.dividend.QuoRem(bc.divisor)
+			}
+		})
+	}
+}
+
+func BenchmarkU128QuoRemTZ(b *testing.B) {
+	for zeros := 0; zeros < 31; zeros++ {
+		b.Run("", func(b *testing.B) {
+			bs := "0b"
+			for j := 0; j < 128; j++ {
+				if j >= zeros {
+					bs += "1"
+				} else {
+					bs += "0"
+				}
+			}
+
+			da := u128s("0x98765432109876543210987654321098")
+			db := u128s(bs)
+
+			for i := 0; i < b.N; i++ {
+				BenchU128Result, _ = da.QuoRem(db)
 			}
 		})
 	}

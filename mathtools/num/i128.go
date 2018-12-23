@@ -310,6 +310,10 @@ func (i I128) LessOrEqualTo(n I128) bool {
 	return false
 }
 
+// Mul returns the product of two I128s.
+//
+// Overflow should wrap around, as per the Go spec.
+//
 func (i I128) Mul(n I128) (dest I128) {
 	// Adapted from Warren, Hacker's Delight, p. 132.
 	hl := i.hi*n.lo + i.lo*n.hi

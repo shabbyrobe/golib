@@ -441,10 +441,8 @@ func (u U128) QuoRem(by U128) (q, r U128) {
 		return q, r
 	}
 
-	// The original author of this method claims choosing to spill at 5 was
-	// the result of a benchmark, but that's in a C context. This should be
-	// benchmarked as Go and tuned:
-	if byLeading0-uLeading0 > 5 {
+	// See BenchmarkU128QuoRemTZ for the test that helps determine this magic number:
+	if byLeading0-uLeading0 > 16 {
 		return quorem128by128(u, by)
 	} else {
 		return quorem128bin(u, by)

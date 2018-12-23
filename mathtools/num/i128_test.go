@@ -32,16 +32,6 @@ func i128s(s string) I128 {
 	return i
 }
 
-func TestI128FromSize(t *testing.T) {
-	tt := assert.WrapTB(t)
-	tt.MustEqual(I128From8(127), i128s("127"))
-	tt.MustEqual(I128From8(-128), i128s("-128"))
-	tt.MustEqual(I128From16(32767), i128s("32767"))
-	tt.MustEqual(I128From16(-32768), i128s("-32768"))
-	tt.MustEqual(I128From32(2147483647), i128s("2147483647"))
-	tt.MustEqual(I128From32(-2147483648), i128s("-2147483648"))
-}
-
 func TestI128AsBigInt(t *testing.T) {
 	for idx, tc := range []struct {
 		a I128
@@ -60,195 +50,6 @@ func TestI128AsBigInt(t *testing.T) {
 			tt := assert.WrapTB(t)
 			v := tc.a.AsBigInt()
 			tt.MustAssert(tc.b.Cmp(v) == 0, "found: %s", v)
-		})
-	}
-}
-
-func TestI128FromBigInt(t *testing.T) {
-	for idx, tc := range []struct {
-		a *big.Int
-		b I128
-	}{
-		{bigI64(0), i64(0)},
-		{bigI64(2), i64(2)},
-		{bigI64(-2), i64(-2)},
-		{bigs("18446744073709551616"), I128{0x1, 0x0}}, // 1 << 64
-		{bigs("36893488147419103231"), I128{0x1, 0xFFFFFFFFFFFFFFFF}}, // (1<<65) - 1
-		{bigs("28446744073709551615"), i128s("28446744073709551615")},
-		{bigs("170141183460469231731687303715884105727"), i128s("170141183460469231731687303715884105727")},
-		{bigs("-1"), I128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}},
-	} {
-		t.Run(fmt.Sprintf("%d/%s=%d,%d", idx, tc.a, tc.b.lo, tc.b.hi), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			v := accI128FromBigInt(tc.a)
-			tt.MustAssert(tc.b.Cmp(v) == 0, "found: (%d, %d), expected (%d, %d)", v.hi, v.lo, tc.b.hi, tc.b.lo)
-		})
-	}
-}
-
-func TestI128Neg(t *testing.T) {
-	for idx, tc := range []struct {
-		a, b I128
-	}{
-		{i64(0), i64(0)},
-		{i64(-2), i64(2)},
-		{i64(2), i64(-2)},
-
-		// hi/lo carry:
-		{I128{lo: 0xFFFFFFFFFFFFFFFF}, I128{hi: 0xFFFFFFFFFFFFFFFF, lo: 1}},
-		{I128{hi: 0xFFFFFFFFFFFFFFFF, lo: 1}, I128{lo: 0xFFFFFFFFFFFFFFFF}},
-
-		{i128s("28446744073709551615"), i128s("-28446744073709551615")},
-		{i128s("-28446744073709551615"), i128s("28446744073709551615")},
-
-		// Negating MaxI128 should yield MinI128 + 1:
-		{I128{hi: 0x7FFFFFFFFFFFFFFF, lo: 0xFFFFFFFFFFFFFFFF}, I128{hi: 0x8000000000000000, lo: 1}},
-
-		// Negating MinI128 should yield MinI128:
-		{I128{hi: 0x8000000000000000, lo: 0}, I128{hi: 0x8000000000000000, lo: 0}},
-	} {
-		t.Run(fmt.Sprintf("%d/-%s=%s", idx, tc.a, tc.b), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			result := tc.a.Neg()
-			tt.MustAssert(tc.b.Equal(result))
-		})
-	}
-}
-
-func TestI128Add(t *testing.T) {
-	for idx, tc := range []struct {
-		a, b, c I128
-	}{
-		{i64(-2), i64(-1), i64(-3)},
-		{i64(-2), i64(1), i64(-1)},
-		{i64(-1), i64(1), i64(0)},
-		{i64(1), i64(2), i64(3)},
-		{i64(10), i64(3), i64(13)},
-
-		// Hi/lo carry:
-		{I128{lo: 0xFFFFFFFFFFFFFFFF}, i64(1), I128{hi: 1, lo: 0}},
-		{I128{hi: 1, lo: 0}, i64(-1), I128{lo: 0xFFFFFFFFFFFFFFFF}},
-
-		// Overflow:
-		{I128{hi: 0xFFFFFFFFFFFFFFFF, lo: 0xFFFFFFFFFFFFFFFF}, i64(1), I128{}},
-
-		// Overflow wraps:
-		{MaxI128, i64(1), MinI128},
-	} {
-		t.Run(fmt.Sprintf("%d/%s+%s=%s", idx, tc.a, tc.b, tc.c), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			tt.MustAssert(tc.c.Equal(tc.a.Add(tc.b)))
-		})
-	}
-}
-
-func TestI128Sub(t *testing.T) {
-	for idx, tc := range []struct {
-		a, b, c I128
-	}{
-		{i64(-2), i64(-1), i64(-1)},
-		{i64(-2), i64(1), i64(-3)},
-		{i64(2), i64(1), i64(1)},
-		{i64(2), i64(-1), i64(3)},
-		{i64(1), i64(2), i64(-1)},  // crossing zero
-		{i64(-1), i64(-2), i64(1)}, // crossing zero
-
-		{MinI128, i64(1), MaxI128},  // Overflow wraps
-		{MaxI128, i64(-1), MinI128}, // Overflow wraps
-
-		{i128s("0x10000000000000000"), i64(1), i128s("0xFFFFFFFFFFFFFFFF")},  // carry down
-		{i128s("0xFFFFFFFFFFFFFFFF"), i64(-1), i128s("0x10000000000000000")}, // carry up
-
-		// {i64(maxInt64), i64(1), i128s("18446744073709551616")}, // lo carries to hi
-		// {i128s("18446744073709551615"), i128s("18446744073709551615"), i128s("36893488147419103230")},
-	} {
-		t.Run(fmt.Sprintf("%d/%s-%s=%s", idx, tc.a, tc.b, tc.c), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			tt.MustAssert(tc.c.Equal(tc.a.Sub(tc.b)))
-		})
-	}
-}
-
-func TestI128Inc(t *testing.T) {
-	for _, tc := range []struct {
-		a, b I128
-	}{
-		{i64(-1), i64(0)},
-		{i64(-2), i64(-1)},
-		{i64(1), i64(2)},
-		{i64(10), i64(11)},
-		{i64(maxInt64), i128s("9223372036854775808")},
-		{i128s("18446744073709551616"), i128s("18446744073709551617")},
-		{i128s("-18446744073709551617"), i128s("-18446744073709551616")},
-	} {
-		t.Run(fmt.Sprintf("%s+1=%s", tc.a, tc.b), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			inc := tc.a.Inc()
-			tt.MustAssert(tc.b.Equal(inc), "%s + 1 != %s, found %s", tc.a, tc.b, inc)
-		})
-	}
-}
-
-func TestI128Dec(t *testing.T) {
-	for _, tc := range []struct {
-		a, b I128
-	}{
-		{i64(1), i64(0)},
-		{i64(10), i64(9)},
-		// {i64(maxUint64), i128s("18446744073709551614")},
-		// {i64(0), MaxI128},
-		// {i64(maxUint64).Add(i64(1)), i64(maxUint64)},
-	} {
-		t.Run(fmt.Sprintf("%s-1=%s", tc.a, tc.b), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			dec := tc.a.Dec()
-			tt.MustAssert(tc.b.Equal(dec), "%s - 1 != %s, found %s", tc.a, tc.b, dec)
-		})
-	}
-}
-
-func TestI128Mul(t *testing.T) {
-	for _, tc := range []struct {
-		a, b, out I128
-	}{
-		{i64(1), i64(0), i64(0)},
-		{i64(-2), i64(2), i64(-4)},
-		{i64(-2), i64(-2), i64(4)},
-		{i64(10), i64(9), i64(90)},
-		{i64(maxInt64), i64(maxInt64), i128s("85070591730234615847396907784232501249")},
-	} {
-		t.Run(fmt.Sprintf("%s*%s=%s", tc.a, tc.b, tc.out), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-
-			v := tc.a.Mul(tc.b)
-			tt.MustAssert(tc.out.Equal(v), "%s * %s != %s, found %s", tc.a, tc.b, tc.out, v)
-		})
-	}
-}
-
-func TestI128Div(t *testing.T) {
-	for _, tc := range []struct {
-		i, by, q, r I128
-	}{
-		{i: i64(1), by: i64(2), q: i64(0), r: i64(1)},
-		{i: i64(10), by: i64(3), q: i64(3), r: i64(1)},
-		{i: i64(10), by: i64(-3), q: i64(-3), r: i64(1)},
-	} {
-		t.Run(fmt.Sprintf("%s÷%s=%s,%s", tc.i, tc.by, tc.q, tc.r), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			q, r := tc.i.QuoRem(tc.by)
-			tt.MustEqual(tc.q.String(), q.String())
-			tt.MustEqual(tc.r.String(), r.String())
-
-			iBig := tc.i.AsBigInt()
-			byBig := tc.by.AsBigInt()
-
-			qBig, rBig := new(big.Int).Set(iBig), new(big.Int).Set(iBig)
-			qBig = qBig.Div(qBig, byBig)
-			rBig = rBig.Mod(rBig, byBig)
-
-			tt.MustEqual(tc.q.String(), qBig.String())
-			tt.MustEqual(tc.r.String(), rBig.String())
 		})
 	}
 }
@@ -297,6 +98,72 @@ func TestI128AsFloat64(t *testing.T) {
 	}
 }
 
+func TestI128Add(t *testing.T) {
+	for idx, tc := range []struct {
+		a, b, c I128
+	}{
+		{i64(-2), i64(-1), i64(-3)},
+		{i64(-2), i64(1), i64(-1)},
+		{i64(-1), i64(1), i64(0)},
+		{i64(1), i64(2), i64(3)},
+		{i64(10), i64(3), i64(13)},
+
+		// Hi/lo carry:
+		{I128{lo: 0xFFFFFFFFFFFFFFFF}, i64(1), I128{hi: 1, lo: 0}},
+		{I128{hi: 1, lo: 0}, i64(-1), I128{lo: 0xFFFFFFFFFFFFFFFF}},
+
+		// Overflow:
+		{I128{hi: 0xFFFFFFFFFFFFFFFF, lo: 0xFFFFFFFFFFFFFFFF}, i64(1), I128{}},
+
+		// Overflow wraps:
+		{MaxI128, i64(1), MinI128},
+	} {
+		t.Run(fmt.Sprintf("%d/%s+%s=%s", idx, tc.a, tc.b, tc.c), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			tt.MustAssert(tc.c.Equal(tc.a.Add(tc.b)))
+		})
+	}
+}
+
+func TestI128Dec(t *testing.T) {
+	for _, tc := range []struct {
+		a, b I128
+	}{
+		{i64(1), i64(0)},
+		{i64(10), i64(9)},
+		{MinI128, MaxI128}, // underflow
+		{I128{hi: 1}, I128{lo: 0xFFFFFFFFFFFFFFFF}}, // carry
+	} {
+		t.Run(fmt.Sprintf("%s-1=%s", tc.a, tc.b), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			dec := tc.a.Dec()
+			tt.MustAssert(tc.b.Equal(dec), "%s - 1 != %s, found %s", tc.a, tc.b, dec)
+		})
+	}
+}
+
+func TestI128FromBigInt(t *testing.T) {
+	for idx, tc := range []struct {
+		a *big.Int
+		b I128
+	}{
+		{bigI64(0), i64(0)},
+		{bigI64(2), i64(2)},
+		{bigI64(-2), i64(-2)},
+		{bigs("18446744073709551616"), I128{0x1, 0x0}}, // 1 << 64
+		{bigs("36893488147419103231"), I128{0x1, 0xFFFFFFFFFFFFFFFF}}, // (1<<65) - 1
+		{bigs("28446744073709551615"), i128s("28446744073709551615")},
+		{bigs("170141183460469231731687303715884105727"), i128s("170141183460469231731687303715884105727")},
+		{bigs("-1"), I128{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}},
+	} {
+		t.Run(fmt.Sprintf("%d/%s=%d,%d", idx, tc.a, tc.b.lo, tc.b.hi), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			v := accI128FromBigInt(tc.a)
+			tt.MustAssert(tc.b.Cmp(v) == 0, "found: (%d, %d), expected (%d, %d)", v.hi, v.lo, tc.b.hi, tc.b.lo)
+		})
+	}
+}
+
 func TestI128FromFloat64Random(t *testing.T) {
 	tt := assert.WrapTB(t)
 
@@ -320,20 +187,152 @@ func TestI128FromFloat64Random(t *testing.T) {
 	}
 }
 
-var (
-	BenchIResult I128
-)
+func TestI128FromSize(t *testing.T) {
+	tt := assert.WrapTB(t)
+	tt.MustEqual(I128From8(127), i128s("127"))
+	tt.MustEqual(I128From8(-128), i128s("-128"))
+	tt.MustEqual(I128From16(32767), i128s("32767"))
+	tt.MustEqual(I128From16(-32768), i128s("-32768"))
+	tt.MustEqual(I128From32(2147483647), i128s("2147483647"))
+	tt.MustEqual(I128From32(-2147483648), i128s("-2147483648"))
+}
 
-func BenchmarkI128Sub(b *testing.B) {
-	sub := i64(1)
-	for _, iv := range []I128{i64(1), i128s("0x10000000000000000"), MaxI128} {
-		b.Run(fmt.Sprintf("%s", iv), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				BenchIResult = iv.Sub(sub)
-			}
+func TestI128Inc(t *testing.T) {
+	for _, tc := range []struct {
+		a, b I128
+	}{
+		{i64(-1), i64(0)},
+		{i64(-2), i64(-1)},
+		{i64(1), i64(2)},
+		{i64(10), i64(11)},
+		{i64(maxInt64), i128s("9223372036854775808")},
+		{i128s("18446744073709551616"), i128s("18446744073709551617")},
+		{i128s("-18446744073709551617"), i128s("-18446744073709551616")},
+	} {
+		t.Run(fmt.Sprintf("%s+1=%s", tc.a, tc.b), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			inc := tc.a.Inc()
+			tt.MustAssert(tc.b.Equal(inc), "%s + 1 != %s, found %s", tc.a, tc.b, inc)
 		})
 	}
 }
+
+func TestI128Mul(t *testing.T) {
+	for _, tc := range []struct {
+		a, b, out I128
+	}{
+		{i64(1), i64(0), i64(0)},
+		{i64(-2), i64(2), i64(-4)},
+		{i64(-2), i64(-2), i64(4)},
+		{i64(10), i64(9), i64(90)},
+		{i64(maxInt64), i64(maxInt64), i128s("85070591730234615847396907784232501249")},
+		{i64(minInt64), i64(minInt64), i128s("85070591730234615865843651857942052864")},
+		{i64(minInt64), i64(maxInt64), i128s("-85070591730234615856620279821087277056")},
+		{MaxI128, i64(2), i128s("-2")}, // Overflow. "math.MaxInt64 * 2" produces the same result, "-2".
+		{MaxI128, MaxI128, i128s("1")}, // Overflow
+	} {
+		t.Run(fmt.Sprintf("%s*%s=%s", tc.a, tc.b, tc.out), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+
+			v := tc.a.Mul(tc.b)
+			tt.MustAssert(tc.out.Equal(v), "%s * %s != %s, found %s", tc.a, tc.b, tc.out, v)
+		})
+	}
+}
+
+func TestI128Neg(t *testing.T) {
+	for idx, tc := range []struct {
+		a, b I128
+	}{
+		{i64(0), i64(0)},
+		{i64(-2), i64(2)},
+		{i64(2), i64(-2)},
+
+		// hi/lo carry:
+		{I128{lo: 0xFFFFFFFFFFFFFFFF}, I128{hi: 0xFFFFFFFFFFFFFFFF, lo: 1}},
+		{I128{hi: 0xFFFFFFFFFFFFFFFF, lo: 1}, I128{lo: 0xFFFFFFFFFFFFFFFF}},
+
+		{i128s("28446744073709551615"), i128s("-28446744073709551615")},
+		{i128s("-28446744073709551615"), i128s("28446744073709551615")},
+
+		// Negating MaxI128 should yield MinI128 + 1:
+		{I128{hi: 0x7FFFFFFFFFFFFFFF, lo: 0xFFFFFFFFFFFFFFFF}, I128{hi: 0x8000000000000000, lo: 1}},
+
+		// Negating MinI128 should yield MinI128:
+		{I128{hi: 0x8000000000000000, lo: 0}, I128{hi: 0x8000000000000000, lo: 0}},
+	} {
+		t.Run(fmt.Sprintf("%d/-%s=%s", idx, tc.a, tc.b), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			result := tc.a.Neg()
+			tt.MustAssert(tc.b.Equal(result))
+		})
+	}
+}
+
+func TestI128QuoRem(t *testing.T) {
+	for _, tc := range []struct {
+		i, by, q, r I128
+	}{
+		{i: i64(1), by: i64(2), q: i64(0), r: i64(1)},
+		{i: i64(10), by: i64(3), q: i64(3), r: i64(1)},
+		{i: i64(10), by: i64(-3), q: i64(-3), r: i64(1)},
+		{i: i64(10), by: i64(10), q: i64(1), r: i64(0)},
+
+		// Hit the 128-bit division 'lz+tz == 127' branch:
+		{i: i128s("0x10000000000000000"), by: i128s("0x10000000000000000"), q: i64(1), r: i64(0)},
+
+		// Hit the 128-bit division 'cmp == 0' branch
+		{i: i128s("0x12345678901234567"), by: i128s("0x12345678901234567"), q: i64(1), r: i64(0)},
+	} {
+		t.Run(fmt.Sprintf("%s÷%s=%s,%s", tc.i, tc.by, tc.q, tc.r), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			q, r := tc.i.QuoRem(tc.by)
+			tt.MustEqual(tc.q.String(), q.String())
+			tt.MustEqual(tc.r.String(), r.String())
+
+			iBig := tc.i.AsBigInt()
+			byBig := tc.by.AsBigInt()
+
+			qBig, rBig := new(big.Int).Set(iBig), new(big.Int).Set(iBig)
+			qBig = qBig.Div(qBig, byBig)
+			rBig = rBig.Mod(rBig, byBig)
+
+			tt.MustEqual(tc.q.String(), qBig.String())
+			tt.MustEqual(tc.r.String(), rBig.String())
+		})
+	}
+}
+
+func TestI128Sub(t *testing.T) {
+	for idx, tc := range []struct {
+		a, b, c I128
+	}{
+		{i64(-2), i64(-1), i64(-1)},
+		{i64(-2), i64(1), i64(-3)},
+		{i64(2), i64(1), i64(1)},
+		{i64(2), i64(-1), i64(3)},
+		{i64(1), i64(2), i64(-1)},  // crossing zero
+		{i64(-1), i64(-2), i64(1)}, // crossing zero
+
+		{MinI128, i64(1), MaxI128},  // Overflow wraps
+		{MaxI128, i64(-1), MinI128}, // Overflow wraps
+
+		{i128s("0x10000000000000000"), i64(1), i128s("0xFFFFFFFFFFFFFFFF")},  // carry down
+		{i128s("0xFFFFFFFFFFFFFFFF"), i64(-1), i128s("0x10000000000000000")}, // carry up
+
+		// {i64(maxInt64), i64(1), i128s("18446744073709551616")}, // lo carries to hi
+		// {i128s("18446744073709551615"), i128s("18446744073709551615"), i128s("36893488147419103230")},
+	} {
+		t.Run(fmt.Sprintf("%d/%s-%s=%s", idx, tc.a, tc.b, tc.c), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			tt.MustAssert(tc.c.Equal(tc.a.Sub(tc.b)))
+		})
+	}
+}
+
+var (
+	BenchIResult I128
+)
 
 func BenchmarkI128LessThan(b *testing.B) {
 	for _, iv := range []struct {
@@ -349,6 +348,17 @@ func BenchmarkI128LessThan(b *testing.B) {
 		b.Run(fmt.Sprintf("%s<%s", iv.a, iv.b), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				BenchBoolResult = iv.a.LessThan(iv.b)
+			}
+		})
+	}
+}
+
+func BenchmarkI128Sub(b *testing.B) {
+	sub := i64(1)
+	for _, iv := range []I128{i64(1), i128s("0x10000000000000000"), MaxI128} {
+		b.Run(fmt.Sprintf("%s", iv), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				BenchIResult = iv.Sub(sub)
 			}
 		})
 	}
