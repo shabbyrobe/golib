@@ -6,6 +6,13 @@ import (
 	"io"
 )
 
+// Negotiator negotiates the Protocol used by the client and the server.
+// Negotiation should perform at least one write and read using the
+// Communicator. Be careful to ensure that your negotiator doesn't limit your
+// ability to upgrade the protocol in the future; that's the whole point of it.
+//
+// See NewVersionNegotiator for a quick way to include support for version
+// negotiation.
 type Negotiator interface {
 	Negotiate(Side, Communicator, ConnConfig) (Protocol, error)
 }

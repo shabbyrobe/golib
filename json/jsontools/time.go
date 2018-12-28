@@ -3,45 +3,8 @@ package jsontools
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"strconv"
-	"time"
-
-	"github.com/shabbyrobe/golib/times"
 )
-
-type FloatTimeSecs time.Time
-
-func (t FloatTimeSecs) MarshalJSON() ([]byte, error) {
-	return json.Marshal(times.ToFloat64Secs(time.Time(t)))
-}
-
-func (t *FloatTimeSecs) UnmarshalJSON(b []byte) error {
-	var f float64
-	if err := json.Unmarshal(b, &f); err != nil {
-		return err
-	}
-	*t = FloatTimeSecs(times.FromFloat64Secs(f))
-	return nil
-}
-
-type IntTimeSecs time.Time
-
-func (t IntTimeSecs) MarshalJSON() ([]byte, error) {
-	return json.Marshal(time.Time(t).Unix())
-}
-
-func (t *IntTimeSecs) UnmarshalJSON(b []byte) error {
-	var f float64
-	if err := json.Unmarshal(b, &f); err != nil {
-		return err
-	}
-	if math.IsNaN(f) || math.IsInf(f, 0) {
-		return fmt.Errorf("input %q is an invalid unix time", string(b))
-	}
-	*t = IntTimeSecs(time.Unix(int64(math.RoundToEven(f)), 0))
-	return nil
-}
 
 // StringFromScalar forces any scalar value (numeric, bool, string, null)
 // to be a string. Useful for murky APIs where you are building a struct but

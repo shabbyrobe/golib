@@ -334,54 +334,6 @@ func (sc *wsServerCommand) Run(ctx cmdy.Context) error {
 	return <-ender.Ends()
 }
 
-type VersionNegotiator struct {
-	Protocols map[uint32]socketsrv.Protocol
-	Timeout   time.Duration
-}
-
-func (v *VersionNegotiator) Negotiate(side socketsrv.Side, c socketsrv.Communicator) (socketsrv.Protocol, error) {
-	timeout := v.Timeout
-	if timeout <= 0 {
-		timeout = 10 * time.Second
-	}
-
-	var oursBuf = make([]byte, len(v.Protocols)*4)
-	i := 0
-	for v := range v.Protocols {
-		encoding.PutUint32(oursBuf[i:], v)
-		i += 4
-	}
-	if err := c.WriteMessage(oursBuf, timeout); err != nil {
-		return nil, err
-	}
-
-	msg, err := c.ReadMessage(nil, 1024, timeout)
-	if err != nil {
-		return nil, err
-	}
-	if len(msg)%4 != 0 {
-		return nil, fmt.Errorf("unexpected remote versions")
-	}
-
-	var max uint32
-	var found bool
-	for i := 0; i < len(msg); i += 4 {
-		cur := encoding.Uint32(msg[i:])
-		if _, ok := v.Protocols[cur]; ok {
-			found = true
-			if cur > max {
-				max = cur
-			}
-		}
-	}
-
-	if !found {
-		return nil, fmt.Errorf("could not negotiate protocol")
-	}
-
-	return v.Protocols[max], nil
-}
-
 type SimpleCodec struct{}
 
 var _ socketsrv.Codec = SimpleCodec{}
