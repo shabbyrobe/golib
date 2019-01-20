@@ -4,6 +4,12 @@ import (
 	"errors"
 )
 
+const (
+	// 4 bits encoding the number of trailing zeros, then 64 bits of data.
+	// 68 bits broken into 7 bit chunks == 10 bytes.
+	MaxLen64 = 10
+)
+
 // PutUvarint encodes a uint64 into buf and returns the number of bytes written.
 // If the buffer is too small, PutUvarint will panic.
 func PutUvarint(buf []byte, x uint64) int {
