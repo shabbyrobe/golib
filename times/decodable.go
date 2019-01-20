@@ -10,10 +10,14 @@ import (
 
 // DurationString provides a time.Duration that marshals to/from a string
 // using time.Duration.String()/time.ParseDuration().
-type DurationString time.Duration
+type DurationString struct {
+	// Turns out wrapping the type in a struct is ever so slightly faster than
+	// deriving ('type DurationString time.Duration').
+	time.Duration
+}
 
 func (d DurationString) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + time.Duration(d).String() + `"`), nil
+	return []byte(`"` + d.Duration.String() + `"`), nil
 }
 
 func (d *DurationString) UnmarshalJSON(b []byte) (err error) {
@@ -25,10 +29,36 @@ func (d *DurationString) UnmarshalJSON(b []byte) (err error) {
 	if err != nil {
 		return err
 	}
-	*d = DurationString(td)
+	*d = DurationString{td}
 	return nil
 }
 
+// DurationMsecFloat provides a time.Duration that marshals to/from a float
+// representing milliseconds.
+type DurationMsecFloat time.Duration
+
+func (d DurationMsecFloat) String() string {
+	return time.Duration(d).String()
+}
+
+func (d DurationMsecFloat) MarshalJSON() ([]byte, error) {
+	fv := float64(d) / float64(time.Millisecond)
+	fs := strconv.FormatFloat(fv, 'f', 9, 64)
+	return []byte(fs), nil
+}
+
+func (d *DurationMsecFloat) UnmarshalJSON(b []byte) (err error) {
+	fv, err := strconv.ParseFloat(string(b), 64)
+	if err != nil {
+		return err
+	}
+	fd := time.Duration(fv * float64(time.Millisecond))
+	*d = DurationMsecFloat(fd)
+	return nil
+}
+
+// UnixSecInt provides a time.Time that marshals to/from an int representing
+// the number of whole seconds since the Unix epoch.
 type UnixSecInt time.Time
 
 func (u UnixSecInt) Time() time.Time {
@@ -53,6 +83,8 @@ func (u *UnixSecInt) UnmarshalJSON(bts []byte) error {
 	return nil
 }
 
+// UnixSecInt provides a time.Time that marshals to/from a float representing
+// the number of whole or partial seconds since the Unix epoch.
 type UnixSecFloat time.Time
 
 func (u UnixSecFloat) Time() time.Time {
@@ -76,6 +108,8 @@ func (u *UnixSecFloat) UnmarshalJSON(bts []byte) error {
 	return nil
 }
 
+// UnixMsecInt provides a time.Time that marshals to/from an int representing
+// the number of whole milliseconds since the Unix epoch.
 type UnixMsecInt time.Time
 
 func (u UnixMsecInt) Time() time.Time {
@@ -100,6 +134,8 @@ func (u *UnixMsecInt) UnmarshalJSON(bts []byte) error {
 	return nil
 }
 
+// UnixMsecFloat provides a time.Time that marshals to/from a float representing
+// the number of whole or partial milliseconds since the Unix epoch.
 type UnixMsecFloat time.Time
 
 func (u UnixMsecFloat) Time() time.Time {

@@ -53,3 +53,14 @@ func TestUnixMsecInt(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkDurationString(b *testing.B) {
+	var ds DurationString
+	var in = []byte(`"1m"`)
+
+	for i := 0; i < b.N; i++ {
+		if err := json.Unmarshal(in, &ds); err != nil {
+			panic(err)
+		}
+	}
+}
