@@ -1,4 +1,4 @@
-package fixvarint
+package fixvarnum
 
 import (
 	"errors"
@@ -14,7 +14,7 @@ const (
 
 // PutUvarint encodes a uint64 into buf and returns the number of bytes written.
 // If the buffer is too small, PutUvarint will panic.
-func PutUvarint(buf []byte, x num.U128) int {
+func PutU128(buf []byte, x num.U128) int {
 	var xhi, xlo = x.Raw()
 	var zeros byte
 
@@ -103,9 +103,17 @@ func PutUvarint(buf []byte, x num.U128) int {
 
 	for {
 		if i == 9 {
-			// if we have written 9 bytes, we have shifted 59 bits off xlo (3
-			// initial bits + 8x7 bits):
-			xv = ((xlo >> 59) | (xhi << 5)) & 0xFF
+			// If we have written 9 bytes, we have shifted 59 bits off xlo (3
+			// initial bits + 8x7 bits).
+			//
+			// BW: I had to think a little harder than I'd care to admit about whether
+			// the hi bits go first or the lo bits.
+			xv = ((xhi << 5) | (xlo >> 59)) & 0xFF
+
+			// This means the composition of the join byte (the byte that crosses the gap
+			// between hi and lo) is like so (where x is the continuation bit):
+			//   x H H L L L L L
+
 		} else if i == 10 {
 			// remaining 59 bits of xhi:
 			xv = xhi >> 5
@@ -123,7 +131,7 @@ func PutUvarint(buf []byte, x num.U128) int {
 	return i + 1
 }
 
-// Uvarint decodes a num.U128 from buf and returns that value and the
+// U128 decodes a num.U128 from buf and returns that value and the
 // number of bytes read (> 0). If an error occurred, the value is 0
 // and the number of bytes n is <= 0 meaning:
 //
@@ -131,12 +139,12 @@ func PutUvarint(buf []byte, x num.U128) int {
 // 	n  < 0: value larger than 128 bits (overflow)
 // 	        and -n is the number of bytes read
 //
-func Uvarint(buf []byte) (out num.U128, n int) {
-	var x uint64
-	var s uint = 3
+func U128(buf []byte) (out num.U128, n int) {
+	var shift uint = 3
+	var lo, hi uint64
 
 	zeros := (buf[0] >> 3) & 0xF
-	x = uint64(buf[0] & 0x7)
+	lo = uint64(buf[0] & 0x7)
 
 	n = 1
 	if buf[0] < 0x80 {
@@ -144,24 +152,46 @@ func Uvarint(buf []byte) (out num.U128, n int) {
 	}
 
 	for i, b := range buf[1:] {
-		if b < 0x80 {
+		if i > 9 {
 			if i >= MaxLen128 || i == (MaxLen128-1) && b > 1 {
 				return out, -(i + 1) // overflow
 			}
 
-			x, n = x|uint64(b)<<s, i+2 // +1 for the slice offset, +1 to convert from 0-index
+			if b < 0x80 {
+				hi, n = hi|uint64(b)<<shift, i+2 // +1 for the slice offset, +1 to convert from 0-index
+				goto done
+			}
+			hi |= uint64(b&0x7f) << shift
+			shift += 7
 
-			goto done
+		} else if i == 9 {
+			// if we have read 9 bytes, we have accumulated 59 bits of the lo number.
+			// after the continuation bit, the high 2 bits of the current byte belong
+			// to the hi number of the U128, and the low 5 belong to the lo:
+			//   x H H L L L L L
+			if b < 0x80 {
+				lo, hi, n = lo|(uint64(b)<<shift), uint64(b>>5), i+2 // +1 for the slice offset, +1 to convert from 0-index
+				goto done
+			}
+			lo, hi = lo|(uint64(b&0x7f)<<shift), (uint64(b&0x7f) >> 5)
+			shift = 2
+
+		} else {
+			if b < 0x80 {
+				lo, n = lo|uint64(b)<<shift, i+2 // +1 for the slice offset, +1 to convert from 0-index
+				goto done
+			}
+			lo |= uint64(b&0x7f) << shift
+			shift += 7
 		}
-		x |= uint64(b&0x7f) << s
-		s += 7
 	}
 
 done:
+	out = num.U128FromRaw(hi, lo)
 	if zeros > 0 {
-		x *= zumul[zeros]
+		out = out.Mul(zumul[zeros])
 	}
-	return x, n
+	return out, n
 }
 
 /*
@@ -558,7 +588,24 @@ done:
 
 var (
 	zmul  = [...]int64{0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15}
-	zumul = [...]uint64{0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15}
+	zumul = [...]num.U128{
+		num.U128From64(0),
+		num.U128From64(1e1),
+		num.U128From64(1e2),
+		num.U128From64(1e3),
+		num.U128From64(1e4),
+		num.U128From64(1e5),
+		num.U128From64(1e6),
+		num.U128From64(1e7),
+		num.U128From64(1e8),
+		num.U128From64(1e9),
+		num.U128From64(1e10),
+		num.U128From64(1e11),
+		num.U128From64(1e12),
+		num.U128From64(1e13),
+		num.U128From64(1e14),
+		num.U128From64(1e15),
+	}
 
 	overflow = errors.New("fixvarint: varint overflows a 64-bit integer")
 )

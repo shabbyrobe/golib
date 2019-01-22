@@ -1,4 +1,4 @@
-package fixvarint
+package fixvarnum
 
 import (
 	"fmt"
