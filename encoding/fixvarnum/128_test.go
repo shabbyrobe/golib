@@ -7,62 +7,64 @@ import (
 	"testing"
 	"time"
 
+	num "github.com/shabbyrobe/go-num"
 	"github.com/shabbyrobe/golib/assert"
 )
 
 const FuzzIterations = 1e6
 
-func assertUint(tt assert.T, v uint64, scratch []byte) {
+func assertU128(tt assert.T, v num.U128, scratch []byte) {
 	tt.Helper()
-	n := PutUvarint(scratch, v)
+	n := PutU128(scratch, v)
 
-	vd, _ := Uvarint(scratch[:n])
+	vd, _ := U128(scratch[:n])
 	tt.MustEqual(v, vd)
 
-	vd, _ = UvarintTurbo(scratch[:n])
-	tt.MustEqual(v, vd)
+	// vd, _ = UvarintTurbo(scratch[:n])
+	// tt.MustEqual(v, vd)
 }
 
-func assertUintSz(tt assert.T, v uint64, sz int, scratch []byte) {
+func assertUintSz(tt assert.T, v num.U128, sz int, scratch []byte) {
 	tt.Helper()
-	n := PutUvarint(scratch, v)
+	n := PutU128(scratch, v)
 
-	vd, osz := Uvarint(scratch[:n])
+	vd, osz := U128(scratch[:n])
 	tt.MustEqual(v, vd)
 	tt.MustEqual(sz, n)
 	tt.MustEqual(sz, osz)
 
-	vd, osz = UvarintTurbo(scratch[:n])
-	tt.MustEqual(v, vd)
-	tt.MustEqual(sz, n)
-	tt.MustEqual(sz, osz)
+	// vd, osz = UvarintTurbo(scratch[:n])
+	// tt.MustEqual(v, vd)
+	// tt.MustEqual(sz, n)
+	// tt.MustEqual(sz, osz)
 }
 
-func assertInt(tt assert.T, v int64, scratch []byte) {
-	tt.Helper()
-	n := PutVarint(scratch, v)
-
-	vd, _ := Varint(scratch[:n])
-	tt.MustEqual(v, vd)
-
-	vd, _ = VarintTurbo(scratch[:n])
-	tt.MustEqual(v, vd)
-}
-
-func assertIntSz(tt assert.T, v int64, sz int, scratch []byte) {
-	tt.Helper()
-	n := PutVarint(scratch, v)
-
-	vd, osz := Varint(scratch[:n])
-	tt.MustEqual(v, vd)
-	tt.MustEqual(sz, n)
-	tt.MustEqual(sz, osz)
-
-	vd, osz = VarintTurbo(scratch[:n])
-	tt.MustEqual(v, vd)
-	tt.MustEqual(sz, n)
-	tt.MustEqual(sz, osz)
-}
+// func assertInt(tt assert.T, v int64, scratch []byte) {
+//     tt.Helper()
+//     n := PutVarint(scratch, v)
+//
+//     vd, _ := Varint(scratch[:n])
+//     tt.MustEqual(v, vd)
+//
+//     vd, _ = VarintTurbo(scratch[:n])
+//     tt.MustEqual(v, vd)
+// }
+//
+// func assertIntSz(tt assert.T, v int64, sz int, scratch []byte) {
+//     tt.Helper()
+//     n := PutVarint(scratch, v)
+//
+//     vd, osz := Varint(scratch[:n])
+//     tt.MustEqual(v, vd)
+//     tt.MustEqual(sz, n)
+//     tt.MustEqual(sz, osz)
+//
+//     vd, osz = VarintTurbo(scratch[:n])
+//     tt.MustEqual(v, vd)
+//     tt.MustEqual(sz, n)
+//     tt.MustEqual(sz, osz)
+// }
+//
 
 /*
 func TestVarUintOverflow(t *testing.T) {
@@ -82,7 +84,7 @@ func TestVarUintOverflow(t *testing.T) {
 func TestVarUintZero(t *testing.T) {
 	tt := assert.WrapTB(t)
 	b := make([]byte, 16)
-	assertUintSz(tt, 0, 1, b)
+	assertUintSz(tt, num.U128{}, 1, b)
 }
 
 func TestVarUintSz(t *testing.T) {
@@ -90,7 +92,7 @@ func TestVarUintSz(t *testing.T) {
 
 	for _, tc := range []struct {
 		sz int
-		in uint64
+		in num.U128
 	}{
 		{1, 1},
 		{1, 7},
