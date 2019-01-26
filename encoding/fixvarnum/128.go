@@ -12,77 +12,82 @@ const (
 	MaxLen128 = 19
 )
 
+var zeroU128 num.U128
+
 // PutUvarint encodes a uint64 into buf and returns the number of bytes written.
 // If the buffer is too small, PutUvarint will panic.
 func PutU128(buf []byte, x num.U128) int {
 	var xhi, xlo = x.Raw()
 	var zeros byte
 
-	if xlo != 0 && xlo%10 == 0 {
-		if xlo%1e8 != 0 { // <8
-			if xlo%1e4 != 0 { // <4
-				if xlo%1e2 != 0 { // <2
-					if xlo%1e1 != 0 { // == 0
+	hasTen := x.Rem(zumul[1]).Equal(zeroU128)
+	if x != zeroU128 && hasTen {
+		if !x.Rem(zumul[8]).Equal(zeroU128) { // <8
+			if !x.Rem(zumul[4]).Equal(zeroU128) { // <4
+				if !x.Rem(zumul[2]).Equal(zeroU128) { // <2
+					if !hasTen {
 						// all good
 					} else { // == 1
-						zeros, xlo = 1, xlo/1e1
+						zeros, x = 1, x.Quo(zumul[1])
 					}
 				} else { // >=2, <4
-					if xlo%1e3 != 0 { // == 2
-						zeros, xlo = 2, xlo/100
+					if !x.Rem(zumul[3]).Equal(zeroU128) { // == 2
+						zeros, x = 2, x.Quo(zumul[2])
 					} else { // == 3
-						zeros, xlo = 3, xlo/1000
+						zeros, x = 3, x.Quo(zumul[3])
 					}
 				}
 
 			} else { // >=4, <8
-				if xlo%1e6 != 0 { // >=4, <6
-					if xlo%1e5 != 0 { // == 4
-						zeros, xlo = 4, xlo/1e4
+				if !x.Rem(zumul[6]).Equal(zeroU128) { // >=4, <6
+					if !x.Rem(zumul[5]).Equal(zeroU128) { // == 4
+						zeros, x = 4, x.Quo(zumul[4])
 					} else { // == 5
-						zeros, xlo = 5, xlo/1e5
+						zeros, x = 5, x.Quo(zumul[5])
 					}
 				} else { // >= 6, <8
-					if xlo%1e7 != 0 { // == 6
-						zeros, xlo = 6, xlo/1e6
+					if !x.Rem(zumul[7]).Equal(zeroU128) { // == 6
+						zeros, x = 6, x.Quo(zumul[6])
 					} else { // == 7
-						zeros, xlo = 7, xlo/1e7
+						zeros, x = 7, x.Quo(zumul[7])
 					}
 				}
 			}
 
 		} else { // >= 8, <16
-			if xlo%1e12 != 0 { // >= 8, <12
-				if xlo%1e10 != 0 { // >= 8, <10
-					if xlo%1e9 != 0 { // == 8
-						zeros, xlo = 8, xlo/1e8
+			if !x.Rem(zumul[12]).Equal(zeroU128) { // >= 8, <12
+				if !x.Rem(zumul[10]).Equal(zeroU128) { // >= 8, <10
+					if !x.Rem(zumul[9]).Equal(zeroU128) { // == 8
+						zeros, x = 8, x.Quo(zumul[8])
 					} else { // == 9
-						zeros, xlo = 9, xlo/1e9
+						zeros, x = 9, x.Quo(zumul[9])
 					}
 				} else { // >=10, <12
-					if xlo%1e11 != 0 { // == 10
-						zeros, xlo = 10, xlo/1e10
+					if !x.Rem(zumul[11]).Equal(zeroU128) { // == 10
+						zeros, x = 10, x.Quo(zumul[10])
 					} else { // == 11
-						zeros, xlo = 11, xlo/1e11
+						zeros, x = 11, x.Quo(zumul[11])
 					}
 				}
 
 			} else { // >=12, <16
-				if xlo%1e14 != 0 { // >=12, <14
-					if xlo%1e13 != 0 { // == 12
-						zeros, xlo = 12, xlo/1e12
+				if !x.Rem(zumul[14]).Equal(zeroU128) { // >=12, <14
+					if !x.Rem(zumul[13]).Equal(zeroU128) { // == 12
+						zeros, x = 12, x.Quo(zumul[12])
 					} else { // == 13
-						zeros, xlo = 13, xlo/1e13
+						zeros, x = 13, x.Quo(zumul[13])
 					}
 				} else { // >= 14, <16
-					if xlo%1e15 != 0 { // == 14
-						zeros, xlo = 14, xlo/1e14
+					if !x.Rem(zumul[15]).Equal(zeroU128) { // == 14
+						zeros, x = 14, x.Quo(zumul[14])
 					} else { // == 15
-						zeros, xlo = 15, xlo/1e15
+						zeros, x = 15, x.Quo(zumul[15])
 					}
 				}
 			}
 		}
+
+		xhi, xlo = x.Raw()
 	}
 
 	i := 0
@@ -90,45 +95,45 @@ func PutU128(buf []byte, x num.U128) int {
 	xv := xlo
 
 	var cont byte
-	if xv >= 0x8 {
+	if xv >= 0x8 || xhi > 0 {
 		cont = 0x80
 	}
 
-	buf[i] = cont | (zeros << 3) | byte(xv&0x7)
+	buf[0] = cont | (zeros << 3) | byte(xv&0x7)
 	xv >>= 3
-	if xv == 0 {
-		return i + 1
-	}
 	i++
 
-	for {
+	for bits := x.BitLen() - 3; bits > 0; bits -= 7 {
 		if i == 9 {
 			// If we have written 9 bytes, we have shifted 59 bits off xlo (3
 			// initial bits + 8x7 bits).
 			//
-			// BW: I had to think a little harder than I'd care to admit about whether
-			// the hi bits go first or the lo bits.
-			xv = ((xhi << 5) | (xlo >> 59)) & 0xFF
-
 			// This means the composition of the join byte (the byte that crosses the gap
 			// between hi and lo) is like so (where x is the continuation bit):
 			//   x H H L L L L L
+			xv = (xhi << 5) | (xlo >> 59)
 
-		} else if i == 10 {
-			// remaining 59 bits of xhi:
-			xv = xhi >> 5
-		}
-		if xv < 0x80 {
-			break
-		}
+			if bits <= 7 {
+				buf[i], i = byte(xv), i+1
+			} else {
+				buf[i], i = byte(xv)|0x80, i+1
+			}
 
-		buf[i] = byte(xv) | 0x80
-		xv >>= 7
-		i++
+			// The previous byte uses 2 bits of xhi, so replace our bit queue
+			// with the remaining 62:
+			xv = xhi >> 2
+
+		} else {
+			if bits <= 7 {
+				buf[i], i = byte(xv), i+1
+			} else {
+				buf[i], i = byte(xv)|0x80, i+1
+			}
+			xv >>= 7
+		}
 	}
 
-	buf[i] = byte(xv)
-	return i + 1
+	return i
 }
 
 // U128 decodes a num.U128 from buf and returns that value and the
@@ -140,10 +145,16 @@ func PutU128(buf []byte, x num.U128) int {
 // 	        and -n is the number of bytes read
 //
 func U128(buf []byte) (out num.U128, n int) {
-	var shift uint = 3
+	var shift uint
 	var lo, hi uint64
+	var b byte
+	var i int
+
+	lim := len(buf)
+	iter := lim
 
 	zeros := (buf[0] >> 3) & 0xF
+	shift = 3
 	lo = uint64(buf[0] & 0x7)
 
 	n = 1
@@ -151,47 +162,70 @@ func U128(buf []byte) (out num.U128, n int) {
 		goto done
 	}
 
-	for i, b := range buf[1:] {
-		if i > 9 {
-			if i >= MaxLen128 || i == (MaxLen128-1) && b > 1 {
-				return out, -(i + 1) // overflow
-			}
+	if iter > 9 {
+		iter = 9
+	}
 
-			if b < 0x80 {
-				hi, n = hi|uint64(b)<<shift, i+2 // +1 for the slice offset, +1 to convert from 0-index
-				goto done
-			}
-			hi |= uint64(b&0x7f) << shift
-			shift += 7
+	for i = 1; i < iter; i++ {
+		b = buf[i]
 
-		} else if i == 9 {
-			// if we have read 9 bytes, we have accumulated 59 bits of the lo number.
-			// after the continuation bit, the high 2 bits of the current byte belong
-			// to the hi number of the U128, and the low 5 belong to the lo:
-			//   x H H L L L L L
-			if b < 0x80 {
-				lo, hi, n = lo|(uint64(b)<<shift), uint64(b>>5), i+2 // +1 for the slice offset, +1 to convert from 0-index
-				goto done
-			}
-			lo, hi = lo|(uint64(b&0x7f)<<shift), (uint64(b&0x7f) >> 5)
-			shift = 2
-
-		} else {
-			if b < 0x80 {
-				lo, n = lo|uint64(b)<<shift, i+2 // +1 for the slice offset, +1 to convert from 0-index
-				goto done
-			}
-			lo |= uint64(b&0x7f) << shift
-			shift += 7
+		if b < 0x80 {
+			lo, n = lo|uint64(b)<<shift, i+1 // +1 to convert from 0-index
+			goto done
 		}
+		lo |= uint64(b&0x7f) << shift
+		shift += 7
+	}
+
+	{ // i == 9
+		b = buf[9]
+		// if we have read 9 bytes, we have accumulated 59 bits of the lo number.
+		// after the continuation bit, the high 2 bits of the current byte belong
+		// to the hi number of the U128, and the low 5 belong to the lo:
+		//   x H H L L L L L
+		if b < 0x80 {
+			lo, hi, n = lo|(uint64(b)<<shift), uint64(b>>5), i+1 // +1 to convert from 0-index
+			goto done
+		}
+		lo, hi = lo|(uint64(b&0x7f)<<shift), (uint64(b&0x7f) >> 5)
+		shift = 2
+	}
+
+	for i = 10; i < lim; i++ {
+		b = buf[i]
+		if i > MaxLen128 || (i == MaxLen128 && b > 1) {
+			return out, -(i + 1) // overflow
+		}
+
+		if b < 0x80 {
+			hi, n = hi|uint64(b)<<shift, i+1 // +1 to convert from 0-index
+			goto done
+		}
+		hi |= uint64(b&0x7f) << shift
+		shift += 7
 	}
 
 done:
-	out = num.U128FromRaw(hi, lo)
-	if zeros > 0 {
-		out = out.Mul(zumul[zeros])
+	if zeros == 0 {
+		return num.U128FromRaw(hi, lo), n
 	}
-	return out, n
+
+	zmlo := zumul64[zeros]
+
+	hl := hi * zmlo
+	lo = lo * zmlo
+
+	// break the multiplication into (x1 << 32 + x0)(y1 << 32 + y0)
+	// which is x1*y1 << 64 + (x0*y1 + x1*y0) << 32 + x0*y0
+	// so now we can do 64 bit multiplication and addition and
+	// shift the results into the right place
+	x0, x1 := lo&0x00000000ffffffff, lo>>32
+	y0, y1 := zmlo&0x00000000ffffffff, zmlo>>32
+	t := x1*y0 + (x0*y0)>>32
+	w1 := (t & 0x00000000ffffffff) + (x0 * y1)
+	hi = (x1 * y1) + (t >> 32) + (w1 >> 32) + hl
+
+	return num.U128FromRaw(hi, lo), n
 }
 
 /*
@@ -605,6 +639,25 @@ var (
 		num.U128From64(1e13),
 		num.U128From64(1e14),
 		num.U128From64(1e15),
+	}
+
+	zumul64 = [...]uint64{
+		0,
+		1e1,
+		1e2,
+		1e3,
+		1e4,
+		1e5,
+		1e6,
+		1e7,
+		1e8,
+		1e9,
+		1e10,
+		1e11,
+		1e12,
+		1e13,
+		1e14,
+		1e15,
 	}
 
 	overflow = errors.New("fixvarint: varint overflows a 64-bit integer")

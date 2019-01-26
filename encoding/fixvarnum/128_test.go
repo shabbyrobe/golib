@@ -3,28 +3,44 @@ package fixvarnum
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"math/rand"
+	"strings"
 	"testing"
-	"time"
 
 	num "github.com/shabbyrobe/go-num"
 	"github.com/shabbyrobe/golib/assert"
 )
 
+var u64 = num.U128From64
+
+func u128s(s string) num.U128 {
+	s = strings.Replace(s, " ", "", -1)
+	b, ok := new(big.Int).SetString(s, 0)
+	if !ok {
+		panic(fmt.Errorf("num: u128 string %q invalid", s))
+	}
+	out, acc := num.U128FromBigInt(b)
+	if !acc {
+		panic(fmt.Errorf("num: inaccurate u128 %s", s))
+	}
+	return out
+}
+
 const FuzzIterations = 1e6
 
-func assertU128(tt assert.T, v num.U128, scratch []byte) {
+func assertU128(tt assert.T, v num.U128, scratch []byte, args ...interface{}) {
 	tt.Helper()
 	n := PutU128(scratch, v)
 
 	vd, _ := U128(scratch[:n])
-	tt.MustEqual(v, vd)
+	tt.MustEqual(v, vd, args...)
 
 	// vd, _ = UvarintTurbo(scratch[:n])
 	// tt.MustEqual(v, vd)
 }
 
-func assertUintSz(tt assert.T, v num.U128, sz int, scratch []byte) {
+func assertU128Sz(tt assert.T, v num.U128, sz int, scratch []byte) {
 	tt.Helper()
 	n := PutU128(scratch, v)
 
@@ -84,7 +100,7 @@ func TestVarUintOverflow(t *testing.T) {
 func TestVarUintZero(t *testing.T) {
 	tt := assert.WrapTB(t)
 	b := make([]byte, 16)
-	assertUintSz(tt, num.U128{}, 1, b)
+	assertU128Sz(tt, num.U128{}, 1, b)
 }
 
 func TestVarUintSz(t *testing.T) {
@@ -94,74 +110,94 @@ func TestVarUintSz(t *testing.T) {
 		sz int
 		in num.U128
 	}{
-		{1, 1},
-		{1, 7},
-		{2, 8},
-		{2, 701},
+		{1, u64(1)},
+		{1, u64(7)},
+		{2, u64(8)},
+		{2, u64(701)},
 
-		{1, 1e1},
-		{1, 1e2},
-		{1, 1e3},
-		{1, 1e4},
-		{1, 1e5},
-		{1, 1e6},
-		{1, 1e7},
-		{1, 1e8},
-		{1, 1e9},
-		{1, 1e10},
-		{1, 1e11},
-		{1, 1e12},
-		{1, 1e13},
-		{1, 1e14},
-		{1, 1e15},
-		{2, 1e16}, // exceeded 4 "zero bits"
-		{9, 11111111111111111},
-		{8, 11111111111111110},
-		{8, 11111111111111100},
-		{7, 11111111111111000},
-		{7, 11111111111110000},
-		{6, 11111111111100000},
-		{6, 11111111111000000},
-		{5, 11111111110000000},
-		{5, 11111111100000000},
-		{4, 11111111000000000},
-		{4, 11111110000000000},
-		{3, 11111100000000000},
-		{3, 11111000000000000},
-		{3, 11110000000000000},
-		{2, 11100000000000000},
-		{2, 11000000000000000},
-		{6, 1<<36 - 1},
-		{7, 1<<41 - 1},
-		{8, 1<<48 - 1},
-		{9, 1<<55 - 1},
-		{10, math.MaxUint64},
+		{1, u64(1e1)},
+		{1, u64(1e2)},
+		{1, u64(1e3)},
+		{1, u64(1e4)},
+		{1, u64(1e5)},
+		{1, u64(1e6)},
+		{1, u64(1e7)},
+		{1, u64(1e8)},
+		{1, u64(1e9)},
+		{1, u64(1e10)},
+		{1, u64(1e11)},
+		{1, u64(1e12)},
+		{1, u64(1e13)},
+		{1, u64(1e14)},
+		{1, u64(1e15)},
+		{2, u64(1e16)}, // exceeded 4 "zero bits"
+		{9, u64(11111111111111111)},
+		{8, u64(11111111111111110)},
+		{8, u64(11111111111111100)},
+		{7, u64(11111111111111000)},
+		{7, u64(11111111111110000)},
+		{6, u64(11111111111100000)},
+		{6, u64(11111111111000000)},
+		{5, u64(11111111110000000)},
+		{5, u64(11111111100000000)},
+		{4, u64(11111111000000000)},
+		{4, u64(11111110000000000)},
+		{3, u64(11111100000000000)},
+		{3, u64(11111000000000000)},
+		{3, u64(11110000000000000)},
+		{2, u64(11100000000000000)},
+		{2, u64(11000000000000000)},
+		{6, u64(1<<36 - 1)},
+		{7, u64(1<<41 - 1)},
+		{8, u64(1<<48 - 1)},
+		{9, u64(1<<55 - 1)},
+		{10, u64(math.MaxUint64)},
 	} {
 		t.Run(fmt.Sprintf("%d", tc.in), func(t *testing.T) {
 			tt := assert.WrapTB(t)
-			assertUintSz(tt, tc.in, tc.sz, b)
+			assertU128Sz(tt, tc.in, tc.sz, b)
 		})
 	}
 }
 
 func TestVarUintFuzz(t *testing.T) {
 	tt := assert.WrapTB(t)
-	b := make([]byte, 16)
+	scratch := make([]byte, MaxLen128)
 
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := 0; i < FuzzIterations; i++ {
-		var mask uint64
-		bits := rand.Intn(64) + 1
-		if bits == 64 {
-			mask = ^uint64(0)
-		} else {
-			mask = (1 << uint(bits)) - 1
+	var seed int64
+	// seed = time.Now().UnixNano()
+	rng := rand.New(rand.NewSource(seed))
+	next := func() (num.U128, uint, bool) {
+		var mask num.U128
+		bits := uint(rng.Intn(128) + 1)
+		if bits == 128 {
+			mask = num.MaxU128
+		} else if bits > 0 {
+			mask = num.U128From64(1).Lsh(bits).Sub(num.U128From64(1))
 		}
-		uv := rng.Uint64() & mask
-		assertUint(tt, uv, b)
+		uv := num.RandU128(rng).And(mask)
+		return uv, bits, false
+	}
+
+	// var x bool
+	// next = func() (num.U128, uint, bool) {
+	//     if x {
+	//         return num.U128{}, 0, true
+	//     }
+	//     x = true
+	//     return num.MustU128FromString("447573512691987709388639"), 128, false
+	// }
+
+	for i := 0; i < FuzzIterations; i++ {
+		uv, bits, stop := next()
+		if stop {
+			break
+		}
+		assertU128(tt, uv, scratch, "failed at index %d with bits %d", i, bits)
 	}
 }
 
+/*
 func TestVarIntFuzz(t *testing.T) {
 	tt := assert.WrapTB(t)
 	b := make([]byte, 16)
@@ -179,63 +215,6 @@ func TestVarIntFuzz(t *testing.T) {
 	}
 }
 
-func TestVarUint(t *testing.T) {
-	b := make([]byte, 16)
-
-	for _, tc := range []struct {
-		sz int
-		in uint64
-	}{
-		{1, 3},
-		{1, 7},
-		{2, 8},
-		{2, 63},
-		{2, 64},
-		{3, 65535},
-		{3, 65536},
-		{1, 500000},
-		{4, 500001},
-
-		{1, 1},
-		{1, 1e1},
-		{1, 1e2},
-		{1, 1e3},
-		{1, 1e4},
-		{1, 1e5},
-		{1, 1e6},
-		{1, 1e7},
-		{1, 1e8},
-		{1, 1e9},
-		{1, 1e10},
-		{1, 1e11},
-		{1, 1e12},
-		{1, 1e13},
-		{1, 1e14},
-		{1, 1e15},
-		{2, 1e16},
-		{8, 1111111111111111},
-		{8, 1111111111111110},
-		{7, 1111111111111100},
-		{7, 1111111111111000},
-		{6, 1111111111110000},
-		{6, 1111111111100000},
-		{5, 1111111111000000},
-		{5, 1111111110000000},
-		{4, 1111111100000000},
-		{4, 1111111000000000},
-		{3, 1111110000000000},
-		{3, 1111100000000000},
-		{3, 1111000000000000},
-		{2, 1110000000000000},
-		{2, 1100000000000000},
-	} {
-		t.Run(fmt.Sprintf("%d", tc.in), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			assertUintSz(tt, tc.in, tc.sz, b)
-		})
-	}
-}
-
 func TestVarInt(t *testing.T) {
 	tt := assert.WrapTB(t)
 	b := make([]byte, 16)
@@ -250,86 +229,91 @@ func TestVarIntZero(t *testing.T) {
 	b := make([]byte, 16)
 	assertIntSz(tt, 0, 1, b)
 }
+*/
 
-func BenchmarkZero(b *testing.B) {
-	for _, v := range []uint64{
-		1,
-		1e1,
-		1e2,
-		1e3,
-		1e4,
-		1e5,
-		1e6,
-		1e7,
-		1e8,
-		1e9,
-		1e10,
-		1e11,
-		1e12,
-		1e13,
-		1e14,
-		1e15,
-		1e16,
-		1111111111111111,
-		1111111111111110,
-		1111111111111100,
-		1111111111111000,
-		1111111111110000,
-		1111111111100000,
-		1111111111000000,
-		1111111110000000,
-		1111111100000000,
-		1111111000000000,
-		1111110000000000,
-		1111100000000000,
-		1111000000000000,
-		1110000000000000,
-		1100000000000000,
+func BenchmarkU128Zero(b *testing.B) {
+	for _, v := range []num.U128{
+		u64(1),
+		u64(1e1),
+		u64(1e2),
+		u64(1e3),
+		u64(1e4),
+		u64(1e5),
+		u64(1e6),
+		u64(1e7),
+		u64(1e8),
+		u64(1e9),
+		u64(1e10),
+		u64(1e11),
+		u64(1e12),
+		u64(1e13),
+		u64(1e14),
+		u64(1e15),
+		u64(1e16),
+		u64(1111111111111111),
+		u64(1111111111111110),
+		u64(1111111111111100),
+		u64(1111111111111000),
+		u64(1111111111110000),
+		u64(1111111111100000),
+		u64(1111111111000000),
+		u64(1111111110000000),
+		u64(1111111100000000),
+		u64(1111111000000000),
+		u64(1111110000000000),
+		u64(1111100000000000),
+		u64(1111000000000000),
+		u64(1110000000000000),
+		u64(1100000000000000),
 	} {
 		b.Run(fmt.Sprintf("%d", v), func(b *testing.B) {
 			buf := make([]byte, 16)
 			for i := 0; i < b.N; i++ {
-				x, _ := Uvarint(buf[:PutUvarint(buf, v)])
-				BenchmarkDecodeUintResult += x
+				x, _ := U128(buf[:PutU128(buf, v)])
+				BenchmarkDecodeUintResult = x
 			}
 		})
 	}
 }
 
-func BenchmarkAppendUint1(b *testing.B)  { benchmarkAppendUint(b, 1) }
-func BenchmarkAppendUint2(b *testing.B)  { benchmarkAppendUint(b, 128) }
-func BenchmarkAppendUint3(b *testing.B)  { benchmarkAppendUint(b, 16512) }
-func BenchmarkAppendUint4(b *testing.B)  { benchmarkAppendUint(b, 2113664) }
-func BenchmarkAppendUint5(b *testing.B)  { benchmarkAppendUint(b, 270549120) }
-func BenchmarkAppendUint6(b *testing.B)  { benchmarkAppendUint(b, 34630287488) }
-func BenchmarkAppendUint7(b *testing.B)  { benchmarkAppendUint(b, 4432676798592) }
-func BenchmarkAppendUint8(b *testing.B)  { benchmarkAppendUint(b, 567382630219904) }
-func BenchmarkAppendUint9(b *testing.B)  { benchmarkAppendUint(b, 72624976668147840) }
-func BenchmarkAppendUint10(b *testing.B) { benchmarkAppendUint(b, 9295997013522923648) }
+func BenchmarkAppendUint1(b *testing.B)  { benchmarkAppendUint(b, u64(1)) }
+func BenchmarkAppendUint2(b *testing.B)  { benchmarkAppendUint(b, u64(128)) }
+func BenchmarkAppendUint3(b *testing.B)  { benchmarkAppendUint(b, u64(16512)) }
+func BenchmarkAppendUint4(b *testing.B)  { benchmarkAppendUint(b, u64(2113664)) }
+func BenchmarkAppendUint5(b *testing.B)  { benchmarkAppendUint(b, u64(270549120)) }
+func BenchmarkAppendUint6(b *testing.B)  { benchmarkAppendUint(b, u64(34630287488)) }
+func BenchmarkAppendUint7(b *testing.B)  { benchmarkAppendUint(b, u64(4432676798592)) }
+func BenchmarkAppendUint8(b *testing.B)  { benchmarkAppendUint(b, u64(567382630219904)) }
+func BenchmarkAppendUint9(b *testing.B)  { benchmarkAppendUint(b, u64(72624976668147840)) }
+func BenchmarkAppendUint10(b *testing.B) { benchmarkAppendUint(b, u64(9295997013522923648)) }
+func BenchmarkAppendUint11(b *testing.B) { benchmarkAppendUint(b, u128s("295147905179352825856")) }
 
-func benchmarkAppendUint(b *testing.B, v uint64) {
+func benchmarkAppendUint(b *testing.B, v num.U128) {
 	buf := make([]byte, 16)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		PutUvarint(buf, v)
+		PutU128(buf, v)
 	}
 }
 
-var BenchmarkDecodeUintResult uint64
+var BenchmarkDecodeUintResult num.U128
 
 func benchmarkDecodeUint(b *testing.B, buf []byte) {
 	for i := 0; i < b.N; i++ {
-		v, _ := Uvarint(buf)
-		BenchmarkDecodeUintResult += v
+		v, _ := U128(buf)
+		BenchmarkDecodeUintResult = v
 	}
 }
 
-func BenchmarkDecodeUint1(b *testing.B) { benchmarkDecodeUint(b, []byte{0x7f}) }
-func BenchmarkDecodeUint2(b *testing.B) { benchmarkDecodeUint(b, []byte{0xff, 0x7f}) }
-func BenchmarkDecodeUint3(b *testing.B) { benchmarkDecodeUint(b, []byte{0xff, 0xff, 0x7f}) }
-func BenchmarkDecodeUint4(b *testing.B) { benchmarkDecodeUint(b, []byte{0xff, 0xff, 0xff, 0x7f}) }
-func BenchmarkDecodeUint5(b *testing.B) { benchmarkDecodeUint(b, []byte{0xff, 0xff, 0xff, 0xff, 0x7f}) }
+func BenchmarkDecodeUintNoZeros1(b *testing.B) { benchmarkDecodeUint(b, []byte{0x3}) }
+func BenchmarkDecodeUintNoZeros2(b *testing.B) { benchmarkDecodeUint(b, []byte{0x3, 0x7f}) }
+
+func BenchmarkDecodeUintWithZeros1(b *testing.B) { benchmarkDecodeUint(b, []byte{0x7f}) }
+func BenchmarkDecodeUint2(b *testing.B)          { benchmarkDecodeUint(b, []byte{0xff, 0x7f}) }
+func BenchmarkDecodeUint3(b *testing.B)          { benchmarkDecodeUint(b, []byte{0xff, 0xff, 0x7f}) }
+func BenchmarkDecodeUint4(b *testing.B)          { benchmarkDecodeUint(b, []byte{0xff, 0xff, 0xff, 0x7f}) }
+func BenchmarkDecodeUint5(b *testing.B)          { benchmarkDecodeUint(b, []byte{0xff, 0xff, 0xff, 0xff, 0x7f}) }
 func BenchmarkDecodeUint6(b *testing.B) {
 	benchmarkDecodeUint(b, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0x7f})
 }
@@ -346,6 +330,7 @@ func BenchmarkDecodeUint10(b *testing.B) {
 	benchmarkDecodeUint(b, []byte{0x80, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0x7f})
 }
 
+/*
 func benchmarkDecodeUintTurbo(b *testing.B, buf []byte) {
 	for i := 0; i < b.N; i++ {
 		v, _ := UvarintTurbo(buf)
@@ -441,3 +426,4 @@ func BenchmarkDecodeIntTurbo8(b *testing.B) {
 func BenchmarkDecodeIntTurbo9(b *testing.B) {
 	benchmarkDecodeIntTurbo(b, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0x00})
 }
+*/
