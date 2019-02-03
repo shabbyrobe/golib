@@ -7,15 +7,17 @@ import (
 )
 
 const (
-	// 4 bits encoding the number of trailing zeros, then 128 bits of data.
-	// 132 bits broken into 7 bit chunks == 19 bytes.
+	// MaxLen128 reports the largest buffer that PutU128 or PutI128 will ever
+	// create. This consists of 4 bits encoding the number of trailing decimal
+	// zeros, then 128 bits of data. 132 bits broken into 7 bit chunks == 19
+	// bytes.
 	MaxLen128 = 19
 )
 
 var zeroU128 num.U128
 
-// PutUvarint encodes a uint64 into buf and returns the number of bytes written.
-// If the buffer is too small, PutUvarint will panic.
+// PutU128 encodes a variable-length num.U128 into buf and returns the number
+// of bytes written. If the buffer is too small, PutUvarint will panic.
 func PutU128(buf []byte, x num.U128) int {
 	var xhi, xlo = x.Raw()
 	var zeros byte
@@ -213,7 +215,7 @@ done:
 	zmlo := zumul64[zeros]
 
 	hl := hi * zmlo
-	lo = lo * zmlo
+	olo := lo * zmlo // Subsequent calculations must use the original value
 
 	// break the multiplication into (x1 << 32 + x0)(y1 << 32 + y0)
 	// which is x1*y1 << 64 + (x0*y1 + x1*y0) << 32 + x0*y0
@@ -225,7 +227,7 @@ done:
 	w1 := (t & 0x00000000ffffffff) + (x0 * y1)
 	hi = (x1 * y1) + (t >> 32) + (w1 >> 32) + hl
 
-	return num.U128FromRaw(hi, lo), n
+	return num.U128FromRaw(hi, olo), n
 }
 
 /*
