@@ -26,9 +26,9 @@ func PutUvarint(buf []byte, x uint64) int {
 					}
 				} else { // >=2, <4
 					if x%1e3 != 0 { // == 2
-						zeros, x = 2, x/100
+						zeros, x = 2, x/1e2
 					} else { // == 3
-						zeros, x = 3, x/1000
+						zeros, x = 3, x/1e3
 					}
 				}
 

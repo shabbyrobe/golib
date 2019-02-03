@@ -3,50 +3,48 @@ package fixvarint
 import (
 	"fmt"
 	"math"
-	"math/rand"
+	"math/bits"
 	"testing"
-	"time"
 
 	"github.com/shabbyrobe/golib/assert"
 )
 
-const FuzzIterations = 1e6
-
-func assertUint(tt assert.T, v uint64, scratch []byte) {
+// fatalfArgs allows you to call tb.Fatalf(msg, args...) using a single, fully
+// optional "args ...interface{}" param. If v[0] is not a string, FatalfArgs
+// will panic.
+func fatalfArgs(tt assert.T, msg string, v ...interface{}) {
 	tt.Helper()
-	n := PutUvarint(scratch, v)
-
-	vd, _ := Uvarint(scratch[:n])
-	tt.MustEqual(v, vd)
-
-	vd, _ = UvarintTurbo(scratch[:n])
-	tt.MustEqual(v, vd)
+	if len(v) == 0 {
+		tt.Fatal(msg)
+	}
+	tt.Fatalf(v[0].(string)+": "+msg, v[1:]...)
 }
 
-func assertUintSz(tt assert.T, v uint64, sz int, scratch []byte) {
+func assertUintSz(tt assert.T, v uint64, sz int, scratch []byte, args ...interface{}) {
 	tt.Helper()
 	n := PutUvarint(scratch, v)
 
 	vd, osz := Uvarint(scratch[:n])
-	tt.MustEqual(v, vd)
-	tt.MustEqual(sz, n)
-	tt.MustEqual(sz, osz)
+	if v != vd {
+		fatalfArgs(tt, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
+	}
+	if sz != n {
+		fatalfArgs(tt, fmt.Sprintf("encoded size %d did not match expected size %d", n, sz), args...)
+	}
+	if sz != osz {
+		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
+	}
 
 	vd, osz = UvarintTurbo(scratch[:n])
-	tt.MustEqual(v, vd)
-	tt.MustEqual(sz, n)
-	tt.MustEqual(sz, osz)
-}
-
-func assertInt(tt assert.T, v int64, scratch []byte) {
-	tt.Helper()
-	n := PutVarint(scratch, v)
-
-	vd, _ := Varint(scratch[:n])
-	tt.MustEqual(v, vd)
-
-	vd, _ = VarintTurbo(scratch[:n])
-	tt.MustEqual(v, vd)
+	if v != vd {
+		fatalfArgs(tt, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
+	}
+	if sz != n {
+		fatalfArgs(tt, fmt.Sprintf("encoded size %d did not match expected size %d", n, sz), args...)
+	}
+	if sz != osz {
+		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
+	}
 }
 
 func assertIntSz(tt assert.T, v int64, sz int, scratch []byte) {
@@ -81,14 +79,14 @@ func TestVarUintOverflow(t *testing.T) {
 
 func TestVarUintZero(t *testing.T) {
 	tt := assert.WrapTB(t)
-	b := make([]byte, 16)
+	b := make([]byte, MaxLen64)
 	assertUintSz(tt, 0, 1, b)
 }
 
 func TestVarUintSz(t *testing.T) {
-	b := make([]byte, 16)
+	b := make([]byte, MaxLen64)
 
-	for _, tc := range []struct {
+	for idx, tc := range []struct {
 		sz int
 		in uint64
 	}{
@@ -135,7 +133,7 @@ func TestVarUintSz(t *testing.T) {
 		{9, 1<<55 - 1},
 		{10, math.MaxUint64},
 	} {
-		t.Run(fmt.Sprintf("%d", tc.in), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d/%d", idx, tc.in), func(t *testing.T) {
 			tt := assert.WrapTB(t)
 			assertUintSz(tt, tc.in, tc.sz, b)
 		})
@@ -144,41 +142,48 @@ func TestVarUintSz(t *testing.T) {
 
 func TestVarUintFuzz(t *testing.T) {
 	tt := assert.WrapTB(t)
-	b := make([]byte, 16)
+	b := make([]byte, MaxLen64)
 
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := 0; i < FuzzIterations; i++ {
+	rng := globalRNG
+
+	for i := 0; i < fuzzIterations; i++ {
 		var mask uint64
-		bits := rand.Intn(64) + 1
+		bits := uint(rng.Intn(64) + 1)
 		if bits == 64 {
 			mask = ^uint64(0)
 		} else {
-			mask = (1 << uint(bits)) - 1
+			mask = (1 << bits) - 1
 		}
 		uv := rng.Uint64() & mask
-		assertUint(tt, uv, b)
+		uv |= 1 << (bits - 1) // Ensure that the number is definitely the expected number of bits
+
+		sz := expectedBytesFromUint64(uv)
+		assertUintSz(tt, uv, sz, b, "failed at index %d with bits %d, number %d", i, bits, uv)
 	}
 }
 
 func TestVarIntFuzz(t *testing.T) {
 	tt := assert.WrapTB(t)
-	b := make([]byte, 16)
+	b := make([]byte, MaxLen64)
 
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := 0; i < FuzzIterations; i++ {
-		bits := rand.Intn(63) + 1
+	rng := globalRNG
+
+	for i := 0; i < fuzzIterations; i++ {
+		bits := rng.Intn(63) + 1
 		mask := uint64((1 << uint(bits)) - 1)
 		uv := rng.Uint64() & mask
 		iv := int64(uv)
-		if rand.Intn(2) == 1 {
+
+		if rng.Intn(2) == 1 {
 			iv = -iv
 		}
-		assertInt(tt, iv, b)
+		sz := expectedBytesFromInt64(iv)
+		assertIntSz(tt, iv, sz, b)
 	}
 }
 
 func TestVarUint(t *testing.T) {
-	b := make([]byte, 16)
+	b := make([]byte, MaxLen64)
 
 	for _, tc := range []struct {
 		sz int
@@ -234,18 +239,75 @@ func TestVarUint(t *testing.T) {
 	}
 }
 
+func TestVarIntSz(t *testing.T) {
+	b := make([]byte, MaxLen64)
+
+	for idx, tc := range []struct {
+		sz int
+		in uint64
+	}{
+		{1, 1},
+		{1, 7},
+		{2, 8},
+		{2, 701},
+
+		{1, 1e1},
+		{1, 1e2},
+		{1, 1e3},
+		{1, 1e4},
+		{1, 1e5},
+		{1, 1e6},
+		{1, 1e7},
+		{1, 1e8},
+		{1, 1e9},
+		{1, 1e10},
+		{1, 1e11},
+		{1, 1e12},
+		{1, 1e13},
+		{1, 1e14},
+		{1, 1e15},
+		{2, 1e16}, // exceeded 4 "zero bits"
+		{9, 11111111111111111},
+		{8, 11111111111111110},
+		{8, 11111111111111100},
+		{7, 11111111111111000},
+		{7, 11111111111110000},
+		{6, 11111111111100000},
+		{6, 11111111111000000},
+		{5, 11111111110000000},
+		{5, 11111111100000000},
+		{4, 11111111000000000},
+		{4, 11111110000000000},
+		{3, 11111100000000000},
+		{3, 11111000000000000},
+		{3, 11110000000000000},
+		{2, 11100000000000000},
+		{2, 11000000000000000},
+		{6, 1<<36 - 1},
+		{7, 1<<41 - 1},
+		{8, 1<<48 - 1},
+		{9, 1<<55 - 1},
+		{10, math.MaxUint64},
+	} {
+		t.Run(fmt.Sprintf("%d/%d", idx, tc.in), func(t *testing.T) {
+			tt := assert.WrapTB(t)
+			assertUintSz(tt, tc.in, tc.sz, b)
+		})
+	}
+}
+
 func TestVarInt(t *testing.T) {
 	tt := assert.WrapTB(t)
-	b := make([]byte, 16)
+	b := make([]byte, MaxLen64)
 
-	assertInt(tt, -3, b)
-	assertInt(tt, int64(-1)<<32, b)
-	assertInt(tt, int64(-1<<63), b)
+	assertIntSz(tt, -3, 1, b)
+	assertIntSz(tt, int64(-1)<<32, 6, b)
+	assertIntSz(tt, int64(-1<<63), 10, b)
 }
 
 func TestVarIntZero(t *testing.T) {
 	tt := assert.WrapTB(t)
-	b := make([]byte, 16)
+	b := make([]byte, MaxLen64)
 	assertIntSz(tt, 0, 1, b)
 }
 
@@ -438,4 +500,56 @@ func BenchmarkDecodeIntTurbo8(b *testing.B) {
 }
 func BenchmarkDecodeIntTurbo9(b *testing.B) {
 	benchmarkDecodeIntTurbo(b, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0x00})
+}
+
+func expectedBytesFromBits(bits int) (bytes int) {
+	if bits == 0 {
+		return 1
+	}
+	bytes++
+	bits -= 3 // first byte only contains 3 bits of the number
+	if bits <= 0 {
+		return bytes
+	}
+
+	bytes += bits / 7
+	if bits%7 > 0 {
+		bytes++
+	}
+	return bytes
+}
+
+func expectedBytesFromUint64(u uint64) (bytes int) {
+	zeros := 0
+	for i := 0; i < 16; i++ {
+		if u%10 == 0 {
+			u = u / 10
+			zeros++
+		} else {
+			break
+		}
+	}
+
+	return expectedBytesFromBits(bits.Len64(u))
+}
+
+func expectedBytesFromInt64(i int64) (bytes int) {
+	neg := i < 0
+	u := uint64(i)
+
+	zeros := 0
+	for i := 0; i < 16; i++ {
+		if u%10 == 0 {
+			u = u / 10
+			zeros++
+		} else {
+			break
+		}
+	}
+
+	n := bits.Len64(u)
+	if neg {
+		n++
+	}
+	return expectedBytesFromBits(n)
 }
