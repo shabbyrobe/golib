@@ -3,79 +3,199 @@ package fixvarint
 import (
 	"fmt"
 	"math"
-	"math/bits"
 	"testing"
 
 	"github.com/shabbyrobe/golib/assert"
 )
 
-// fatalfArgs allows you to call tb.Fatalf(msg, args...) using a single, fully
-// optional "args ...interface{}" param. If v[0] is not a string, FatalfArgs
-// will panic.
-func fatalfArgs(tt assert.T, msg string, v ...interface{}) {
-	tt.Helper()
-	if len(v) == 0 {
-		tt.Fatal(msg)
-	}
-	tt.Fatalf(v[0].(string)+": "+msg, v[1:]...)
-}
-
 func assertUintSz(tt assert.T, v uint64, sz int, scratch []byte, args ...interface{}) {
 	tt.Helper()
+	assertUintSzInternal(tt, v, sz, scratch, args)
+}
+
+func assertUintSzInternal(tt assert.T, v uint64, sz int, scratch []byte, args ...interface{}) {
 	n := PutUvarint(scratch, v)
+
+	// NOTE: there's a lot of duplicated stuff here and in assertDecodeIntSz, but the fuzzer
+	// is significantly slower if we try to reuse.
 
 	vd, osz := Uvarint(scratch[:n])
 	if v != vd {
 		fatalfArgs(tt, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
 	}
-	if sz != n {
-		fatalfArgs(tt, fmt.Sprintf("encoded size %d did not match expected size %d", n, sz), args...)
-	}
+
 	if sz != osz {
 		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
+	}
+	if sz != n {
+		fatalfArgs(tt, fmt.Sprintf("encoded size %d did not match expected size %d", n, sz), args...)
 	}
 
 	vd, osz = UvarintTurbo(scratch[:n])
 	if v != vd {
+		fatalfArgs(tt, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
+	}
+	if sz != osz {
+		fatalfArgs(tt, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
+	}
+}
+
+func assertIntSz(tt assert.T, v int64, sz int, scratch []byte, args ...interface{}) {
+	tt.Helper()
+	assertIntSzInternal(tt, v, sz, scratch, args...)
+}
+
+func assertIntSzInternal(tt assert.T, v int64, sz int, scratch []byte, args ...interface{}) {
+	n := PutVarint(scratch, v)
+
+	// NOTE: there's a lot of duplicated stuff here and in assertDecodeIntSz, but the fuzzer
+	// is significantly slower if we try to reuse.
+
+	vd, osz := Varint(scratch[:n])
+	if v != vd {
 		fatalfArgs(tt, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
+	}
+
+	if sz != osz {
+		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
 	}
 	if sz != n {
 		fatalfArgs(tt, fmt.Sprintf("encoded size %d did not match expected size %d", n, sz), args...)
 	}
+
+	vd, osz = VarintTurbo(scratch[:n])
+	if v != vd {
+		fatalfArgs(tt, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
+	}
 	if sz != osz {
-		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
+		fatalfArgs(tt, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
 	}
 }
 
-func assertIntSz(tt assert.T, v int64, sz int, scratch []byte) {
+func assertDecodeIntSz(tt assert.T, data []byte, v int64, sz int, args ...interface{}) {
 	tt.Helper()
-	n := PutVarint(scratch, v)
 
-	vd, osz := Varint(scratch[:n])
-	tt.MustEqual(v, vd)
-	tt.MustEqual(sz, n)
-	tt.MustEqual(sz, osz)
+	vd, osz := Varint(data)
+	if v != vd {
+		fatalfArgs(tt, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
+	}
+	if sz != osz {
+		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
+	}
 
-	vd, osz = VarintTurbo(scratch[:n])
-	tt.MustEqual(v, vd)
-	tt.MustEqual(sz, n)
-	tt.MustEqual(sz, osz)
+	vd, osz = VarintTurbo(data)
+	if v != vd {
+		fatalfArgs(tt, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
+	}
+	if sz != osz {
+		fatalfArgs(tt, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
+	}
 }
 
-/*
+func assertDecodeUintSz(tt assert.T, data []byte, v uint64, sz int, args ...interface{}) {
+	tt.Helper()
+
+	vd, osz := Uvarint(data)
+	if v != vd {
+		fatalfArgs(tt, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
+	}
+	if sz != osz {
+		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
+	}
+
+	vd, osz = UvarintTurbo(data)
+	if v != vd {
+		fatalfArgs(tt, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
+	}
+	if sz != osz {
+		fatalfArgs(tt, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
+	}
+}
+
 func TestVarUintOverflow(t *testing.T) {
 	tt := assert.WrapTB(t)
 
-	// The number represented here is 18446744073709551615 + 1, which is
-	// one past the largest representable 64-bit integer:
-	in := []byte{0x80, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xff, 0x00}
-	_, n, err := DecodeUint(in)
-	tt.MustAssert(IsOverflow(err))
+	scr := make([]byte, 11)
 
-	// We successfully decoded 9 bytes, but failed at the 10th:
-	tt.MustEqual(9, n)
+	{
+		// Sanity check MaxUint64 equals what we expect:
+		n := PutUvarint(scr, math.MaxUint64)
+		tt.MustEqual(10, n)
+		tt.MustEqual([]byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f}, scr[:n])
+	}
+
+	{
+		// MaxUint64 + 1:
+		in := []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x20}
+		assertDecodeUintSz(tt, in, 0, -10)
+	}
+
+	{
+		// MaxUint128:
+		in := []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f}
+		u, n := Uvarint(in)
+		tt.MustEqual(uint64(0), u)
+
+		// Should read until the end of the number, but then report overflow
+		tt.MustEqual(-19, n)
+	}
+
+	{
+		// Overflow with no terminating byte:
+		in := []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+		u, n := Uvarint(in)
+		tt.MustEqual(uint64(0), u)
+
+		// Should read until the end of the number, but then report overflow
+		// (slightly different for turbo version)
+		tt.MustEqual(-18, n)
+	}
 }
-*/
+
+func TestVarIntOverflow(t *testing.T) {
+	tt := assert.WrapTB(t)
+
+	scr := make([]byte, 11)
+
+	{
+		// Sanity check MaxInt64 equals what we expect:
+		n := PutVarint(scr, math.MaxInt64)
+		tt.MustEqual(10, n)
+		tt.MustEqual([]byte{0x86, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f}, scr[:n])
+	}
+
+	{
+		// MaxInt64 + 1:
+		in := []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x20}
+		assertDecodeIntSz(tt, in, 0, -10)
+	}
+
+	{
+		// MaxInt128:
+		in := []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f}
+		u, n := Varint(in)
+		tt.MustEqual(int64(0), u)
+
+		// Should read until the end of the number, but then report overflow
+		// (slightly different for turbo version)
+		tt.MustEqual(-19, n)
+	}
+
+	{
+		// Overflow with no terminating byte:
+		in := []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+		u, n := Varint(in)
+		tt.MustEqual(int64(0), u)
+
+		// Should read until the end of the number, but then report overflow
+		// (slightly different for turbo version)
+		tt.MustEqual(-18, n)
+	}
+}
 
 func TestVarUintZero(t *testing.T) {
 	tt := assert.WrapTB(t)
@@ -158,7 +278,7 @@ func TestVarUintFuzz(t *testing.T) {
 		uv |= 1 << (bits - 1) // Ensure that the number is definitely the expected number of bits
 
 		sz := expectedBytesFromUint64(uv)
-		assertUintSz(tt, uv, sz, b, "failed at index %d with bits %d, number %d", i, bits, uv)
+		assertUintSzInternal(tt, uv, sz, b, "failed at index %d with bits %d, number %d", i, bits, uv)
 	}
 }
 
@@ -169,16 +289,20 @@ func TestVarIntFuzz(t *testing.T) {
 	rng := globalRNG
 
 	for i := 0; i < fuzzIterations; i++ {
-		bits := rng.Intn(63) + 1
+		// bit 0 == signed or unsigned. bits 1-6 == bit size of number used in this fuzz interation
+		randStuff := rng.Intn(1 << 7)
+
+		signed := randStuff>>6 == 1
+		bits := (randStuff & 0x3f) + 1
+
 		mask := uint64((1 << uint(bits)) - 1)
 		uv := rng.Uint64() & mask
 		iv := int64(uv)
-
-		if rng.Intn(2) == 1 {
+		if signed {
 			iv = -iv
 		}
 		sz := expectedBytesFromInt64(iv)
-		assertIntSz(tt, iv, sz, b)
+		assertIntSzInternal(tt, iv, sz, b, "failed at index %d with bits %d, number %d", i, bits, iv)
 	}
 }
 
@@ -500,56 +624,4 @@ func BenchmarkDecodeIntTurbo8(b *testing.B) {
 }
 func BenchmarkDecodeIntTurbo9(b *testing.B) {
 	benchmarkDecodeIntTurbo(b, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0x00})
-}
-
-func expectedBytesFromBits(bits int) (bytes int) {
-	if bits == 0 {
-		return 1
-	}
-	bytes++
-	bits -= 3 // first byte only contains 3 bits of the number
-	if bits <= 0 {
-		return bytes
-	}
-
-	bytes += bits / 7
-	if bits%7 > 0 {
-		bytes++
-	}
-	return bytes
-}
-
-func expectedBytesFromUint64(u uint64) (bytes int) {
-	zeros := 0
-	for i := 0; i < 16; i++ {
-		if u%10 == 0 {
-			u = u / 10
-			zeros++
-		} else {
-			break
-		}
-	}
-
-	return expectedBytesFromBits(bits.Len64(u))
-}
-
-func expectedBytesFromInt64(i int64) (bytes int) {
-	neg := i < 0
-	u := uint64(i)
-
-	zeros := 0
-	for i := 0; i < 16; i++ {
-		if u%10 == 0 {
-			u = u / 10
-			zeros++
-		} else {
-			break
-		}
-	}
-
-	n := bits.Len64(u)
-	if neg {
-		n++
-	}
-	return expectedBytesFromBits(n)
 }

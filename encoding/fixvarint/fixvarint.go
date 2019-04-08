@@ -110,7 +110,7 @@ func PutUvarint(buf []byte, x uint64) int {
 // and the number of bytes n is <= 0 meaning:
 //
 // 	n == 0: buf too small
-// 	n  < 0: value larger than 64 bits (overflow)
+// 	n  < 0: (value larger than 64 bits (overflow) or no terminating byte)
 // 	        and -n is the number of bytes read
 //
 func Uvarint(buf []byte) (uint64, int) {
@@ -127,8 +127,11 @@ func Uvarint(buf []byte) (uint64, int) {
 
 	for i, b := range buf[1:] {
 		if b < 0x80 {
-			if i > 9 || i == 9 && b > 1 {
-				return 0, -(i + 1) // overflow
+			// this is a bit cryptic; the 8th index here is actually the 10th byte due
+			// to the buf[1:]. if the last byte is greater than 0x1f, we have run out of
+			// space in a 64-bit number to accomodate what's left.
+			if i > 8 || i == 8 && b > 0x1f {
+				return 0, -(i + 2) // overflow
 			}
 			x, n = x|uint64(b)<<s, i+2 // +1 for the slice offset, +1 to convert from 0-index
 
@@ -137,6 +140,11 @@ func Uvarint(buf []byte) (uint64, int) {
 		x |= uint64(b&0x7f) << s
 		s += 7
 	}
+
+	// If we do not exit the loop early, we must fail as we never found a
+	// terminating byte:
+	n = len(buf)
+	return 0, -n
 
 done:
 	if zeros > 0 {
@@ -239,6 +247,9 @@ func UvarintTurbo(buf []byte) (uint64, int) {
 	}
 
 	if buf[9] < 0x80 {
+		if buf[9] > 0x1f {
+			return 0, -10 // overflow
+		}
 		x = x |
 			(uint64(buf[1]&0x7f) << 3) |
 			(uint64(buf[2]&0x7f) << 10) |
@@ -253,7 +264,7 @@ func UvarintTurbo(buf []byte) (uint64, int) {
 		goto done
 	}
 
-	return 0, -11
+	return 0, -10
 
 done:
 	if zeros > 0 {
@@ -335,6 +346,10 @@ func PutVarint(buf []byte, x int64) int {
 		}
 	}
 
+	// Shifting the entire number one to the left creates space for a sign bit as
+	// the LSB, rather than the MSB. If the number is negative, we invert it so
+	// the leading run of 1-bits becomes a leading run of 0-bits. The ^ operation
+	// will flip our new LSB sign-bit to 'on' as well.
 	ux := uint64(x) << 1
 	if x < 0 {
 		ux = ^ux
@@ -343,7 +358,7 @@ func PutVarint(buf []byte, x int64) int {
 	i := 0
 
 	var cont byte
-	if ux >= 0x8 {
+	if ux > 0x7 {
 		cont = 0x80
 	}
 
@@ -386,9 +401,13 @@ func Varint(buf []byte) (v int64, n int) {
 
 	for i, b := range buf[1:] {
 		if b < 0x80 {
-			if i > 9 || i == 9 && b > 1 {
-				return 0, -(i + 1) // overflow
+			// this is a bit cryptic; the 8th index here is actually the 10th byte due
+			// to the buf[1:]. if the last byte is greater than 0x1f, we have run out of
+			// space in a 64-bit number to accomodate what's left.
+			if i > 8 || i == 8 && b > 0x1f {
+				return 0, -(i + 2) // overflow
 			}
+
 			ux, n = ux|uint64(b)<<s, i+2 // +1 for the slice offset, +1 to convert from 0-index
 
 			goto done
@@ -396,6 +415,11 @@ func Varint(buf []byte) (v int64, n int) {
 		ux |= uint64(b&0x7f) << s
 		s += 7
 	}
+
+	// If we do not exit the loop early, we must fail as we never found a
+	// terminating byte:
+	n = len(buf)
+	return 0, -n
 
 done:
 	ix = int64(ux >> 1)
@@ -505,6 +529,9 @@ func VarintTurbo(buf []byte) (int64, int) {
 	}
 
 	if buf[9] < 0x80 {
+		if buf[9] > 0x1f {
+			return 0, -10 // overflow
+		}
 		ux = ux |
 			(uint64(buf[1]&0x7f) << 3) |
 			(uint64(buf[2]&0x7f) << 10) |
@@ -519,7 +546,7 @@ func VarintTurbo(buf []byte) (int64, int) {
 		goto done
 	}
 
-	return 0, -11
+	return 0, -10
 
 done:
 	ix = int64(ux >> 1)
