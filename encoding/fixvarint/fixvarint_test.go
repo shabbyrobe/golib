@@ -154,49 +154,6 @@ func TestVarUintOverflow(t *testing.T) {
 	}
 }
 
-func TestVarIntOverflow(t *testing.T) {
-	tt := assert.WrapTB(t)
-
-	scr := make([]byte, 11)
-
-	{
-		// Sanity check MaxInt64 equals what we expect:
-		n := PutVarint(scr, math.MaxInt64)
-		tt.MustEqual(10, n)
-		tt.MustEqual([]byte{0x86, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f}, scr[:n])
-	}
-
-	{
-		// MaxInt64 + 1:
-		in := []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x20}
-		assertDecodeIntSz(tt, in, 0, -10)
-	}
-
-	{
-		// MaxInt128:
-		in := []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f}
-		u, n := Varint(in)
-		tt.MustEqual(int64(0), u)
-
-		// Should read until the end of the number, but then report overflow
-		// (slightly different for turbo version)
-		tt.MustEqual(-19, n)
-	}
-
-	{
-		// Overflow with no terminating byte:
-		in := []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-			0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-		u, n := Varint(in)
-		tt.MustEqual(int64(0), u)
-
-		// Should read until the end of the number, but then report overflow
-		// (slightly different for turbo version)
-		tt.MustEqual(-18, n)
-	}
-}
-
 func TestVarUintZero(t *testing.T) {
 	tt := assert.WrapTB(t)
 	b := make([]byte, MaxLen64)
@@ -257,6 +214,186 @@ func TestVarUintSz(t *testing.T) {
 			tt := assert.WrapTB(t)
 			assertUintSz(tt, tc.in, tc.sz, b)
 		})
+	}
+}
+
+func TestVarintOverflow(t *testing.T) {
+	scratch := make([]byte, 11)
+
+	// Sanity check MaxInt64 equals what we expect:
+	t.Run("", func(t *testing.T) {
+		tt := assert.WrapTB(t)
+		n := PutVarint(scratch, math.MaxInt64)
+		tt.MustEqual(10, n)
+		tt.MustEqual([]byte{0x86, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f}, scratch[:n])
+	})
+
+	// MaxInt64 + 1:
+	t.Run("", func(t *testing.T) {
+		tt := assert.WrapTB(t)
+		in := []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x20}
+		assertDecodeIntSz(tt, in, 0, -10)
+	})
+
+	// MaxInt128:
+	t.Run("", func(t *testing.T) {
+		tt := assert.WrapTB(t)
+		in := []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f}
+		u, n := Varint(in)
+		tt.MustEqual(int64(0), u)
+
+		// Should read until the end of the number, but then report overflow
+		// (slightly different for turbo version)
+		tt.MustEqual(-19, n)
+	})
+
+	// Overflow with no terminating byte:
+	t.Run("", func(t *testing.T) {
+		tt := assert.WrapTB(t)
+		in := []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+		u, n := Varint(in)
+		tt.MustEqual(int64(0), u)
+
+		// Should read until the end of the number, but then report overflow
+		// (slightly different for turbo version)
+		tt.MustEqual(-18, n)
+	})
+}
+
+func TestUvarintOverflow(t *testing.T) {
+	scratch := make([]byte, 11)
+
+	// If we add a zero to the zero bits, do we overflow?
+	for idx, tc := range []struct {
+		v    uint64
+		add  byte
+		over bool
+	}{
+		{1, 15, false},
+
+		{1<<50 - 1, 4, false}, // Fast path, number fits inside 64 bits after multiplication.
+		{1<<50 - 1, 5, true},  // Slow path, number does not fit inside 64 bits after multiplication.
+		{1 << 50, 4, false},   // Slow path
+		{1 << 50, 5, true},    // Slow path
+	} {
+		t.Run(fmt.Sprintf("extrazero/%d", idx), func(t *testing.T) {
+			if tc.add <= 0 {
+				panic("not enough zeros!")
+			}
+
+			tt := assert.WrapTB(t)
+
+			sz := PutUvarint(scratch, tc.v)
+			inZeros := (scratch[0] & 0x78) >> 3
+			if int(inZeros)+int(tc.add) > 15 {
+				panic("too many zeros!")
+			}
+
+			scratch[0] = (scratch[0] & 0x80) | // Continuation bit
+				((inZeros + tc.add) << 3) | // Zeros
+				(scratch[0] & 0x7) // Remaining data
+
+			{
+				v, n := Uvarint(scratch[:sz])
+				if tc.over {
+					tt.MustAssert(n < 0)
+				} else {
+					tt.MustAssert(n > 0)
+					tt.MustEqual(tc.v*zumul[tc.add], v)
+				}
+			}
+
+			{
+				v, n := UvarintTurbo(scratch[:sz])
+				if tc.over {
+					tt.MustAssert(n < 0)
+				} else {
+					tt.MustAssert(n > 0)
+					tt.MustEqual(tc.v*zumul[tc.add], v)
+				}
+			}
+		})
+	}
+}
+
+func TestVarintSpillToNextByte(t *testing.T) {
+	// Encoded values that should spill to the next size, indexed by length. Note that
+	// length MaxLen64 is skipped here as the largest number that 10 bytes can hold
+	// overflows a 64-bit integer:
+	templates := make([][]byte, MaxLen64)
+
+	// Build the templates
+	for i := range templates {
+		if i == 0 {
+			continue
+		} else if i == 1 {
+			templates[i] = []byte{0x7}
+		} else {
+			template := make([]byte, i)
+			template[0] = 0x87
+			for j := 1; j < i-1; j++ {
+				template[j] = 0xff
+			}
+			template[i-1] = 0x7f
+			templates[i] = template
+		}
+	}
+
+	scratch := make([]byte, MaxLen64)
+
+	for sz, data := range templates {
+		if sz == 0 {
+			continue
+		}
+
+		// FIXME: we are not testing all zeros because we aren't properly handling the
+		// overflow that can happen when the encoded trailing decimal zeros cause the
+		// final multiplication stage to overflow
+		for zeros := byte(0); zeros <= 1; zeros++ {
+
+			// Take the first byte of the template and set the number of trailing decimal
+			// zeros, located in bits 2 to 5. For example 0b0ZZZZ000, where Z is a
+			// 'trailing decimal zero bit'. Only the Z bits are touched:
+			data[0] = data[0]&0x87 | (zeros << 3)
+
+			t.Run(fmt.Sprintf("uv/sz=%d/z=%d", sz, zeros), func(t *testing.T) {
+				tt := assert.WrapTB(t)
+
+				v, osz := Uvarint(data)
+				if sz != osz {
+					fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz))
+				}
+
+				if v >= 0 {
+					v++
+				}
+				nsz := PutUvarint(scratch, v)
+				if osz >= nsz {
+					fatalfArgs(tt, fmt.Sprintf("next number after %d expected size to be greater than %d", v, osz))
+				}
+			})
+
+			t.Run(fmt.Sprintf("iv/sz=%d/z=%d", sz, zeros), func(t *testing.T) {
+				tt := assert.WrapTB(t)
+
+				v, osz := Varint(data)
+				if sz != osz {
+					fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz))
+				}
+
+				if v >= 0 {
+					v++
+				} else {
+					v--
+				}
+				nsz := PutVarint(scratch, v)
+				if osz >= nsz {
+					fatalfArgs(tt, fmt.Sprintf("next number after %d expected size to be greater than %d", v, osz))
+				}
+			})
+		}
 	}
 }
 
@@ -559,7 +696,7 @@ func BenchmarkDecodeUintTurbo9(b *testing.B) {
 	benchmarkDecodeUintTurbo(b, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f})
 }
 func BenchmarkDecodeUintTurbo10(b *testing.B) {
-	benchmarkDecodeUintTurbo(b, []byte{0x80, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0x7f})
+	benchmarkDecodeUintTurbo(b, []byte{0x80, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0x1f})
 }
 
 var BenchmarkDecodeIntResult int64

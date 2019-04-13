@@ -148,7 +148,79 @@ func Uvarint(buf []byte) (uint64, int) {
 
 done:
 	if zeros > 0 {
-		x *= zumul[zeros]
+		if x&zumask[zeros] == 0 {
+			// Definitely doesn't overflow; fast path!
+			x *= zumul[zeros]
+
+		} else {
+			a := x
+			x *= zumul[zeros]
+
+			// Use division by constants to encourage compiler to use a significantly
+			// faster MUL instruction:
+			switch zeros {
+			case 1:
+				if x/1e1 != a {
+					return 0, -n
+				}
+			case 2:
+				if x/1e2 != a {
+					return 0, -n
+				}
+			case 3:
+				if x/1e3 != a {
+					return 0, -n
+				}
+			case 4:
+				if x/1e4 != a {
+					return 0, -n
+				}
+			case 5:
+				if x/1e5 != a {
+					return 0, -n
+				}
+			case 6:
+				if x/1e6 != a {
+					return 0, -n
+				}
+			case 7:
+				if x/1e7 != a {
+					return 0, -n
+				}
+			case 8:
+				if x/1e8 != a {
+					return 0, -n
+				}
+			case 9:
+				if x/1e9 != a {
+					return 0, -n
+				}
+			case 10:
+				if x/1e10 != a {
+					return 0, -n
+				}
+			case 11:
+				if x/1e11 != a {
+					return 0, -n
+				}
+			case 12:
+				if x/1e12 != a {
+					return 0, -n
+				}
+			case 13:
+				if x/1e13 != a {
+					return 0, -n
+				}
+			case 14:
+				if x/1e14 != a {
+					return 0, -n
+				}
+			case 15:
+				if x/1e15 != a {
+					return 0, -n
+				}
+			}
+		}
 	}
 	return x, n
 }
@@ -268,7 +340,79 @@ func UvarintTurbo(buf []byte) (uint64, int) {
 
 done:
 	if zeros > 0 {
-		x *= zumul[zeros]
+		if x&zumask[zeros] == 0 {
+			// Definitely doesn't overflow; fast path!
+			x *= zumul[zeros]
+
+		} else {
+			a := x
+			x *= zumul[zeros]
+
+			// Use division by constants to encourage compiler to use a significantly
+			// faster MUL instruction:
+			switch zeros {
+			case 1:
+				if x/1e1 != a {
+					return 0, -n
+				}
+			case 2:
+				if x/1e2 != a {
+					return 0, -n
+				}
+			case 3:
+				if x/1e3 != a {
+					return 0, -n
+				}
+			case 4:
+				if x/1e4 != a {
+					return 0, -n
+				}
+			case 5:
+				if x/1e5 != a {
+					return 0, -n
+				}
+			case 6:
+				if x/1e6 != a {
+					return 0, -n
+				}
+			case 7:
+				if x/1e7 != a {
+					return 0, -n
+				}
+			case 8:
+				if x/1e8 != a {
+					return 0, -n
+				}
+			case 9:
+				if x/1e9 != a {
+					return 0, -n
+				}
+			case 10:
+				if x/1e10 != a {
+					return 0, -n
+				}
+			case 11:
+				if x/1e11 != a {
+					return 0, -n
+				}
+			case 12:
+				if x/1e12 != a {
+					return 0, -n
+				}
+			case 13:
+				if x/1e13 != a {
+					return 0, -n
+				}
+			case 14:
+				if x/1e14 != a {
+					return 0, -n
+				}
+			case 15:
+				if x/1e15 != a {
+					return 0, -n
+				}
+			}
+		}
 	}
 
 	return x, n
@@ -428,7 +572,79 @@ done:
 	}
 
 	if zeros > 0 {
-		ix *= zmul[zeros]
+		if ix&zimask[zeros] == 0 {
+			// Definitely doesn't overflow; fast path!
+			ix *= zimul[zeros]
+
+		} else {
+			a := ix
+			ix *= zimul[zeros]
+
+			// Use division by constants to encourage compiler to use a significantly
+			// faster MUL instruction:
+			switch zeros {
+			case 1:
+				if ix/1e1 != a {
+					return 0, -n
+				}
+			case 2:
+				if ix/1e2 != a {
+					return 0, -n
+				}
+			case 3:
+				if ix/1e3 != a {
+					return 0, -n
+				}
+			case 4:
+				if ix/1e4 != a {
+					return 0, -n
+				}
+			case 5:
+				if ix/1e5 != a {
+					return 0, -n
+				}
+			case 6:
+				if ix/1e6 != a {
+					return 0, -n
+				}
+			case 7:
+				if ix/1e7 != a {
+					return 0, -n
+				}
+			case 8:
+				if ix/1e8 != a {
+					return 0, -n
+				}
+			case 9:
+				if ix/1e9 != a {
+					return 0, -n
+				}
+			case 10:
+				if ix/1e10 != a {
+					return 0, -n
+				}
+			case 11:
+				if ix/1e11 != a {
+					return 0, -n
+				}
+			case 12:
+				if ix/1e12 != a {
+					return 0, -n
+				}
+			case 13:
+				if ix/1e13 != a {
+					return 0, -n
+				}
+			case 14:
+				if ix/1e14 != a {
+					return 0, -n
+				}
+			case 15:
+				if ix/1e15 != a {
+					return 0, -n
+				}
+			}
+		}
 	}
 
 	return ix, n
@@ -555,15 +771,133 @@ done:
 	}
 
 	if zeros > 0 {
-		ix *= zmul[zeros]
+		if ix&zimask[zeros] == 0 {
+			// Definitely doesn't overflow; fast path!
+			ix *= zimul[zeros]
+
+		} else {
+			a := ix
+			ix *= zimul[zeros]
+
+			// Use division by constants to encourage compiler to use a significantly
+			// faster MUL instruction:
+			switch zeros {
+			case 1:
+				if ix/1e1 != a {
+					return 0, -n
+				}
+			case 2:
+				if ix/1e2 != a {
+					return 0, -n
+				}
+			case 3:
+				if ix/1e3 != a {
+					return 0, -n
+				}
+			case 4:
+				if ix/1e4 != a {
+					return 0, -n
+				}
+			case 5:
+				if ix/1e5 != a {
+					return 0, -n
+				}
+			case 6:
+				if ix/1e6 != a {
+					return 0, -n
+				}
+			case 7:
+				if ix/1e7 != a {
+					return 0, -n
+				}
+			case 8:
+				if ix/1e8 != a {
+					return 0, -n
+				}
+			case 9:
+				if ix/1e9 != a {
+					return 0, -n
+				}
+			case 10:
+				if ix/1e10 != a {
+					return 0, -n
+				}
+			case 11:
+				if ix/1e11 != a {
+					return 0, -n
+				}
+			case 12:
+				if ix/1e12 != a {
+					return 0, -n
+				}
+			case 13:
+				if ix/1e13 != a {
+					return 0, -n
+				}
+			case 14:
+				if ix/1e14 != a {
+					return 0, -n
+				}
+			case 15:
+				if ix/1e15 != a {
+					return 0, -n
+				}
+			}
+		}
 	}
 
 	return ix, n
 }
 
 var (
-	zmul  = [...]int64{0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15}
+	zimul = [...]int64{0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15}
 	zumul = [...]uint64{0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15}
+
+	// These masks represent the maximum number you can multiply by each
+	// corresponding index in zumul before overflowing before you have to
+	// calculate zero multiplication the slow way:
+	zumask = [...]uint64{
+		0,
+		^(uint64(1<<(64-4)) - 1),
+		^(uint64(1<<(64-7)) - 1),
+		^(uint64(1<<(64-10)) - 1),
+		^(uint64(1<<(64-14)) - 1),
+		^(uint64(1<<(64-17)) - 1),
+		^(uint64(1<<(64-20)) - 1),
+		^(uint64(1<<(64-24)) - 1),
+		^(uint64(1<<(64-27)) - 1),
+		^(uint64(1<<(64-30)) - 1),
+		^(uint64(1<<(64-34)) - 1),
+		^(uint64(1<<(64-37)) - 1),
+		^(uint64(1<<(64-40)) - 1),
+		^(uint64(1<<(64-44)) - 1),
+		^(uint64(1<<(64-47)) - 1),
+		^(uint64(1<<(64-50)) - 1),
+	}
+
+	// These masks represent the maximum number you can multiply by each
+	// corresponding index in zimul before overflowing before you have to
+	// calculate zero multiplication the slow way:
+	zimask = [...]int64{
+		0,
+		int64(zumask[1] & signMask),
+		int64(zumask[2] & signMask),
+		int64(zumask[3] & signMask),
+		int64(zumask[4] & signMask),
+		int64(zumask[5] & signMask),
+		int64(zumask[6] & signMask),
+		int64(zumask[7] & signMask),
+		int64(zumask[8] & signMask),
+		int64(zumask[9] & signMask),
+		int64(zumask[10] & signMask),
+		int64(zumask[11] & signMask),
+		int64(zumask[12] & signMask),
+		int64(zumask[13] & signMask),
+		int64(zumask[14] & signMask),
+		int64(zumask[15] & signMask),
+	}
 
 	overflow = errors.New("fixvarint: varint overflows a 64-bit integer")
 )
+
+const signMask = ^uint64(1 << 63)
