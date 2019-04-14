@@ -14,12 +14,14 @@ const (
 	MaxLen128 = 19
 )
 
-var zeroU128 num.U128
+var (
+	zeroI128 num.I128
+	zeroU128 num.U128
+)
 
 // PutU128 encodes a variable-length num.U128 into buf and returns the number
-// of bytes written. If the buffer is too small, PutUvarint will panic.
+// of bytes written. If the buffer is too small, PutU128 will panic.
 func PutU128(buf []byte, x num.U128) int {
-	var xhi, xlo = x.Raw()
 	var zeros byte
 
 	hasTen := x.Rem(zumul[1]).Equal(zeroU128)
@@ -88,9 +90,9 @@ func PutU128(buf []byte, x num.U128) int {
 				}
 			}
 		}
-
-		xhi, xlo = x.Raw()
 	}
+
+	var xhi, xlo = x.Raw()
 
 	i := 0
 
@@ -116,9 +118,9 @@ func PutU128(buf []byte, x num.U128) int {
 			xv = (xhi << 5) | (xlo >> 59)
 
 			if bits <= 7 {
-				buf[i], i = byte(xv), i+1
+				buf[i] = byte(xv)
 			} else {
-				buf[i], i = byte(xv)|0x80, i+1
+				buf[i] = byte(xv) | 0x80
 			}
 
 			// The previous byte uses 2 bits of xhi, so replace our bit queue
@@ -127,12 +129,14 @@ func PutU128(buf []byte, x num.U128) int {
 
 		} else {
 			if bits <= 7 {
-				buf[i], i = byte(xv), i+1
+				buf[i] = byte(xv)
 			} else {
-				buf[i], i = byte(xv)|0x80, i+1
+				buf[i] = byte(xv) | 0x80
 			}
 			xv >>= 7
 		}
+
+		i++
 	}
 
 	return i
@@ -196,7 +200,7 @@ func U128(buf []byte) (out num.U128, n int) {
 	for i = 10; i < lim; i++ {
 		b = buf[i]
 		if i > MaxLen128 || (i == MaxLen128 && b > 1) {
-			return out, -(i + 1) // overflow
+			return zeroU128, -(i + 1) // overflow
 		}
 
 		if b < 0x80 {
@@ -348,10 +352,140 @@ done:
 
 	return x, n
 }
+*/
 
+// PutI128 encodes a variable-length num.I128 into buf and returns the number
+// of bytes written. If the buffer is too small, PutI128 will panic.
+func PutI128(buf []byte, x num.I128) int {
+	var xhi, xlo = x.Raw()
+	var zeros byte
+
+	hasTen := x.Rem(zimul[1]).Equal(zeroI128)
+	if x != zeroI128 && hasTen {
+		if !x.Rem(zimul[8]).Equal(zeroI128) { // <8
+			if !x.Rem(zimul[4]).Equal(zeroI128) { // <4
+				if !x.Rem(zimul[2]).Equal(zeroI128) { // <2
+					if !hasTen {
+						// all good
+					} else { // == 1
+						zeros, x = 1, x.Quo(zimul[1])
+					}
+				} else { // >=2, <4
+					if !x.Rem(zimul[3]).Equal(zeroI128) { // == 2
+						zeros, x = 2, x.Quo(zimul[2])
+					} else { // == 3
+						zeros, x = 3, x.Quo(zimul[3])
+					}
+				}
+
+			} else { // >=4, <8
+				if !x.Rem(zimul[6]).Equal(zeroI128) { // >=4, <6
+					if !x.Rem(zimul[5]).Equal(zeroI128) { // == 4
+						zeros, x = 4, x.Quo(zimul[4])
+					} else { // == 5
+						zeros, x = 5, x.Quo(zimul[5])
+					}
+				} else { // >= 6, <8
+					if !x.Rem(zimul[7]).Equal(zeroI128) { // == 6
+						zeros, x = 6, x.Quo(zimul[6])
+					} else { // == 7
+						zeros, x = 7, x.Quo(zimul[7])
+					}
+				}
+			}
+
+		} else { // >= 8, <16
+			if !x.Rem(zimul[12]).Equal(zeroI128) { // >= 8, <12
+				if !x.Rem(zimul[10]).Equal(zeroI128) { // >= 8, <10
+					if !x.Rem(zimul[9]).Equal(zeroI128) { // == 8
+						zeros, x = 8, x.Quo(zimul[8])
+					} else { // == 9
+						zeros, x = 9, x.Quo(zimul[9])
+					}
+				} else { // >=10, <12
+					if !x.Rem(zimul[11]).Equal(zeroI128) { // == 10
+						zeros, x = 10, x.Quo(zimul[10])
+					} else { // == 11
+						zeros, x = 11, x.Quo(zimul[11])
+					}
+				}
+
+			} else { // >=12, <16
+				if !x.Rem(zimul[14]).Equal(zeroI128) { // >=12, <14
+					if !x.Rem(zimul[13]).Equal(zeroI128) { // == 12
+						zeros, x = 12, x.Quo(zimul[12])
+					} else { // == 13
+						zeros, x = 13, x.Quo(zimul[13])
+					}
+				} else { // >= 14, <16
+					if !x.Rem(zimul[15]).Equal(zeroI128) { // == 14
+						zeros, x = 14, x.Quo(zimul[14])
+					} else { // == 15
+						zeros, x = 15, x.Quo(zimul[15])
+					}
+				}
+			}
+		}
+
+		xhi, xlo = x.Raw()
+	}
+
+	ux := num.U128FromRaw(x.Raw()).Lsh(1)
+	if x.Sign() < 0 {
+		ux = ux.Not()
+	}
+	xhi, xlo = ux.Raw()
+
+	i := 0
+
+	xv := xlo
+
+	var cont byte
+	if xv >= 0x8 || xhi > 0 {
+		cont = 0x80
+	}
+
+	buf[0] = cont | (zeros << 3) | byte(xv&0x7)
+	xv >>= 3
+	i++
+
+	for bits := ux.BitLen() - 3; bits > 0; bits -= 7 {
+		if i == 9 {
+			// If we have written 9 bytes, we have shifted 59 bits off xlo (3
+			// initial bits + 8x7 bits).
+			//
+			// This means the composition of the join byte (the byte that crosses the gap
+			// between hi and lo) is like so (where x is the continuation bit):
+			//   x H H L L L L L
+			xv = (xhi << 5) | (xlo >> 59)
+
+			if bits <= 7 {
+				buf[i], i = byte(xv), i+1
+			} else {
+				buf[i], i = byte(xv)|0x80, i+1
+			}
+
+			// The previous byte uses 2 bits of xhi, so replace our bit queue
+			// with the remaining 62:
+			xv = xhi >> 2
+
+		} else {
+			if bits <= 7 {
+				buf[i], i = byte(xv), i+1
+			} else {
+				buf[i], i = byte(xv)|0x80, i+1
+			}
+			xv >>= 7
+		}
+	}
+
+	return i
+}
+
+/*
 // PutVarint encodes an int64 into buf and returns the number of bytes written.
 // If the buffer is too small, PutVarint will panic.
-func PutVarint(buf []byte, x num.I128) int {
+func PutVarint(buf []byte, x int64) int {
 	var zeros byte
 
 	if x != 0 && x%10 == 0 {
@@ -448,7 +582,107 @@ func PutVarint(buf []byte, x num.I128) int {
 	buf[i] = byte(ux)
 	return i + 1
 }
+*/
 
+// I128 decodes a num.I128 from buf and returns that value and the
+// number of bytes read (> 0). If an error occurred, the value is 0
+// and the number of bytes n is <= 0 meaning:
+//
+// 	n == 0: buf too small
+// 	n  < 0: value larger than 128 bits (overflow)
+// 	        and -n is the number of bytes read
+//
+func I128(buf []byte) (out num.I128, n int) {
+	var shift uint
+	var lo, hi uint64
+	var b byte
+	var i int
+
+	lim := len(buf)
+	iter := lim
+
+	zeros := (buf[0] >> 3) & 0xF
+	shift = 3
+	lo = uint64(buf[0] & 0x7)
+
+	n = 1
+	if buf[0] < 0x80 {
+		goto done
+	}
+
+	if iter > 9 {
+		iter = 9
+	}
+
+	for i = 1; i < iter; i++ {
+		b = buf[i]
+
+		if b < 0x80 {
+			lo, n = lo|uint64(b)<<shift, i+1 // +1 to convert from 0-index
+			goto done
+		}
+		lo |= uint64(b&0x7f) << shift
+		shift += 7
+	}
+
+	{ // i == 9
+		b = buf[9]
+		// if we have read 9 bytes, we have accumulated 59 bits of the lo number.
+		// after the continuation bit, the high 2 bits of the current byte belong
+		// to the hi number of the U128, and the low 5 belong to the lo:
+		//   x H H L L L L L
+		if b < 0x80 {
+			lo, hi, n = lo|(uint64(b)<<shift), uint64(b>>5), i+1 // +1 to convert from 0-index
+			goto done
+		}
+		lo, hi = lo|(uint64(b&0x7f)<<shift), (uint64(b&0x7f) >> 5)
+		shift = 2
+	}
+
+	for i = 10; i < lim; i++ {
+		b = buf[i]
+		if i > MaxLen128 || (i == MaxLen128 && b > 1) {
+			return zeroI128, -(i + 1) // overflow
+		}
+
+		if b < 0x80 {
+			hi, n = hi|uint64(b)<<shift, i+1 // +1 to convert from 0-index
+			goto done
+		}
+		hi |= uint64(b&0x7f) << shift
+		shift += 7
+	}
+
+done:
+	ux := num.U128FromRaw(hi, lo).Rsh(1)
+	if lo&1 != 0 {
+		ux = ux.Not()
+	}
+	if zeros == 0 {
+		return ux.AsI128(), n
+	}
+
+	hi, lo = ux.Raw()
+
+	zmlo := zumul64[zeros]
+
+	hl := hi * zmlo
+	olo := lo * zmlo // Subsequent calculations must use the original value
+
+	// break the multiplication into (x1 << 32 + x0)(y1 << 32 + y0)
+	// which is x1*y1 << 64 + (x0*y1 + x1*y0) << 32 + x0*y0
+	// so now we can do 64 bit multiplication and addition and
+	// shift the results into the right place
+	x0, x1 := lo&0x00000000ffffffff, lo>>32
+	y0, y1 := zmlo&0x00000000ffffffff, zmlo>>32
+	t := x1*y0 + (x0*y0)>>32
+	w1 := (t & 0x00000000ffffffff) + (x0 * y1)
+	hi = (x1 * y1) + (t >> 32) + (w1 >> 32) + hl
+
+	return num.I128FromRaw(hi, olo), n
+}
+
+/*
 // Varint decodes an int64 from buf and returns that value and the
 // number of bytes read (> 0). If an error occurred, the value is 0
 // and the number of bytes n is <= 0 with the following meaning:
@@ -623,7 +857,6 @@ done:
 */
 
 var (
-	zmul  = [...]int64{0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15}
 	zumul = [...]num.U128{
 		num.U128From64(0),
 		num.U128From64(1e1),
@@ -641,6 +874,25 @@ var (
 		num.U128From64(1e13),
 		num.U128From64(1e14),
 		num.U128From64(1e15),
+	}
+
+	zimul = [...]num.I128{
+		num.I128From64(0),
+		num.I128From64(1e1),
+		num.I128From64(1e2),
+		num.I128From64(1e3),
+		num.I128From64(1e4),
+		num.I128From64(1e5),
+		num.I128From64(1e6),
+		num.I128From64(1e7),
+		num.I128From64(1e8),
+		num.I128From64(1e9),
+		num.I128From64(1e10),
+		num.I128From64(1e11),
+		num.I128From64(1e12),
+		num.I128From64(1e13),
+		num.I128From64(1e14),
+		num.I128From64(1e15),
 	}
 
 	zumul64 = [...]uint64{

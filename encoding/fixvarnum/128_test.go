@@ -3,84 +3,64 @@ package fixvarnum
 import (
 	"fmt"
 	"math"
-	"math/big"
 	"math/rand"
-	"strings"
 	"testing"
 
 	num "github.com/shabbyrobe/go-num"
 	"github.com/shabbyrobe/golib/assert"
 )
 
-var u64 = num.U128From64
+func assertU128Sz(tt assert.T, v num.U128, sz int, scratch []byte, args ...interface{}) {
+	// tt.Helper() // Really slow!!
 
-func u128s(s string) num.U128 {
-	s = strings.Replace(s, " ", "", -1)
-	b, ok := new(big.Int).SetString(s, 0)
-	if !ok {
-		panic(fmt.Errorf("num: u128 string %q invalid", s))
-	}
-	out, acc := num.U128FromBigInt(b)
-	if !acc {
-		panic(fmt.Errorf("num: inaccurate u128 %s", s))
-	}
-	return out
-}
-
-const FuzzIterations = 1e6
-
-func assertU128(tt assert.T, v num.U128, scratch []byte, args ...interface{}) {
-	tt.Helper()
-	n := PutU128(scratch, v)
-
-	vd, _ := U128(scratch[:n])
-	tt.MustEqual(v, vd, args...)
-
-	// vd, _ = UvarintTurbo(scratch[:n])
-	// tt.MustEqual(v, vd)
-}
-
-func assertU128Sz(tt assert.T, v num.U128, sz int, scratch []byte) {
-	tt.Helper()
 	n := PutU128(scratch, v)
 
 	vd, osz := U128(scratch[:n])
-	tt.MustEqual(v, vd)
-	tt.MustEqual(sz, n)
-	tt.MustEqual(sz, osz)
+	if v != vd {
+		fatalfArgs(tt, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
+	}
+
+	if sz != osz {
+		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
+	}
+	if sz != n {
+		fatalfArgs(tt, fmt.Sprintf("encoded size %d did not match expected size %d", n, sz), args...)
+	}
 
 	// vd, osz = UvarintTurbo(scratch[:n])
-	// tt.MustEqual(v, vd)
-	// tt.MustEqual(sz, n)
-	// tt.MustEqual(sz, osz)
+	// if v != vd {
+	//     fatalfArgs(tt, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
+	// }
+	// if sz != osz {
+	//     fatalfArgs(tt, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
+	// }
 }
 
-// func assertInt(tt assert.T, v int64, scratch []byte) {
-//     tt.Helper()
-//     n := PutVarint(scratch, v)
-//
-//     vd, _ := Varint(scratch[:n])
-//     tt.MustEqual(v, vd)
-//
-//     vd, _ = VarintTurbo(scratch[:n])
-//     tt.MustEqual(v, vd)
-// }
-//
-// func assertIntSz(tt assert.T, v int64, sz int, scratch []byte) {
-//     tt.Helper()
-//     n := PutVarint(scratch, v)
-//
-//     vd, osz := Varint(scratch[:n])
-//     tt.MustEqual(v, vd)
-//     tt.MustEqual(sz, n)
-//     tt.MustEqual(sz, osz)
-//
-//     vd, osz = VarintTurbo(scratch[:n])
-//     tt.MustEqual(v, vd)
-//     tt.MustEqual(sz, n)
-//     tt.MustEqual(sz, osz)
-// }
-//
+func assertI128Sz(tt assert.T, v num.I128, sz int, scratch []byte, args ...interface{}) {
+	// tt.Helper() // Really slow!!
+
+	n := PutI128(scratch, v)
+
+	vd, osz := I128(scratch[:n])
+	if v != vd {
+		fatalfArgs(tt, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
+	}
+
+	if sz != osz {
+		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
+	}
+	if sz != n {
+		fatalfArgs(tt, fmt.Sprintf("encoded size %d did not match expected size %d", n, sz), args...)
+	}
+
+	// vd, osz = UvarintTurbo(scratch[:n])
+	// if v != vd {
+	//     fatalfArgs(tt, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
+	// }
+	// if sz != osz {
+	//     fatalfArgs(tt, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
+	// }
+}
 
 /*
 func TestVarUintOverflow(t *testing.T) {
@@ -131,7 +111,12 @@ func TestVarUintSz(t *testing.T) {
 		{1, u64(1e13)},
 		{1, u64(1e14)},
 		{1, u64(1e15)},
-		{2, u64(1e16)},                                         // exceeded 4 "zero bits"
+
+		// 16 zeros exceeds the 4 "zero bits", so the encoded number is '10
+		// with 15 zeros', which also exceeds the 3 data bits from the first
+		// byte:
+		{2, u64(1e16)},
+
 		{2, u128s("100000000000000000")},                       // 1e17
 		{2, u128s("1000000000000000000")},                      // 1e18
 		{3, u128s("10000000000000000000")},                     // 1e19
@@ -182,65 +167,67 @@ func TestVarUintSz(t *testing.T) {
 		t.Run(fmt.Sprintf("%d/%d", idx, tc.in), func(t *testing.T) {
 			tt := assert.WrapTB(t)
 			assertU128Sz(tt, tc.in, tc.sz, b)
+			tt.MustEqual(tc.sz, expectedBytesFromU128(tc.in))
 		})
 	}
 }
 
-func TestVarUintFuzz(t *testing.T) {
+func TestVarUintFuzzEncDec(t *testing.T) {
 	tt := assert.WrapTB(t)
 	scratch := make([]byte, MaxLen128)
 
-	var seed int64
-	// seed = time.Now().UnixNano()
-	rng := rand.New(rand.NewSource(seed))
-	next := func() (num.U128, uint, bool) {
+	rng := globalRNG
+	next := func() (num.U128, uint) {
 		var mask num.U128
 		bits := uint(rng.Intn(128) + 1)
 		if bits == 128 {
 			mask = num.MaxU128
 		} else if bits > 0 {
-			mask = num.U128From64(1).Lsh(bits).Sub(num.U128From64(1))
+			mask = u64(1).Lsh(bits).Sub(num.U128From64(1))
 		}
 		uv := num.RandU128(rng).And(mask)
-		return uv, bits, false
+		uv = uv.Or(u64(1).Lsh(bits - 1)) // Ensure that the number is definitely the expected number of bits
+		return uv, bits
 	}
 
-	// var x bool
-	// next = func() (num.U128, uint, bool) {
-	//     if x {
-	//         return num.U128{}, 0, true
-	//     }
-	//     x = true
-	//     return num.MustU128FromString("447573512691987709388639"), 128, false
-	// }
+	for i := 0; i < fuzzIterations; i++ {
+		uv, bits := next()
+		sz := expectedBytesFromU128(uv)
+		assertU128Sz(tt, uv, int(sz), scratch, "failed at index %d with bits %d, number %d", i, bits, uv)
+	}
+}
 
-	for i := 0; i < FuzzIterations; i++ {
-		uv, bits, stop := next()
-		if stop {
-			break
+func TestVarIntFuzzEncDec(t *testing.T) {
+	tt := assert.WrapTB(t)
+	scratch := make([]byte, MaxLen128)
+
+	rng := globalRNG
+	next := func() (num.I128, uint) {
+		var mask num.U128
+		bits := uint(rng.Intn(127) + 1)
+		if bits == 128 {
+			mask = num.MaxU128
+		} else if bits > 0 {
+			mask = u64(1).Lsh(bits).Sub(num.U128From64(1))
 		}
-		assertU128(tt, uv, scratch, "failed at index %d with bits %d", i, bits)
+		uv := num.RandU128(rng).And(mask)
+		uv = uv.Or(u64(1).Lsh(bits - 1)) // Ensure that the number is definitely the expected number of bits
+
+		iv := uv.AsI128()
+		if rand.Intn(2) == 1 {
+			iv = iv.Neg()
+		}
+		return iv, bits
+	}
+
+	for i := 0; i < fuzzIterations; i++ {
+		iv, bits := next()
+		sz := expectedBytesFromI128(iv)
+		assertI128Sz(tt, iv, int(sz), scratch, "failed at index %d with bits %d, number %d", i, bits, iv)
 	}
 }
 
 /*
-func TestVarIntFuzz(t *testing.T) {
-	tt := assert.WrapTB(t)
-	b := make([]byte, 16)
-
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := 0; i < FuzzIterations; i++ {
-		bits := rand.Intn(63) + 1
-		mask := uint64((1 << uint(bits)) - 1)
-		uv := rng.Uint64() & mask
-		iv := int64(uv)
-		if rand.Intn(2) == 1 {
-			iv = -iv
-		}
-		assertInt(tt, iv, b)
-	}
-}
-
 func TestVarInt(t *testing.T) {
 	tt := assert.WrapTB(t)
 	b := make([]byte, 16)
