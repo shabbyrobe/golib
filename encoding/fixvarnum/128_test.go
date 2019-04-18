@@ -62,21 +62,6 @@ func assertI128Sz(tt assert.T, v num.I128, sz int, scratch []byte, args ...inter
 	// }
 }
 
-/*
-func TestVarUintOverflow(t *testing.T) {
-	tt := assert.WrapTB(t)
-
-	// The number represented here is 18446744073709551615 + 1, which is
-	// one past the largest representable 64-bit integer:
-	in := []byte{0x80, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xff, 0x00}
-	_, n, err := DecodeUint(in)
-	tt.MustAssert(IsOverflow(err))
-
-	// We successfully decoded 9 bytes, but failed at the 10th:
-	tt.MustEqual(9, n)
-}
-*/
-
 func TestVarUintZero(t *testing.T) {
 	tt := assert.WrapTB(t)
 	b := make([]byte, 16)
@@ -172,7 +157,7 @@ func TestVarUintSz(t *testing.T) {
 	}
 }
 
-func TestVarUintFuzzEncDec(t *testing.T) {
+func TestUvarintFuzzEncDec(t *testing.T) {
 	tt := assert.WrapTB(t)
 	scratch := make([]byte, MaxLen128)
 

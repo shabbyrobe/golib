@@ -188,6 +188,7 @@ func TestVarUintSz(t *testing.T) {
 		{1, 1e14},
 		{1, 1e15},
 		{2, 1e16}, // exceeded 4 "zero bits"
+
 		{9, 11111111111111111},
 		{8, 11111111111111110},
 		{8, 11111111111111100},
@@ -262,7 +263,7 @@ func TestVarintOverflow(t *testing.T) {
 	})
 }
 
-func TestUvarintOverflow(t *testing.T) {
+func TestUvarintOverflowZero(t *testing.T) {
 	scratch := make([]byte, 11)
 
 	// If we add a zero to the zero bits, do we overflow?
