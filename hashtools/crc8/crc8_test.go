@@ -21,15 +21,20 @@ func TestCCITT(t *testing.T) {
 		{[]byte{0, 1, 2, 3, 4}, 227},
 		{[]byte{0, 1, 2, 3, 4, 5}, 188},
 		{[]byte{0, 1, 2, 3, 4, 5, 6}, 47},
+		{[]byte{0, 1, 2, 3, 4, 5, 6, 7}, 216},
 	} {
 		t.Run("", func(t *testing.T) {
 			tt := assert.WrapTB(t)
 			tt.MustEqual(tc.out, CCITT(tc.in))
+
+			if len(tc.in) == 8 {
+				tt.MustEqual(tc.out, CCITTFirst8(tc.in))
+			}
 		})
 	}
 }
 
-func TestCCITTFirst8(t *testing.T) {
+func TestCCITTFirst8Rand(t *testing.T) {
 	tt := assert.WrapTB(t)
 	buf := make([]byte, 32)
 	rand.Read(buf)
@@ -39,8 +44,8 @@ func TestCCITTFirst8(t *testing.T) {
 
 var BenchResult uint8
 
-func BenchmarkCCITT(b *testing.B) {
-	for _, sz := range []int{8, 50, 100} {
+func BenchmarkCCITTFull(b *testing.B) {
+	for _, sz := range []int{8, 50, 100, 1000} {
 		buf := make([]byte, sz)
 		rand.Read(buf)
 

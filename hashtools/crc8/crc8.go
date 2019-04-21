@@ -35,6 +35,10 @@ var CCITTTable = [256]byte{
 	0xe6, 0xe1, 0xe8, 0xef, 0xfa, 0xfd, 0xf4, 0xf3,
 }
 
+// CCITT calculates the CRC-8 of a byte slice.
+//
+// Note that it cannot be inlined due to the 'range' call: if you care
+// about performance, paste the loop into your own code.
 func CCITT(in []byte) (out uint8) {
 	for _, b := range in {
 		out = CCITTTable[out^b]
