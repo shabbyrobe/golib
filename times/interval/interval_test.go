@@ -76,17 +76,14 @@ func TestString(t *testing.T) {
 func TestConvertFuzz(t *testing.T) {
 	return
 	tt := assert.WrapTB(t)
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		from, to := randomDivisibleIntervals(nil)
 		period := randomPeriod(nil, from)
 		tt.MustAssert(from != to)
+		fmt.Println(1)
 
-		there, err := from.ConvertPeriodTo(period, to)
-		tt.MustOK(err)
-
-		back, err := to.ConvertPeriodTo(there, from)
-		tt.MustOK(err)
-		fmt.Println(from, to, period, there, back)
+		there := from.ConvertPeriodTo(period, to)
+		back := to.ConvertPeriodTo(there, from)
 		tt.MustEqual(period, back)
 	}
 }

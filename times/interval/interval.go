@@ -189,11 +189,8 @@ func (i Interval) DurationAt(at time.Time) time.Duration {
 	return end.Sub(start)
 }
 
-func (i Interval) ConvertPeriodTo(p Period, to Interval) (Period, error) {
-	if !i.CanDivideBy(to) && !i.CanCombineTo(to) {
-		return 0, fmt.Errorf("interval: cannot convert; %s is not divisible to or by %s", i, to)
-	}
-	return to.Period(i.Time(p, nil)), nil
+func (i Interval) ConvertPeriodTo(p Period, to Interval) Period {
+	return to.Period(i.Time(p, nil))
 }
 
 func (i Interval) Period(t time.Time) Period {
