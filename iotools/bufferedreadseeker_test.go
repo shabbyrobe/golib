@@ -50,10 +50,15 @@ func TestBufferedReadSeeker(t *testing.T) {
 
 		into := make([]byte, 16)
 		assertRead(tt, brs, into[:3], []byte("123"))  // Exact read
+		assertRead(tt, brs, into[:0], []byte{})       // Empty read shouldn't affect anything
 		assertRead(tt, brs, into[:3], []byte("4"))    // Buffered boundary - only returns the remaining buffered portion
+		assertRead(tt, brs, into[:0], []byte{})       // Empty read shouldn't affect anything
 		assertRead(tt, brs, into[:5], []byte("5678")) // Destination buffer larger than inner buffer
 		assertRead(tt, brs, into[:4], []byte("90"))   // Last bit
-		assertRead(tt, brs, into[:4], nil)            // Last bit
+
+		n, err := brs.Read(into[:4])
+		tt.MustEqual(0, n)
+		tt.MustEqual(io.EOF, err)
 	})
 
 	t.Run("seek-within-buffer", func(t *testing.T) {

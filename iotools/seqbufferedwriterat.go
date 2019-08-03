@@ -9,6 +9,8 @@ import (
 // like calls to Write, but may occasionally need to WriteAt a specific random
 // offset (albeit more slowly).
 //
+// If the write is too large for the buffer, the buffer is flushed and the write
+// is passed through directly.
 type SequentialBufferedWriterAt struct {
 	w      io.WriterAt
 	cls    io.Closer
@@ -40,9 +42,8 @@ func NewSequentialBufferedWriterAt(w io.WriterAt, size int64) *SequentialBuffere
 }
 
 func (wr *SequentialBufferedWriterAt) WriteAt(in []byte, off int64) (n int, err error) {
-	plen := len(in)
-	plen64 := int64(plen)
-	if plen64 > wr.max {
+	inlen := int64(len(in))
+	if inlen > wr.max {
 		if err := wr.Flush(); err != nil {
 			return 0, err
 		}
@@ -57,11 +58,13 @@ func (wr *SequentialBufferedWriterAt) WriteAt(in []byte, off int64) (n int, err 
 		}
 	}
 
-	if plen64 > wr.left {
+	if inlen > wr.left {
 		copied := int64(copy(wr.buffer[wr.len:], in))
 		wr.len += copied
 		off += copied
 		if err := wr.Flush(); err != nil {
+			// FIXME: "0" may not be correct here - we have accepted n bytes into the
+			// buffer at this point
 			return 0, err
 		}
 
@@ -75,7 +78,7 @@ func (wr *SequentialBufferedWriterAt) WriteAt(in []byte, off int64) (n int, err 
 	copied := int64(copy(wr.buffer[wr.len:], in))
 	wr.len += copied
 	wr.left -= copied
-	return plen, nil
+	return int(inlen), nil
 }
 
 func (wr *SequentialBufferedWriterAt) Close() error {

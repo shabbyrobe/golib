@@ -48,6 +48,15 @@ func TestSequentialBufferedWriterAt(t *testing.T) {
 		lwa.assertFlush(tt, bwa)
 	})
 
+	t.Run("write-more-than-twice-buffer-size", func(t *testing.T) {
+		tt := assert.WrapTB(t)
+
+		var lwa loggingWriterAt
+		bwa := NewSequentialBufferedWriterAt(&lwa, 2)
+		lwa.assertWrites(tt, bwa, []byte{1, 2, 3, 4, 5}, 1, writeEvent{p: []byte{1, 2, 3, 4, 5}, at: 1})
+		lwa.assertFlush(tt, bwa)
+	})
+
 	t.Run("write-too-big-with-flushes-buffer", func(t *testing.T) {
 		tt := assert.WrapTB(t)
 
