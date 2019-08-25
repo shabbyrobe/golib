@@ -3,7 +3,6 @@ package iotools
 import (
 	"fmt"
 	"io"
-	"os"
 )
 
 type WriterAtPretender struct {
@@ -21,14 +20,12 @@ func PretendWriterAt(w io.Writer) *WriterAtPretender {
 }
 
 func (w *WriterAtPretender) WriteAt(p []byte, off int64) (n int, err error) {
-	fmt.Fprintln(os.Stderr, w.pos, off)
 	if off < w.pos {
 		return 0, fmt.Errorf("iotools: expected write offset >=%d, found %d", w.pos, off)
 
 	} else if off > w.pos {
 		// Write zeroes until we get to offset
 		gap := off - w.pos
-		fmt.Fprintln(os.Stderr, "GAP", gap)
 
 		for gap > 0 {
 			end := int64(8192)
