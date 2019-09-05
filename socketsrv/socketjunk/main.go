@@ -21,7 +21,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pkg/profile"
 	"github.com/shabbyrobe/cmdy"
-	"github.com/shabbyrobe/cmdy/args"
+	"github.com/shabbyrobe/cmdy/arg"
 	service "github.com/shabbyrobe/go-service"
 	"github.com/shabbyrobe/go-service/services"
 	"github.com/shabbyrobe/go-service/serviceutil"
@@ -41,15 +41,15 @@ func main() {
 }
 
 func run() error {
-	bld := func() (cmdy.Command, cmdy.Init) {
+	bld := func() cmdy.Command {
 		return cmdy.NewGroup("socketjunk", cmdy.Builders{
-			"tcpclient": func() (cmdy.Command, cmdy.Init) { return &tcpClientCommand{}, nil },
-			"tcpserver": func() (cmdy.Command, cmdy.Init) { return &tcpServerCommand{}, nil },
-			"pktclient": func() (cmdy.Command, cmdy.Init) { return &pktClientCommand{}, nil },
-			"pktserver": func() (cmdy.Command, cmdy.Init) { return &pktServerCommand{}, nil },
-			"wsclient":  func() (cmdy.Command, cmdy.Init) { return &wsClientCommand{}, nil },
-			"wsserver":  func() (cmdy.Command, cmdy.Init) { return &wsServerCommand{}, nil },
-		}), nil
+			"tcpclient": func() cmdy.Command { return &tcpClientCommand{} },
+			"tcpserver": func() cmdy.Command { return &tcpServerCommand{} },
+			"pktclient": func() cmdy.Command { return &pktClientCommand{} },
+			"pktserver": func() cmdy.Command { return &pktServerCommand{} },
+			"wsclient":  func() cmdy.Command { return &wsClientCommand{} },
+			"wsserver":  func() cmdy.Command { return &wsServerCommand{} },
+		})
 	}
 
 	return cmdy.Run(context.Background(), os.Args[1:], bld)
@@ -70,16 +70,10 @@ type tcpClientCommand struct {
 }
 
 func (cl *tcpClientCommand) Synopsis() string { return "tcpclient" }
-func (cl *tcpClientCommand) Flags() *cmdy.FlagSet {
-	fs := cmdy.NewFlagSet()
-	cl.spammer.Flags(fs)
-	return fs
-}
 
-func (cl *tcpClientCommand) Args() *args.ArgSet {
-	as := args.NewArgSet()
-	as.StringOptional(&cl.host, "host", "localhost:9631", "host")
-	return as
+func (cl *tcpClientCommand) Configure(flags *cmdy.FlagSet, args *arg.ArgSet) {
+	cl.spammer.Flags(flags)
+	args.StringOptional(&cl.host, "host", "localhost:9631", "host")
 }
 
 func (cl *tcpClientCommand) Run(ctx cmdy.Context) error {
@@ -102,13 +96,10 @@ type tcpServerCommand struct {
 	host string
 }
 
-func (sc *tcpServerCommand) Synopsis() string   { return "tcpserver" }
-func (sc *tcpServerCommand) Args() *args.ArgSet { return nil }
+func (sc *tcpServerCommand) Synopsis() string { return "tcpserver" }
 
-func (sc *tcpServerCommand) Flags() *cmdy.FlagSet {
-	fs := cmdy.NewFlagSet()
-	fs.StringVar(&sc.host, "host", ":9631", "host")
-	return fs
+func (sc *tcpServerCommand) Configure(flags *cmdy.FlagSet, args *arg.ArgSet) {
+	flags.StringVar(&sc.host, "host", ":9631", "host")
 }
 
 func (sc *tcpServerCommand) Run(ctx cmdy.Context) error {
@@ -148,13 +139,10 @@ type pktClientCommand struct {
 	host string
 }
 
-func (cl *pktClientCommand) Synopsis() string     { return "pktclient" }
-func (cl *pktClientCommand) Flags() *cmdy.FlagSet { return nil }
+func (cl *pktClientCommand) Synopsis() string { return "pktclient" }
 
-func (cl *pktClientCommand) Args() *args.ArgSet {
-	as := args.NewArgSet()
-	as.StringOptional(&cl.host, "host", "localhost:9633", "host")
-	return as
+func (cl *pktClientCommand) Configure(flags *cmdy.FlagSet, args *arg.ArgSet) {
+	args.StringOptional(&cl.host, "host", "localhost:9633", "host")
 }
 
 func (cl *pktClientCommand) Run(ctx cmdy.Context) error {
@@ -214,13 +202,10 @@ type pktServerCommand struct {
 	host string
 }
 
-func (sc *pktServerCommand) Synopsis() string   { return "pktserver" }
-func (sc *pktServerCommand) Args() *args.ArgSet { return nil }
+func (sc *pktServerCommand) Synopsis() string { return "pktserver" }
 
-func (sc *pktServerCommand) Flags() *cmdy.FlagSet {
-	fs := cmdy.NewFlagSet()
-	fs.StringVar(&sc.host, "host", ":9633", "host")
-	return fs
+func (sc *pktServerCommand) Configure(flags *cmdy.FlagSet, args *arg.ArgSet) {
+	flags.StringVar(&sc.host, "host", ":9633", "host")
 }
 
 func (sc *pktServerCommand) Run(ctx cmdy.Context) error {
@@ -252,16 +237,10 @@ type wsClientCommand struct {
 }
 
 func (cl *wsClientCommand) Synopsis() string { return "wsclient" }
-func (cl *wsClientCommand) Flags() *cmdy.FlagSet {
-	fs := cmdy.NewFlagSet()
-	cl.spammer.Flags(fs)
-	return fs
-}
 
-func (cl *wsClientCommand) Args() *args.ArgSet {
-	as := args.NewArgSet()
-	as.StringOptional(&cl.url, "url", "ws://localhost:9632/", "host")
-	return as
+func (cl *wsClientCommand) Configure(flags *cmdy.FlagSet, args *arg.ArgSet) {
+	cl.spammer.Flags(flags)
+	args.StringOptional(&cl.url, "url", "ws://localhost:9632/", "host")
 }
 
 func (cl *wsClientCommand) Run(ctx cmdy.Context) error {
@@ -290,13 +269,10 @@ type wsServerCommand struct {
 	host string
 }
 
-func (sc *wsServerCommand) Synopsis() string   { return "wsserver" }
-func (sc *wsServerCommand) Args() *args.ArgSet { return nil }
+func (sc *wsServerCommand) Synopsis() string { return "wsserver" }
 
-func (sc *wsServerCommand) Flags() *cmdy.FlagSet {
-	fs := cmdy.NewFlagSet()
-	fs.StringVar(&sc.host, "host", ":9632", "host")
-	return fs
+func (sc *wsServerCommand) Configure(flags *cmdy.FlagSet, args *arg.ArgSet) {
+	flags.StringVar(&sc.host, "host", ":9632", "host")
 }
 
 func (sc *wsServerCommand) Run(ctx cmdy.Context) error {
