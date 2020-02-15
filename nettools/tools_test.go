@@ -1,21 +1,31 @@
 package nettools
 
 import (
+	"fmt"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestHostDefaultPort(t *testing.T) {
-	tt := assert.WrapTB(t)
-
-	tt.MustEqual("localhost:123", HostDefaultPort("localhost", "123"))
-	tt.MustEqual("localhost:123", HostDefaultPort("localhost", ":123"))
-	tt.MustEqual("localhost:123", HostDefaultPort("localhost:123", ""))
-	tt.MustEqual("localhost:123", HostDefaultPort("localhost:123", "456"))
-	tt.MustEqual("localhost", HostDefaultPort("localhost:", ""))
-	tt.MustEqual("localhost:", HostDefaultPort("localhost:", ":"))
-	tt.MustEqual("localhost:http", HostDefaultPort("localhost", ":http"))
-	tt.MustEqual("localhost:http", HostDefaultPort("localhost:", ":http"))
-	tt.MustEqual("localhost:http", HostDefaultPort("localhost:", "http"))
+	for idx, tc := range []struct {
+		host     string
+		dflt     string
+		expected string
+	}{
+		{"localhost", "123", "localhost:123"},
+		{"localhost", ":123", "localhost:123"},
+		{"localhost:123", "", "localhost:123"},
+		{"localhost:123", "456", "localhost:123"},
+		{"localhost:", "", "localhost"},
+		{"localhost:", ":", "localhost:"},
+		{"localhost", ":http", "localhost:http"},
+		{"localhost:", ":http", "localhost:http"},
+		{"localhost:", "http", "localhost:http"},
+	} {
+		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
+			result := HostDefaultPort(tc.host, tc.dflt)
+			if result != tc.expected {
+				t.Fatal(result, "!=", tc.expected)
+			}
+		})
+	}
 }
