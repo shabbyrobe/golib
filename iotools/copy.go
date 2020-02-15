@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-
-	"github.com/shabbyrobe/golib/errtools"
 )
 
 func CopyFile(from, to string) (rerr error) {
@@ -26,7 +24,13 @@ func CopyFile(from, to string) (rerr error) {
 	if err != nil {
 		return err
 	}
-	defer errtools.DeferClose(&rerr, out)
+
+	defer func() {
+		cerr := out.Close()
+		if rerr == nil && cerr != nil {
+			rerr = cerr
+		}
+	}()
 
 	n, err := io.Copy(out, in)
 	if err != nil {
