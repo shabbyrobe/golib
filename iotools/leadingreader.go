@@ -7,6 +7,10 @@ import (
 
 // LeadingReader is an io.Reader that proxies an existing reader after first
 // reading from a fixed byte slice.
+//
+// Deprecated: you'd probably be better off using io.MultiReader instead:
+//	io.MultiReader(bytes.NewReader(leading), rdr)
+//
 type LeadingReader struct {
 	leading     io.Reader
 	leadingDone bool

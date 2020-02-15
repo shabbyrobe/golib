@@ -41,7 +41,7 @@ func (c *CommitReader) Rest() io.Reader {
 	}
 	c.Commit()
 	c.valid = false
-	return NewLeadingReader(c.buf.Bytes(), c.r)
+	return io.MultiReader(&c.buf, c.r)
 }
 
 func (c *CommitReader) Read(p []byte) (n int, err error) {
