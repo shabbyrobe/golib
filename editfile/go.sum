@@ -1,0 +1,7 @@
+github.com/gofrs/flock v0.7.1 h1:DP+LD/t0njgoPBvT5MJLeliUIVQR03hiKR6vezdwHlc=
+github.com/gofrs/flock v0.7.1/go.mod h1:F1TvTiK9OcQqauNUHlbJvyl9Qa1QvF/gOUDKA14jxHU=
+github.com/shabbyrobe/golib v0.0.0-20200215041705-d919421cac09 h1:aQtokvAeAeBp2RVVtvNbRbDkEwF+3WYItjngImN8pWU=
+github.com/shabbyrobe/golib/assert v0.0.0-20200215041705-d919421cac09 h1:HUqpzWq2ItFLJzIB1nLSbY0pSnG8XKJ9qUiO/liXmek=
+github.com/shabbyrobe/golib/assert v0.0.0-20200215041705-d919421cac09/go.mod h1:cIzwfpt3wIJbYsMDBU+7ldCmxO4NlGPg2T74neiAF6U=
+github.com/shabbyrobe/golib/iotools v0.0.0-20200215041705-d919421cac09 h1:JICOh7tecy/epUyzdUbvwckseuoS0X8xm5m6Z8vLecI=
+github.com/shabbyrobe/golib/iotools v0.0.0-20200215041705-d919421cac09/go.mod h1:O9HZ3elBJMxT820aBcTktY5JGYBk9Zym6v/lfcwJWNk=
