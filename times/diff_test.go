@@ -3,8 +3,6 @@ package times
 import (
 	"testing"
 	"time"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestDiff(t *testing.T) {
@@ -15,9 +13,10 @@ func TestDiff(t *testing.T) {
 		return time.Date(yr, mon, d, 0, 0, 0, 0, time.UTC)
 	}
 	_ = md
+
 	for _, tc := range []struct {
-		a, b   time.Time
-		result TimeDiff
+		a, b     time.Time
+		expected TimeDiff
 	}{
 		{mdt(2018, 1, 1, 12, 0, 0, 0), mdt(2018, 1, 1, 12, 0, 0, 1), TimeDiff{Nanoseconds: 1}},
 		{mdt(2018, 1, 1, 12, 0, 0, 0), mdt(2018, 1, 1, 12, 0, 1, 1), TimeDiff{Seconds: 1, Nanoseconds: 1}},
@@ -37,7 +36,10 @@ func TestDiff(t *testing.T) {
 		{mdt(2005, 12, 31, 23, 59, 0, 0), mdt(2006, 1, 1, 0, 0, 0, 0), TimeDiff{Minutes: 1}},
 	} {
 		t.Run("", func(t *testing.T) {
-			assert.WrapTB(t).MustEqual(tc.result, Diff(tc.a, tc.b))
+			result := Diff(tc.a, tc.b)
+			if tc.expected != result {
+				t.Fatal("diff", tc.a, tc.b, "!=", result)
+			}
 		})
 	}
 }
