@@ -1,3 +1,3 @@
 module github.com/shabbyrobe/golib/incrementer
 
-go 1.14
+go 1.13

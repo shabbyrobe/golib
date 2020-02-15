@@ -1,3 +1,3 @@
 module github.com/shabbyrobe/golib/encoding/cobsr
 
-go 1.14
+go 1.13
