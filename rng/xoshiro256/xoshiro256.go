@@ -1,9 +1,9 @@
-package xoroshiro128
+package xoshiro256
 
-import "github.com/shabbyrobe/golib/randtools/splitmix64"
+import "github.com/shabbyrobe/golib/rng/splitmix64"
 
 type Source struct {
-	a, b uint64
+	a, b, c, d uint64
 }
 
 func NewSource(seed int64) *Source {
@@ -17,7 +17,7 @@ func (xo *Source) Seed(seed int64) {
 	// a 64-bit seed, we suggest to seed a splitmix64 generator and use its
 	// output to fill s.
 	sm := splitmix64.NewSource(seed)
-	xo.a, xo.b = sm.Uint64(), sm.Uint64()
+	xo.a, xo.b, xo.c, xo.d = sm.Uint64(), sm.Uint64(), sm.Uint64(), sm.Uint64()
 }
 
 func (xo *Source) Int63() int64 {
@@ -25,12 +25,18 @@ func (xo *Source) Int63() int64 {
 }
 
 func (xo *Source) Uint64() uint64 {
-	s0, s1 := xo.a, xo.b
-	result := s0 + s1
+	var smul = xo.b * 5
+	var result uint64 = ((smul << 7) | (smul >> (64 - 7))) * 9
+	var t = xo.b << 17
 
-	s1 ^= s0
-	xo.a = ((s0 << 55) | (s0 >> (64 - 55))) ^ s1 ^ (s1 << 14)
-	xo.b = ((s1 << 36) | (s1 >> (64 - 36)))
+	xo.c ^= xo.a
+	xo.d ^= xo.b
+	xo.b ^= xo.c
+	xo.a ^= xo.d
+
+	xo.c ^= t
+
+	xo.d = (xo.d << 45) | (xo.d >> (64 - 45))
 
 	return result
 }
