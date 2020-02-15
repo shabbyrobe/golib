@@ -4,8 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-
-	"github.com/pkg/errors"
 )
 
 const fileHeaderLengthBytes = 4
@@ -51,7 +49,7 @@ func FileHeaderRead(magic string, rdr io.Reader) (hdr []byte, n int, err error) 
 	rn, err := io.ReadFull(rdr, bts)
 	n += rn
 	if rn != expected {
-		return bts, n, errors.Errorf("iotools: file header short read preamble")
+		return bts, n, fmt.Errorf("iotools: file header short read preamble")
 	} else if err != nil {
 		return bts, n, err
 	}
@@ -68,7 +66,7 @@ func FileHeaderRead(magic string, rdr io.Reader) (hdr []byte, n int, err error) 
 		rn, err = io.ReadFull(rdr, hdr)
 		n += rn
 		if uint32(rn) != hlen {
-			return bts, n, errors.Errorf("iotools: file header short read")
+			return bts, n, fmt.Errorf("iotools: file header short read")
 		} else if err != nil {
 			return bts, n, err
 		}
@@ -90,7 +88,7 @@ func FileHeaderWrite(magic string, w io.Writer, hdr []byte) (n int, err error) {
 	if err != nil {
 		return n, err
 	} else if cn != len(preamble) {
-		return n, errors.Errorf("iotools: file header short length write")
+		return n, fmt.Errorf("iotools: file header short length write")
 	}
 
 	cn, err = w.Write(hdr)
@@ -98,7 +96,7 @@ func FileHeaderWrite(magic string, w io.Writer, hdr []byte) (n int, err error) {
 	if err != nil {
 		return n, err
 	} else if cn != len(hdr) {
-		return n, errors.Errorf("iotools: file header short write")
+		return n, fmt.Errorf("iotools: file header short write")
 	}
 
 	return n, nil

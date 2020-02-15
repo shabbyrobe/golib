@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 func MustParse(intvl string) Interval {
@@ -33,7 +31,7 @@ func Parse(intvl string) (Interval, error) {
 		nidx = idx
 	}
 	if nidx < 0 {
-		return 0, errors.Errorf("invalid interval %q", intvl)
+		return 0, fmt.Errorf("interval: invalid input %q", intvl)
 	}
 
 	qty, err := strconv.ParseInt(intvl[:nidx+1], 10, 64)
@@ -76,41 +74,41 @@ func ParseIntervalPeriod(v string) (intvl Interval, period Period, err error) {
 	return intvl, Period(pi), nil
 
 fail:
-	return 0, 0, fmt.Errorf("invalid interval/period %q; expected format '1min:1234'", v)
+	return 0, 0, fmt.Errorf("interval: invalid interval/period %q; expected format '1min:1234'", v)
 }
 
 func Validate(span Span, qty Qty) error {
 	switch span {
 	case Second:
 		if qty > MaxSecond {
-			return errors.Errorf("qty too large for seconds: expected <= %d, found %d", MaxSecond, qty)
+			return fmt.Errorf("interval: qty too large for seconds: expected <= %d, found %d", MaxSecond, qty)
 		}
 	case Minute:
 		if qty > MaxMinute {
-			return errors.Errorf("qty too large for minutes: expected <= %d, found %d", MaxMinute, qty)
+			return fmt.Errorf("interval: qty too large for minutes: expected <= %d, found %d", MaxMinute, qty)
 		}
 	case Hour:
 		if qty > MaxHour {
-			return errors.Errorf("qty too large for hours: expected <= %d, found %d", MaxHour, qty)
+			return fmt.Errorf("interval: qty too large for hours: expected <= %d, found %d", MaxHour, qty)
 		}
 	case Day:
 		if qty > MaxDay {
-			return errors.Errorf("qty too large for days: expected <= %d, found %d", MaxDay, qty)
+			return fmt.Errorf("interval: qty too large for days: expected <= %d, found %d", MaxDay, qty)
 		}
 	case Week:
 		if qty > MaxWeek {
-			return errors.Errorf("qty too large for weeks: expected <= %d, found %d", MaxWeek, qty)
+			return fmt.Errorf("interval: qty too large for weeks: expected <= %d, found %d", MaxWeek, qty)
 		}
 	case Month:
 		if qty > MaxMonth {
-			return errors.Errorf("qty too large for months: expected <= %d, found %d", MaxMonth, qty)
+			return fmt.Errorf("interval: qty too large for months: expected <= %d, found %d", MaxMonth, qty)
 		}
 	case Year:
 		if qty > MaxYear {
-			return errors.Errorf("qty too large for years: expected <= %d, found %d", MaxYear, qty)
+			return fmt.Errorf("interval: qty too large for years: expected <= %d, found %d", MaxYear, qty)
 		}
 	default:
-		return errors.Errorf("unknown span %s", span)
+		return fmt.Errorf("interval: unknown span %s", span)
 	}
 	return nil
 }
@@ -199,7 +197,7 @@ func ParseSpan(sstr string) (span Span, err error) {
 	case "years":
 		span = Year
 	default:
-		err = errors.Errorf("unknown span %q", sstr)
+		err = fmt.Errorf("interval: unknown span %q", sstr)
 	}
 	return
 }

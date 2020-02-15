@@ -2,9 +2,8 @@ package iotools
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
-
-	"github.com/pkg/errors"
 )
 
 type MessageReaderBytePrefix struct {
@@ -43,7 +42,7 @@ again:
 		if err == io.EOF {
 			return nil, 0, io.EOF // EOF is used to allow users to terminate the loop
 		} else if err != nil {
-			return nil, 0, errors.Wrap(err, "iotools: messagereader read failed")
+			return nil, 0, fmt.Errorf("iotools: messagereader read failed: %w", err)
 		} else if n == 0 {
 			return nil, 0, nil
 		}
@@ -68,7 +67,7 @@ again:
 					return nil, 0, io.EOF // EOF is used to allow users to terminate the loop
 				}
 			} else {
-				return nil, 0, errors.Wrap(err, "iotools: messagereader read failed")
+				return nil, 0, fmt.Errorf("iotools: messagereader read failed: %w", err)
 			}
 
 		} else if n == 0 {
@@ -79,7 +78,7 @@ again:
 	}
 
 	if pr.bufLen < msgLen {
-		return nil, 0, errors.Errorf("iotools: short message read; expected %d bytes, found %d", msgLen, pr.bufLen)
+		return nil, 0, fmt.Errorf("iotools: short message read; expected %d bytes, found %d", msgLen, pr.bufLen)
 	}
 
 	out = pr.buf[pr.bufPos : pr.bufPos+msgLen]
@@ -120,7 +119,7 @@ again:
 		if err == io.EOF {
 			return nil, 0, io.EOF // EOF is used to allow users to terminate the loop
 		} else if err != nil {
-			return nil, 0, errors.Wrap(err, "iotools: messagereader read failed")
+			return nil, 0, fmt.Errorf("iotools: messagereader read failed: %w", err)
 		} else if n == 0 {
 			return nil, 0, nil
 		}
@@ -145,7 +144,7 @@ again:
 					return nil, 0, io.EOF // EOF is used to allow users to terminate the loop
 				}
 			} else {
-				return nil, 0, errors.Wrap(err, "iotools: messagereader read failed")
+				return nil, 0, fmt.Errorf("iotools: messagereader read failed: %w", err)
 			}
 
 		} else if n == 0 {
@@ -156,7 +155,7 @@ again:
 	}
 
 	if pr.bufLen < msgLen {
-		return nil, 0, errors.Errorf("iotools: short message read; expected %d bytes, found %d", msgLen, pr.bufLen)
+		return nil, 0, fmt.Errorf("iotools: short message read; expected %d bytes, found %d", msgLen, pr.bufLen)
 	}
 
 	out = pr.buf[pr.bufPos : pr.bufPos+msgLen]
