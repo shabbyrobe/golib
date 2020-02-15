@@ -17,7 +17,7 @@ import (
 //
 // If the file does not exist, an empty file will be created, which will be locked.
 //
-// The original file will be locked using go-flock.
+// The original file will be locked using gofrs/flock.
 //
 func Edit(name string) (file *File, rerr error) {
 	f, err := os.OpenFile(name, os.O_CREATE|os.O_RDWR, 0666)
