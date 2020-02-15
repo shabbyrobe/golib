@@ -1,5 +1,4 @@
 github.com/pkg/profile v1.4.0 h1:uCmaf4vVbWAOZz36k1hrQD7ijGRzLwaME8Am/7a4jZI=
 github.com/pkg/profile v1.4.0/go.mod h1:NWz/XGvpEW1FyYQ7fCx4dqYBLlfTcE+A9FLAkNKqjFE=
-github.com/shabbyrobe/golib v0.0.0-20200215041705-d919421cac09 h1:aQtokvAeAeBp2RVVtvNbRbDkEwF+3WYItjngImN8pWU=
-github.com/shabbyrobe/golib/iotools v0.0.0-20200215041705-d919421cac09 h1:JICOh7tecy/epUyzdUbvwckseuoS0X8xm5m6Z8vLecI=
-github.com/shabbyrobe/golib/iotools v0.0.0-20200215041705-d919421cac09/go.mod h1:O9HZ3elBJMxT820aBcTktY5JGYBk9Zym6v/lfcwJWNk=
+github.com/shabbyrobe/golib/iotools v0.0.0-20200215042454-96cb28ef70ba h1:EEPaqZ88EerDOvP6wQH8ONgbeuOlolrD7gVSg2BsGmE=
+github.com/shabbyrobe/golib/iotools v0.0.0-20200215042454-96cb28ef70ba/go.mod h1:faoRxLdfSq7rm6UH+CSME+nQ5cw3KVI5xTAiT+uWKhs=

@@ -1,4 +1,2 @@
-github.com/shabbyrobe/golib v0.0.0-20191226132435-b57206e27f90 h1:ChPILTwNWfTwP2pavtE4giRJKPrtdl2SsJHRiB77vMk=
-github.com/shabbyrobe/golib v0.0.0-20191226132435-b57206e27f90/go.mod h1:A0K2jJciVDp5RFGaI+uKiUlzhFce6bamE621B9bJGjg=
-github.com/shabbyrobe/golib/rng/splitmix64 v0.0.0-20200215033647-947bdfa9f209 h1:FR7AKf87YwTV8TIvCV9R8OORed69PDzU1cfRuw29LzU=
-github.com/shabbyrobe/golib/rng/splitmix64 v0.0.0-20200215033647-947bdfa9f209/go.mod h1:lIWiYyxIyQ6/huDfqBSAkIL8GNtHGp6WjpVmCaM+6lI=
+github.com/shabbyrobe/golib/rng/splitmix64 v0.0.0-20200215042454-96cb28ef70ba h1:mQ/LAxdiKtpF55pP+NVsVIjZfTkb1Xzg4nqYKUiNTNk=
+github.com/shabbyrobe/golib/rng/splitmix64 v0.0.0-20200215042454-96cb28ef70ba/go.mod h1:6TJqvYySaQjUOVrSorTZK60bcOxLSyV/IySzBbzLnlo=
