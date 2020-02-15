@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"testing"
 	"time"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestFormat(t *testing.T) {
@@ -22,8 +20,10 @@ func TestFormat(t *testing.T) {
 		{Of1Month, 10, "1970-11-01Z"},
 	} {
 		t.Run("", func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			tt.MustEqual(tc.out, tc.intvl.Format(tc.period))
+			result := tc.intvl.Format(tc.period)
+			if tc.out != result {
+				t.Fatal(result)
+			}
 		})
 	}
 }
@@ -45,8 +45,10 @@ func TestFormatIn(t *testing.T) {
 		{Of1Month, loc, 10, "1970-11-01+10:00"},
 	} {
 		t.Run("", func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			tt.MustEqual(tc.out, tc.intvl.FormatIn(tc.period, tc.loc))
+			result := tc.intvl.FormatIn(tc.period, tc.loc)
+			if result != tc.out {
+				t.Fatal(result)
+			}
 		})
 	}
 }
@@ -86,8 +88,10 @@ func TestFormatShort(t *testing.T) {
 		{Of1Month, 12, "1971"},
 	} {
 		t.Run(fmt.Sprintf("%s-%s", tc.intvl, tc.out), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			tt.MustEqual(tc.out, tc.intvl.FormatShort(tc.period))
+			result := tc.intvl.FormatShort(tc.period)
+			if result != tc.out {
+				t.Fatal(result)
+			}
 		})
 	}
 }
@@ -132,8 +136,10 @@ func TestFormatAfter(t *testing.T) {
 		{Of1Day, 0, 396, "1971-02"},
 	} {
 		t.Run(fmt.Sprintf("%s-%s", tc.intvl, tc.out), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			tt.MustEqual(tc.out, tc.intvl.FormatAfter(tc.cur, tc.prev))
+			result := tc.intvl.FormatAfter(tc.cur, tc.prev)
+			if result != tc.out {
+				t.Fatal(result)
+			}
 		})
 	}
 }

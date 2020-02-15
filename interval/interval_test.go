@@ -3,121 +3,147 @@ package interval
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"testing"
 	"time"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestInterval(t *testing.T) {
-	tt := assert.WrapTB(t)
+	tz := time.FixedZone("+10:00", 36000)
 
-	tt.MustEqual(time.Date(2017, 5, 1, 0, 0, 0, 0, time.UTC),
-		Raw(4, Month).Start(time.Date(2017, 7, 1, 0, 0, 0, 0, time.UTC)))
+	for idx, tc := range []struct {
+		in       Interval
+		at       time.Time
+		expected time.Time
+	}{
+		{Raw(4, Month), time.Date(2017, 7, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2017, 5, 1, 0, 0, 0, 0, time.UTC)},
 
-	tt.MustEqual(time.Date(2017, 6, 26, 0, 0, 0, 0, time.UTC),
-		Raw(3, Week).Start(time.Date(2017, 7, 1, 0, 0, 0, 0, time.UTC)))
+		{Raw(3, Week), time.Date(2017, 7, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2017, 6, 26, 0, 0, 0, 0, time.UTC)},
 
-	tt.MustEqual(time.Date(2017, 6, 26, 4, 0, 0, 0, time.UTC),
-		Raw(4, Hour).Start(time.Date(2017, 6, 26, 5, 30, 0, 0, time.UTC)))
+		{Raw(4, Hour), time.Date(2017, 6, 26, 5, 30, 0, 0, time.UTC),
+			time.Date(2017, 6, 26, 4, 0, 0, 0, time.UTC)},
 
-	aest, err := time.LoadLocation("Australia/Melbourne")
-	tt.MustOK(err)
+		{Raw(4, Month), time.Date(2017, 7, 1, 0, 0, 0, 0, tz),
+			time.Date(2017, 5, 1, 0, 0, 0, 0, tz)},
 
-	tt.MustEqual(time.Date(2017, 5, 1, 0, 0, 0, 0, aest),
-		Raw(4, Month).Start(time.Date(2017, 7, 1, 0, 0, 0, 0, aest)))
+		{Raw(3, Week), time.Date(2017, 7, 1, 0, 0, 0, 0, tz),
+			time.Date(2017, 6, 26, 0, 0, 0, 0, tz)},
 
-	tt.MustEqual(time.Date(2017, 6, 26, 0, 0, 0, 0, aest),
-		Raw(3, Week).Start(time.Date(2017, 7, 1, 0, 0, 0, 0, aest)))
-
-	// This is 02:00 instead of 04:00 because the timezone offset is 10 hours
-	// and the buckets start from UTC.
-	tt.MustEqual(time.Date(2017, 6, 26, 2, 0, 0, 0, aest),
-		Raw(4, Hour).Start(time.Date(2017, 6, 26, 5, 30, 0, 0, aest)))
-}
-
-func TestParse(t *testing.T) {
-	tt := assert.WrapTB(t)
-	tt.MustEqual(Raw(1, Second), MustParse("1s"))
-	tt.MustEqual(Raw(10, Second), MustParse("10s"))
-	tt.MustEqual(Raw(1, Second), MustParse("1sec"))
-	tt.MustEqual(Raw(10, Second), MustParse("10 s"))
-	tt.MustEqual(Raw(10, Second), MustParse(" 10 s "))
-	tt.MustEqual(Raw(10, Second), MustParse(" 10 secs "))
-	tt.MustEqual(Raw(10, Second), MustParse(" 10  secs "))
-	tt.MustEqual(Raw(10, Second), MustParse("10 seconds"))
-	tt.MustEqual(Raw(10, Second), MustParse("10second"))
-
-	tt.MustEqual(Raw(10, Minute), MustParse("10 min"))
-	tt.MustEqual(Raw(10, Minute), MustParse("10 mins"))
-	tt.MustEqual(Raw(10, Minute), MustParse("10 minute"))
-	tt.MustEqual(Raw(10, Minute), MustParse("10 minutes"))
-}
-
-func TestString(t *testing.T) {
-	tt := assert.WrapTB(t)
-	tt.MustEqual("1sec", Raw(1, Second).String())
-	tt.MustEqual("2sec", Raw(2, Second).String())
-	tt.MustEqual("1min", Raw(1, Minute).String())
-	tt.MustEqual("2min", Raw(2, Minute).String())
-	tt.MustEqual("1hr", Raw(1, Hour).String())
-	tt.MustEqual("2hr", Raw(2, Hour).String())
-	tt.MustEqual("1wk", Raw(1, Week).String())
-	tt.MustEqual("2wk", Raw(2, Week).String())
-	tt.MustEqual("1d", Raw(1, Day).String())
-	tt.MustEqual("2d", Raw(2, Day).String())
-	tt.MustEqual("1mo", Raw(1, Month).String())
-	tt.MustEqual("2mo", Raw(2, Month).String())
-	tt.MustEqual("1yr", Raw(1, Year).String())
-	tt.MustEqual("2yr", Raw(2, Year).String())
-}
-
-func TestConvertFuzz(t *testing.T) {
-	return
-	tt := assert.WrapTB(t)
-	for i := 0; i < 100; i++ {
-		from, to := randomDivisibleIntervals(nil)
-		period := randomPeriod(nil, from)
-		tt.MustAssert(from != to)
-		fmt.Println(1)
-
-		there := from.ConvertPeriodTo(period, to)
-		back := to.ConvertPeriodTo(there, from)
-		tt.MustEqual(period, back)
+		// This is 02:00 instead of 04:00 because the timezone offset is 10 hours
+		// and the buckets start from UTC.
+		{Raw(4, Hour), time.Date(2017, 6, 26, 5, 30, 0, 0, tz),
+			time.Date(2017, 6, 26, 2, 0, 0, 0, tz)},
+	} {
+		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
+			if !tc.in.Start(tc.at).Equal(tc.expected) {
+				t.Fatal(tc.in, "at", tc.at, "!=", tc.expected)
+			}
+		})
 	}
 }
 
-func TestSort(t *testing.T) {
-	tt := assert.WrapTB(t)
+var stringCases = []struct {
+	in       Interval
+	expected string
+}{
+	{Raw(1, Second), "1sec"},
+	{Raw(2, Second), "2sec"},
+	{Raw(1, Minute), "1min"},
+	{Raw(2, Minute), "2min"},
+	{Raw(1, Hour), "1hr"},
+	{Raw(2, Hour), "2hr"},
+	{Raw(1, Week), "1wk"},
+	{Raw(2, Week), "2wk"},
+	{Raw(1, Day), "1d"},
+	{Raw(2, Day), "2d"},
+	{Raw(1, Month), "1mo"},
+	{Raw(2, Month), "2mo"},
+	{Raw(1, Year), "1yr"},
+	{Raw(2, Year), "2yr"},
+}
 
-	in := []Interval{Raw(61, Minute), Raw(1, Hour), Raw(59, Minute)}
-	ex := []Interval{Raw(59, Minute), Raw(1, Hour), Raw(61, Minute)}
-	sort.Slice(in, func(i, j int) bool { return in[i].Less(in[j]) })
-	tt.MustEqual(ex, in)
-
-	in = []Interval{Raw(61, Second), Raw(1, Minute), Raw(59, Second)}
-	ex = []Interval{Raw(59, Second), Raw(1, Minute), Raw(61, Second)}
-	sort.Slice(in, func(i, j int) bool { return in[i].Less(in[j]) })
-	tt.MustEqual(ex, in)
+func TestString(t *testing.T) {
+	for idx, tc := range stringCases {
+		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
+			result := tc.in.String()
+			if result != tc.expected {
+				t.Fatal(result)
+			}
+		})
+	}
 }
 
 func TestMarshal(t *testing.T) {
-	tt := assert.WrapTB(t)
-	in := Raw(1, Minute)
+	for idx, tc := range stringCases {
+		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
+			inEnc := IntervalEncoded(tc.in)
+			mt, err := inEnc.MarshalText()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(mt) != tc.expected {
+				t.Fatal(string(mt), "!=", tc.expected)
+			}
 
-	inEnc := IntervalEncoded(in)
-	mt, err := inEnc.MarshalText()
-	tt.MustOK(err)
-	tt.MustEqual("1min", string(mt))
+			out, err := json.Marshal(inEnc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expectedJSON := `"` + tc.expected + `"`
+			if string(out) != expectedJSON {
+				t.Fatal(string(out), "!=", expectedJSON)
+			}
 
-	out, err := json.Marshal(inEnc)
-	tt.MustOK(err)
-	tt.MustEqual(`"1min"`, string(out))
+			var r IntervalEncoded
+			if err := json.Unmarshal(out, &r); err != nil {
+				t.Fatal(err)
+			}
 
-	var r IntervalEncoded
-	tt.MustOK(json.Unmarshal(out, &r))
-	tt.MustEqual(in, r.Interval())
+			if tc.in != r.Interval() {
+				t.Fatal(r.Interval(), "!=", tc.in)
+			}
+		})
+	}
+}
+
+/*
+func TestConvertFuzz(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		from, to := randomDivisibleIntervals(nil)
+		period := randomPeriod(nil, from)
+		if from != to {
+			t.Fail()
+		}
+
+		there := from.ConvertPeriodTo(period, to)
+		back := to.ConvertPeriodTo(there, from)
+		if period != back {
+			t.Fail()
+		}
+	}
+}
+*/
+
+func TestSort(t *testing.T) {
+	for idx, tc := range []struct {
+		in []Interval
+		ex []Interval
+	}{
+		{[]Interval{Raw(61, Minute), Raw(1, Hour), Raw(59, Minute)},
+			[]Interval{Raw(59, Minute), Raw(1, Hour), Raw(61, Minute)}},
+		{[]Interval{Raw(61, Second), Raw(1, Minute), Raw(59, Second)},
+			[]Interval{Raw(59, Second), Raw(1, Minute), Raw(61, Second)}},
+	} {
+		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
+			sort.Slice(tc.in, func(i, j int) bool { return tc.in[i].Less(tc.in[j]) })
+			if !reflect.DeepEqual(tc.in, tc.ex) {
+				t.Fatal(tc.in, "!=", tc.ex)
+			}
+		})
+	}
 }
 
 func TestPeriodTime(t *testing.T) {
@@ -314,12 +340,14 @@ func TestPeriodTime(t *testing.T) {
 		{Raw(4, Year), -3, time.Date(1961, 12, 31, 23, 59, 59, 999999999, time.UTC), time.Date(1958, 1, 1, 0, 0, 0, 0, time.UTC)},
 	} {
 		t.Run(fmt.Sprintf("%d:%s/%d/%s", i, c.Interval, c.Period, c.TestTime), func(t *testing.T) {
-			tt := assert.WrapTB(t)
 			p := c.Interval.Period(c.TestTime)
-			tt.MustEqual(c.Period, p)
-
+			if c.Period != p {
+				t.Fatal("period:", p)
+			}
 			b := c.Interval.Time(p, c.PeriodTime.Location())
-			tt.MustEqual(c.PeriodTime, b)
+			if c.PeriodTime != b {
+				t.Fatal("periodtime:", b)
+			}
 		})
 	}
 }
@@ -327,7 +355,7 @@ func TestPeriodTime(t *testing.T) {
 func TestCanCombine(t *testing.T) {
 	for _, tc := range []struct {
 		from, to Interval
-		result   bool
+		expected bool
 	}{
 		{Of1Minute, Of1Minute, false},
 		{Of1Minute, Of2Minutes, true},
@@ -386,9 +414,11 @@ func TestCanCombine(t *testing.T) {
 		{Raw(2, Month), Raw(4, Month), true},
 		{Raw(2, Month), Raw(1, Year), true},
 	} {
-		t.Run(fmt.Sprintf("%s-%s-%v", tc.from, tc.to, tc.result), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			tt.MustAssert(tc.from.CanCombineTo(tc.to) == tc.result)
+		t.Run(fmt.Sprintf("%s-%s-%v", tc.from, tc.to, tc.expected), func(t *testing.T) {
+			result := tc.from.CanCombineTo(tc.to)
+			if result != tc.expected {
+				t.Fatal(result, "!=", tc.expected)
+			}
 		})
 	}
 }

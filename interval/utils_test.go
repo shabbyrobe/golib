@@ -4,16 +4,14 @@ import (
 	"fmt"
 	"testing"
 	"time"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestDivideNicely(t *testing.T) {
 	for _, tc := range []struct {
-		in     Interval
-		by     int
-		limit  Interval
-		result Interval
+		in       Interval
+		by       int
+		limit    Interval
+		expected Interval
 	}{
 		{Of5Minutes, 5, 0, Of1Minute},
 		{Of5Minutes, 10, 0, Of30Seconds},
@@ -27,39 +25,41 @@ func TestDivideNicely(t *testing.T) {
 		{Of1Month, 7, 0, Raw(4, Days)},
 		{Raw(10, Years), 3, 0, Raw(3, Years)},
 	} {
-		t.Run(fmt.Sprintf("%s/%d==%s", tc.in, tc.by, tc.result), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			tt.MustEqual(tc.result, DivideNicely(tc.in, tc.by, tc.limit))
+		t.Run(fmt.Sprintf("%s/%d==%s", tc.in, tc.by, tc.expected), func(t *testing.T) {
+			result := DivideNicely(tc.in, tc.by, tc.limit)
+			if result != tc.expected {
+				t.Fatal(result)
+			}
 		})
 	}
 }
 
 func TestDivideNicelyFor(t *testing.T) {
 	for _, tc := range []struct {
-		in     Interval
-		by     int
-		forv   Interval
-		ok     bool
-		result Interval
+		in       Interval
+		by       int
+		forv     Interval
+		ok       bool
+		expected Interval
 	}{
 		{Of5Minutes, 5, Of1Minute, true, Of1Minute},
 		{Of3Hours, 5, Of5Minutes, true, Of30Minutes},
 		{Raw(26, Minutes), 5, Of1Minute, true, Of5Minutes},
 		{Raw(26, Minutes), 40, Of1Minute, false, Of1Minute},
 	} {
-		t.Run(fmt.Sprintf("%s/%d==%s", tc.in, tc.by, tc.result), func(t *testing.T) {
-			tt := assert.WrapTB(t)
+		t.Run(fmt.Sprintf("%s/%d==%s", tc.in, tc.by, tc.expected), func(t *testing.T) {
 			result, ok := DivideNicelyFor(tc.in, tc.by, tc.forv)
-			tt.MustEqual(tc.ok, ok)
-			tt.MustEqual(tc.result, result)
+			if ok != tc.ok || result != tc.expected {
+				t.Fatal(result)
+			}
 		})
 	}
 }
 
 func TestFind(t *testing.T) {
 	for _, tc := range []struct {
-		dur    time.Duration
-		result Interval
+		dur      time.Duration
+		expected Interval
 	}{
 		{1 * time.Minute, Of1Minute},
 		{-1 * time.Minute, Of1Minute},
@@ -77,9 +77,11 @@ func TestFind(t *testing.T) {
 		{999 * time.Millisecond, Of1Second},
 		{-1 * time.Millisecond, Of1Second},
 	} {
-		t.Run(fmt.Sprintf("%s==%s", tc.dur, tc.result), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			tt.MustEqual(tc.result, Find(tc.dur))
+		t.Run(fmt.Sprintf("%s==%s", tc.dur, tc.expected), func(t *testing.T) {
+			result := Find(tc.dur)
+			if result != tc.expected {
+				t.Fatal(result)
+			}
 		})
 	}
 }

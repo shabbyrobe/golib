@@ -128,74 +128,27 @@ func Validate(span Span, qty Qty) error {
 func ParseSpan(sstr string) (span Span, err error) {
 	ips := strings.ToLower(strings.TrimSpace(sstr))
 	switch ips {
-	case "s":
+	case "s", "sec", "secs", "second", "seconds":
 		span = Second
-	case "sec":
-		span = Second
-	case "secs":
-		span = Second
-	case "second":
-		span = Second
-	case "seconds":
-		span = Second
-	case "min":
+
+	case "min", "mins", "minute", "minutes":
 		span = Minute
-	case "mins":
-		span = Minute
-	case "minute":
-		span = Minute
-	case "minutes":
-		span = Minute
-	case "h":
+
+	case "h", "hr", "hrs", "hour", "hours":
 		span = Hour
-	case "hr":
-		span = Hour
-	case "hrs":
-		span = Hour
-	case "hour":
-		span = Hour
-	case "hours":
-		span = Hour
-	case "d":
+
+	case "d", "ds", "day", "days":
 		span = Day
-	case "ds":
-		span = Day
-	case "day":
-		span = Day
-	case "days":
-		span = Day
-	case "w":
+
+	case "w", "ws", "wk", "wks", "week", "weeks":
 		span = Week
-	case "ws":
-		span = Week
-	case "wk":
-		span = Week
-	case "wks":
-		span = Week
-	case "week":
-		span = Week
-	case "weeks":
-		span = Week
-	case "mo":
+
+	case "mo", "mos", "mnth", "mnths", "month", "months":
 		span = Month
-	case "mos":
-		span = Month
-	case "month":
-		span = Month
-	case "months":
-		span = Month
-	case "y":
+
+	case "y", "ys", "yr", "yrs", "year", "years":
 		span = Year
-	case "ys":
-		span = Year
-	case "yr":
-		span = Year
-	case "yrs":
-		span = Year
-	case "year":
-		span = Year
-	case "years":
-		span = Year
+
 	default:
 		err = fmt.Errorf("interval: unknown span %q", sstr)
 	}

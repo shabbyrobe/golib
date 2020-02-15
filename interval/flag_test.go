@@ -3,18 +3,18 @@ package interval
 import (
 	"flag"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestFlag(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	var intvlFlag FlagVar
 	fs := flag.NewFlagSet("", 0)
 	fs.Var(&intvlFlag, "intvl", "Interval!")
-	tt.MustOK(fs.Parse([]string{"-intvl", "1min"}))
+	if err := fs.Parse([]string{"-intvl", "1min"}); err != nil {
+		t.Fatal(err)
+	}
 
 	intvl := intvlFlag.Interval()
-	tt.MustEqual(Of1Minute, intvl)
+	if intvl != Of1Minute {
+		t.Fatal(intvl, "!=", Of1Minute)
+	}
 }
