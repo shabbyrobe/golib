@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"math"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestSimilar(t *testing.T) {
@@ -21,10 +19,15 @@ func TestSimilar(t *testing.T) {
 		{"Einsteinium", "Einsteinium", 11, 1.0},
 	} {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			tt := assert.WrapTB(t)
 			n, pct := Similar(c.a, c.b)
-			tt.MustEqual(c.n, n)
-			tt.MustAssert(math.Abs(c.pct-pct) < 0.001, fmt.Sprintf("%f != %f", c.pct, pct))
+			if c.n != n {
+				t.Fatal(c.n, "!=", n)
+			}
+
+			diff := math.Abs(c.pct - pct)
+			if diff >= 0.001 {
+				t.Fatal(c.pct, "!=", pct)
+			}
 		})
 	}
 }
