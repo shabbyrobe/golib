@@ -4,13 +4,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestWaitGroup(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	for i := 0; i < 100; i++ {
 		wg := NewWaitGroup()
 		var done int32
@@ -23,13 +19,15 @@ func TestWaitGroup(t *testing.T) {
 			}()
 		}
 		wg.Wait()
-		tt.MustEqual(n, atomic.LoadInt32(&done))
+
+		dv := atomic.LoadInt32(&done)
+		if n != dv {
+			t.Fatal(n, "!=", dv)
+		}
 	}
 }
 
 func TestWaitGroupRecycle(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	wg := NewWaitGroup()
 	for i := 0; i < 100; i++ {
 		var done int32
@@ -42,7 +40,11 @@ func TestWaitGroupRecycle(t *testing.T) {
 			}()
 		}
 		wg.Wait()
-		tt.MustEqual(n, atomic.LoadInt32(&done))
+
+		dv := atomic.LoadInt32(&done)
+		if n != dv {
+			t.Fatal(n, "!=", dv)
+		}
 	}
 }
 
@@ -59,17 +61,15 @@ func TestWaitGroupIncreaseWhileWaiting(t *testing.T) {
 }
 
 func TestWaitGroupWaitOnNothing(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	wg := NewWaitGroup()
 	tm := time.Now()
 	wg.Wait()
-	tt.MustAssert(time.Since(tm) < time.Millisecond)
+	if time.Since(tm) >= time.Millisecond {
+		t.Fail()
+	}
 }
 
 func TestWaitGroupMultipleWaiters(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	wg := NewWaitGroup()
 	for i := 0; i < 100; i++ {
 		var done int32
@@ -86,6 +86,9 @@ func TestWaitGroupMultipleWaiters(t *testing.T) {
 		}
 
 		wg.Wait()
-		tt.MustEqual(n, atomic.LoadInt32(&done))
+		dv := atomic.LoadInt32(&done)
+		if n != dv {
+			t.Fatal(n, "!=", dv)
+		}
 	}
 }

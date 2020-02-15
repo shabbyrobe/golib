@@ -12,8 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
-
-	"github.com/shabbyrobe/golib/stringtools"
 )
 
 type Mutex = sync.Mutex
@@ -91,7 +89,7 @@ func (l *LoggingRWMutex) RUnlock() {
 func wlog(p unsafe.Pointer, id uint64, event string) {
 	n := time.Now()
 	tm := n.Format("2006-01-02T15:04:05.") // .999999999Z07:00"
-	tm += stringtools.RightPad(strconv.FormatInt(int64(n.Nanosecond()), 10), '0', 9)
+	tm += rightPad(strconv.FormatInt(int64(n.Nanosecond()), 10), '0', 9)
 	tm += n.Format("Z07:00")
 
 	_, file, line, _ := runtime.Caller(2)
@@ -122,4 +120,12 @@ func wlog(p unsafe.Pointer, id uint64, event string) {
 		buf.WriteByte('\n')
 		buf.WriteTo(LoggingMutexWriter)
 	}
+}
+
+func rightPad(s string, c byte, total int) string {
+	pad := total - len(s)
+	if pad <= 0 {
+		return s
+	}
+	return s + strings.Repeat(string(c), pad)
 }
