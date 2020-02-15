@@ -1,13 +1,14 @@
 Go Toolbelt
 ===========
 
-This is a collection of packages I use to augment the Go standard library in my
+**NOTE**: experiment in flight; all top-level folders in here are independent
+Go Modules.
+
+This is a collection of code I use to augment the Go standard library in my
 own personal projects.
 
 All code is available under the MIT license unless otherwise stated in the
-particular file or package. There are some copy/pasted pieces of the Go
-standard library in here, which retain the copyright of the Go authors and a
-BSD license.
+particular file or package.
 
 
 ## Expectation Management
