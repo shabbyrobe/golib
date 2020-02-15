@@ -2,9 +2,8 @@ package crc8
 
 import (
 	"crypto/rand"
+	"reflect"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestCCITT(t *testing.T) {
@@ -24,22 +23,25 @@ func TestCCITT(t *testing.T) {
 		{[]byte{0, 1, 2, 3, 4, 5, 6, 7}, 216},
 	} {
 		t.Run("", func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			tt.MustEqual(tc.out, CCITT(tc.in))
-
+			if tc.out != CCITT(tc.in) {
+				t.Fail()
+			}
 			if len(tc.in) == 8 {
-				tt.MustEqual(tc.out, CCITTFirst8(tc.in))
+				if tc.out != CCITTFirst8(tc.in) {
+					t.Fail()
+				}
 			}
 		})
 	}
 }
 
 func TestCCITTFirst8Rand(t *testing.T) {
-	tt := assert.WrapTB(t)
 	buf := make([]byte, 32)
 	rand.Read(buf)
 
-	tt.MustEqual(CCITT(buf[:8]), CCITTFirst8(buf))
+	if !reflect.DeepEqual(CCITT(buf[:8]), CCITTFirst8(buf)) {
+		t.Fatal(CCITT(buf[:8]), "!=", CCITTFirst8(buf))
+	}
 }
 
 var BenchResult uint8
