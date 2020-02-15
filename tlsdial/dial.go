@@ -9,7 +9,7 @@
 // unmerged patch:
 // https://go-review.googlesource.com/c/93255/
 
-package tlstools
+package tlsdial
 
 import (
 	"context"
