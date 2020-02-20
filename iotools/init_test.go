@@ -3,8 +3,8 @@ package iotools
 import (
 	"bytes"
 	"io"
-
-	"github.com/shabbyrobe/golib/assert"
+	"reflect"
+	"testing"
 )
 
 type splitReader struct {
@@ -56,30 +56,44 @@ func (lwa *loggingWriterAt) WriteAt(p []byte, offset int64) (n int, err error) {
 	return len(pc), nil
 }
 
-func (lwa *loggingWriterAt) assertWritesFlush(tt assert.T, via flushingWriterAt, data []byte, at int64, result ...writeEvent) {
-	lwa.assertWrites(tt, via, data, at)
-	lwa.assertFlush(tt, via, result...)
+func (lwa *loggingWriterAt) assertWritesFlush(t testing.TB, via flushingWriterAt, data []byte, at int64, result ...writeEvent) {
+	lwa.assertWrites(t, via, data, at)
+	lwa.assertFlush(t, via, result...)
 }
 
-func (lwa *loggingWriterAt) assertWrites(tt assert.T, via io.WriterAt, data []byte, at int64, result ...writeEvent) {
-	tt.Helper()
+func (lwa *loggingWriterAt) assertWrites(t testing.TB, via io.WriterAt, data []byte, at int64, result ...writeEvent) {
+	t.Helper()
 	n, err := via.WriteAt(data, at)
-	tt.MustOK(err)
-	tt.MustEqual(len(data), n)
-	tt.MustEqual(result, lwa.writes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data) != n {
+		t.Fatal(len(data), n)
+	}
+	if !reflect.DeepEqual(result, lwa.writes) {
+		t.Fatal(result, lwa.writes)
+	}
 	lwa.writes = nil
 }
 
-func (lwa *loggingWriterAt) assertFlush(tt assert.T, via flushingWriterAt, result ...writeEvent) {
-	tt.Helper()
-	tt.MustOK(via.Flush())
-	tt.MustEqual(result, lwa.writes)
+func (lwa *loggingWriterAt) assertFlush(t testing.TB, via flushingWriterAt, result ...writeEvent) {
+	t.Helper()
+	if err := via.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(result, lwa.writes) {
+		t.Fatal(result, lwa.writes)
+	}
 	lwa.writes = nil
 }
 
-func assertWriteAt(tt assert.T, to io.WriterAt, data []byte, at int64) {
-	tt.Helper()
+func assertWriteAt(t testing.TB, to io.WriterAt, data []byte, at int64) {
+	t.Helper()
 	n, err := to.WriteAt(data, at)
-	tt.MustOK(err)
-	tt.MustEqual(len(data), n)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data) != n {
+		t.Fatal(len(data), n)
+	}
 }

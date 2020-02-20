@@ -6,8 +6,6 @@ import (
 	"io/ioutil"
 	"strings"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestCommitReader(t *testing.T) {
@@ -17,8 +15,6 @@ func TestCommitReader(t *testing.T) {
 		into = make([]byte, 2)
 	)
 
-	tt := assert.WrapTB(t)
-
 	in := "1234567890"
 	rdr := strings.NewReader(in)
 	cr := NewCommitReader(rdr)
@@ -26,9 +22,15 @@ func TestCommitReader(t *testing.T) {
 	{ // Read and rewind
 		for i := 0; i < 3; i++ {
 			n, err = cr.Read(into)
-			tt.MustOK(err)
-			tt.MustEqual(2, n)
-			tt.MustEqual("12", string(into))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if n != 2 {
+				t.Fatal(n)
+			}
+			if string(into) != "12" {
+				t.Fatal(string(into))
+			}
 			cr.Rewind()
 		}
 	}
@@ -36,22 +38,24 @@ func TestCommitReader(t *testing.T) {
 	{ // Advance
 		cr.Advance(1)
 		for i := 0; i < 3; i++ {
-			mustRead(tt, cr, into, 2)
-			tt.MustEqual("23", string(into))
+			mustRead(t, cr, into, 2)
+			if string(into) != "23" {
+				t.Fatal(string(into))
+			}
 			cr.Rewind()
 		}
 		cr.Advance(1)
 		for i := 0; i < 3; i++ {
-			mustRead(tt, cr, into, 2)
-			tt.MustEqual("34", string(into))
+			mustRead(t, cr, into, 2)
+			if string(into) != "34" {
+				t.Fatal(string(into))
+			}
 			cr.Rewind()
 		}
 	}
 }
 
 func TestCommitReaderRest(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	{
 		ir := bytes.NewReader([]byte{'a', 'b', 'c'})
 		cr := NewCommitReaderSize(ir, 2)
@@ -59,8 +63,12 @@ func TestCommitReaderRest(t *testing.T) {
 		cr.Read(x)
 		rest := cr.Rest()
 		out, err := ioutil.ReadAll(rest)
-		tt.MustOK(err)
-		tt.MustEqual([]byte{'b', 'c'}, out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal([]byte{'b', 'c'}, out) {
+			t.Fatal(out)
+		}
 	}
 
 	{
@@ -70,8 +78,12 @@ func TestCommitReaderRest(t *testing.T) {
 		cr.Read(x)
 		rest := cr.Rest()
 		out, err := ioutil.ReadAll(rest)
-		tt.MustOK(err)
-		tt.MustEqual([]byte{'b', 'c'}, out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal([]byte{'b', 'c'}, out) {
+			t.Fatal(out)
+		}
 	}
 
 	{
@@ -79,8 +91,12 @@ func TestCommitReaderRest(t *testing.T) {
 		cr := NewCommitReaderSize(ir, 3)
 		rest := cr.Rest()
 		out, err := ioutil.ReadAll(rest)
-		tt.MustOK(err)
-		tt.MustEqual([]byte{'a', 'b', 'c'}, out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal([]byte{'a', 'b', 'c'}, out) {
+			t.Fatal(out)
+		}
 	}
 
 	{
@@ -90,31 +106,40 @@ func TestCommitReaderRest(t *testing.T) {
 		cr.Read(x)
 		rest := cr.Rest()
 		out, err := ioutil.ReadAll(rest)
-		tt.MustOK(err)
-		tt.MustEqual([]byte{'c'}, out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal([]byte{'c'}, out) {
+			t.Fatal(out)
+		}
 	}
 }
 
 func TestCommitReaderCommit(t *testing.T) { // Commit
-	tt := assert.WrapTB(t)
-
 	in := "1234567890"
 	rdr := strings.NewReader(in)
 	cr := NewCommitReader(rdr)
 	into := make([]byte, 2)
 
 	for i := 0; i < len(in); i += 2 {
-		mustRead(tt, cr, into, 2)
-		tt.MustEqual(in[i:i+2], string(into))
+		mustRead(t, cr, into, 2)
+		part := in[i : i+2]
+		if part != string(into) {
+			t.Fatal(part, "!=", string(into))
+		}
 		cr.Commit()
 	}
 }
 
-func mustRead(tt assert.T, rdr io.Reader, into []byte, n int) {
-	tt.Helper()
-	n, err := rdr.Read(into)
-	tt.MustOK(err)
-	tt.MustEqual(n, n)
+func mustRead(t testing.TB, rdr io.Reader, into []byte, n int) {
+	t.Helper()
+	rn, err := rdr.Read(into)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rn != n {
+		t.Fatal(rn, "!=", n)
+	}
 }
 
 type testingReader struct {
@@ -142,32 +167,41 @@ func (t *testingReader) Read(b []byte) (n int, err error) {
 }
 
 func TestCommitReaderMultipleReads(t *testing.T) { // Commit
-	tt := assert.WrapTB(t)
-
 	in := "1234567890"
 	rdr := &testingReader{bts: []byte(in), max: 3}
 
 	cr := NewCommitReader(rdr)
 	into := make([]byte, 16)
 
-	mustRead(tt, cr, into, 3)
-	tt.MustEqual(in[0:3], string(into[:3]))
+	mustRead(t, cr, into, 3)
+	if in[0:3] != string(into[:3]) {
+		t.Fatal()
+	}
 
-	mustRead(tt, cr, into, 3)
-	tt.MustEqual(in[3:6], string(into[:3]))
+	mustRead(t, cr, into, 3)
+	if in[3:6] != string(into[:3]) {
+		t.Fatal()
+	}
 
-	mustRead(tt, cr, into, 3)
-	tt.MustEqual(in[6:9], string(into[:3]))
+	mustRead(t, cr, into, 3)
+	if in[6:9] != string(into[:3]) {
+		t.Fatal()
+	}
 
-	mustRead(tt, cr, into, 1)
-	tt.MustEqual(in[9:10], string(into[:1]))
+	mustRead(t, cr, into, 1)
+	if in[9:10] != string(into[:1]) {
+		t.Fatal()
+	}
 
 	n, err := cr.Read(into)
-	tt.MustEqual(io.EOF, err)
-	tt.MustEqual(0, n)
+	if err != io.EOF || n != 0 {
+		t.Fatal()
+	}
 
 	cr.Rewind()
 
-	mustRead(tt, cr, into, 3)
-	tt.MustEqual(in[0:3], string(into[:3]))
+	mustRead(t, cr, into, 10)
+	if in[0:3] != string(into[:3]) {
+		t.Fatal()
+	}
 }
