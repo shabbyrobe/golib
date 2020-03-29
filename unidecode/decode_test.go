@@ -61,6 +61,12 @@ func TestDecode(t *testing.T) {
 	}
 }
 
+func TestMax(t *testing.T) {
+	// Found a regression where the tables were not the right size
+	_ = multi[maxRune]
+	_ = single[maxRune]
+}
+
 var BenchStringResult string
 var BenchBytesResult []byte
 
