@@ -3,14 +3,13 @@ package errtools
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
-func mustPattern(t assert.T, pattern string, in string) {
+func mustPattern(t *testing.T, pattern string, in string) {
 	t.Helper()
 	ptn, _ := regexp.Compile(pattern)
 	if !ptn.MatchString(in) {
@@ -22,7 +21,6 @@ func mustPattern(t assert.T, pattern string, in string) {
 }
 
 func TestCollectorSet(t *testing.T) {
-	tt := assert.WrapTB(t)
 	in := fmt.Errorf("yep")
 	ec := &Collector{}
 	result := func() (err error) {
@@ -31,23 +29,25 @@ func TestCollectorSet(t *testing.T) {
 		ec.Do(in)
 		return
 	}()
-	tt.Equals(ec, result)
-	mustPattern(tt, `error at .*_test\.go.* #1 - yep`, ec.Error())
+	if !reflect.DeepEqual(ec, result) {
+		t.Fatal()
+	}
+	mustPattern(t, `error at .*_test\.go.* #1 - yep`, ec.Error())
 }
 
 func TestCollectorSetOK(t *testing.T) {
-	tt := assert.WrapTB(t)
 	ec := &Collector{}
 	result := func() (err error) {
 		defer ec.Set(&err)
 		ec.Do(nil)
 		return
 	}()
-	tt.Equals(nil, result)
+	if result != nil {
+		t.Fatal()
+	}
 }
 
 func TestCollectorSetMultiple(t *testing.T) {
-	tt := assert.WrapTB(t)
 	in := fmt.Errorf("yep")
 	ec := &Collector{}
 	result := func() (err error) {
@@ -55,12 +55,13 @@ func TestCollectorSetMultiple(t *testing.T) {
 		ec.Do(nil, nil, in)
 		return
 	}()
-	tt.Equals(ec, result)
-	mustPattern(tt, `error at .*_test\.go.* #3 - yep`, ec.Error())
+	if !reflect.DeepEqual(ec, result) {
+		t.Fatal()
+	}
+	mustPattern(t, `error at .*_test\.go.* #3 - yep`, ec.Error())
 }
 
 func TestCollectorPanic(t *testing.T) {
-	tt := assert.WrapTB(t)
 	in := fmt.Errorf("yep")
 	ec := &Collector{}
 	result := func() (err error) {
@@ -76,6 +77,8 @@ func TestCollectorPanic(t *testing.T) {
 		}()
 		return
 	}()
-	tt.Equals(ec, result)
-	mustPattern(tt, `error at .*_test\.go.* #3 - yep`, ec.Error())
+	if !reflect.DeepEqual(ec, result) {
+		t.Fatal()
+	}
+	mustPattern(t, `error at .*_test\.go.* #3 - yep`, ec.Error())
 }
