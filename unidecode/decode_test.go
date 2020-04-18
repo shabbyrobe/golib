@@ -2,6 +2,7 @@ package unidecode
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -35,11 +36,13 @@ var cases = []struct {
 	{"Efﬁcient", "Efficient", false},
 	{"příliš žluťoučký kůň pěl ďábelské ódy", "prilis zlutoucky kun pel dabelske ody", true},
 	{"PŘÍLIŠ ŽLUŤOUČKÝ KŮŇ PĚL ĎÁBELSKÉ ÓDY", "PRILIS ZLUTOUCKY KUN PEL DABELSKE ODY", true},
+	{strings.Repeat("éfficient", 1000), strings.Repeat("efficient", 1000), true},
+	{strings.Repeat("efficient", 1000), strings.Repeat("efficient", 1000), true},
 }
 
 func TestDecode(t *testing.T) {
 	for idx, tc := range cases {
-		buf := make([]byte, 1000)
+		buf := make([]byte, 65536)
 		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
 			dec := DecodeString(tc.in)
 			if dec != tc.out {
@@ -75,8 +78,12 @@ func BenchmarkDecodeString(b *testing.B) {
 }
 
 func BenchmarkDecode(b *testing.B) {
-	buf := make([]byte, 1000)
 	for idx, tc := range cases {
+		sz := 1000
+		if len(tc.in) > 1000 {
+			sz = 65536
+		}
+		buf := make([]byte, sz)
 		in := []byte(tc.in)
 		b.Run(fmt.Sprintf("%d", idx), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
@@ -98,6 +105,24 @@ func BenchmarkDecodeInPlace(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				copy(cur, in) // XXX: confounds benchmark slightly
 				BenchBytesResult = DecodeInPlace(cur)
+			}
+		})
+	}
+}
+
+var BenchIntResult = 0
+
+func BenchmarkDecodeInPlaceConfound(b *testing.B) {
+	for idx, tc := range cases {
+		if !tc.inPlace {
+			continue
+		}
+		in := []byte(tc.in)
+		cur := []byte(tc.in)
+
+		b.Run(fmt.Sprintf("%d", idx), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				BenchIntResult = copy(cur, in)
 			}
 		})
 	}

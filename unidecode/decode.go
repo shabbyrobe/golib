@@ -13,12 +13,19 @@ func MaxDecodedLen(sz int) int {
 // DecodeInPlace applies all of the unidecode transliterations which are only 1 byte in
 // length to the input slice b, then returns b, which will be truncated.
 func DecodeInPlace(b []byte) []byte {
-	var r, w int
+	var r int
+	for ; r < len(b); r++ {
+		if b[r] >= utf8.RuneSelf {
+			goto change
+		}
+	}
+	return b
+
+change:
+	var w = r
 	for r < len(b) {
-		if b[r] <= unicode.MaxASCII {
-			if r != w {
-				b[w] = b[r]
-			}
+		if b[r] < utf8.RuneSelf {
+			b[w] = b[r]
 			r, w = r+1, w+1
 			continue
 		}
