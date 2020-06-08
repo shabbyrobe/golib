@@ -13,8 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 // This function tests HasFilepathPrefix. It should test it on both case
@@ -189,27 +187,48 @@ func TestFilepathPrefix(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run("", func(t *testing.T) {
-			tt := assert.WrapTB(t)
-
-			tt.MustOK(os.MkdirAll(dir, 0755))
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				t.Fatal(err)
+			}
 			defer os.RemoveAll(dir)
 
 			if c.create == createDir {
-				tt.MustOK(os.MkdirAll(c.path, 0755))
-				tt.MustOK(os.MkdirAll(c.prefix, 0755))
+				if err := os.MkdirAll(c.path, 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.MkdirAll(c.prefix, 0755); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if c.create == createFile {
-				tt.MustOK(os.MkdirAll(filepath.Dir(c.path), 0755))
+				if err := os.MkdirAll(filepath.Dir(c.path), 0755); err != nil {
+					t.Fatal(err)
+				}
 				f, err := os.Create(c.path)
-				tt.MustOKAll(err, f.Close())
-				tt.MustOK(os.MkdirAll(c.prefix, 0755))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := f.Close(); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.MkdirAll(c.prefix, 0755); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			got, p, s, err := FilepathPrefix(c.path, c.prefix)
-			tt.MustOK(err)
-			tt.MustEqual(c.want, got)
-			tt.MustEqual(c.prefix, p)
-			tt.MustEqual(c.suffix, s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.want != got {
+				t.Fatal()
+			}
+			if c.prefix != p {
+				t.Fatal()
+			}
+			if c.suffix != s {
+				t.Fatal()
+			}
 		})
 	}
 }
