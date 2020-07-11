@@ -6,35 +6,39 @@ import (
 	"io"
 	"io/ioutil"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestLeadingReader(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	lr := NewLeadingReader([]byte{'a'}, bytes.NewReader([]byte{'b'}))
 	all, err := ioutil.ReadAll(lr)
-	tt.MustOK(err)
-	tt.MustEqual([]byte{'a', 'b'}, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal([]byte{'a', 'b'}, all) {
+		t.Fatal()
+	}
 }
 
 func TestLeadingReaderEmptyLeading(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	lr := NewLeadingReader([]byte{}, bytes.NewReader([]byte{'b'}))
 	all, err := ioutil.ReadAll(lr)
-	tt.MustOK(err)
-	tt.MustEqual([]byte{'b'}, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal([]byte{'b'}, all) {
+		t.Fatal()
+	}
 }
 
 func TestLeadingReaderEmptyReader(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	lr := NewLeadingReader([]byte{'a'}, bytes.NewReader([]byte{}))
 	all, err := ioutil.ReadAll(lr)
-	tt.MustOK(err)
-	tt.MustEqual([]byte{'a'}, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal([]byte{'a'}, all) {
+		t.Fatal()
+	}
 }
 
 var BenchBytesResult []byte
