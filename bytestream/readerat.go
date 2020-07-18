@@ -1,10 +1,10 @@
-package iotools
+package bytestream
 
 import (
 	"io"
 )
 
-type ReaderAtByteStream struct {
+type ReaderAt struct {
 	rdr io.ReaderAt
 	off int64
 	rem []byte
@@ -12,24 +12,34 @@ type ReaderAtByteStream struct {
 	err error
 }
 
-func NewReaderAtByteStream(rdr io.ReaderAt, buf []byte) *ReaderAtByteStream {
+var _ ByteStream = &ReaderAt{}
+
+func NewReaderAt(rdr io.ReaderAt, buf []byte) *ReaderAt {
 	if len(buf) == 0 {
 		buf = make([]byte, 8192)
 	}
-	return &ReaderAtByteStream{
+	return &ReaderAt{
 		rdr: rdr,
 		rem: buf[:0],
 		buf: buf[:len(buf)],
 	}
 }
 
-func (b *ReaderAtByteStream) Avail() int {
-	return len(b.rem)
+func (b *ReaderAt) Err() error {
+	return b.err
 }
 
-func (b *ReaderAtByteStream) TakeExactly(n int) (o []byte, err error) {
+func (b *ReaderAt) Avail() int64 {
+	return int64(len(b.rem))
+}
+
+func (b *ReaderAt) Tell() int64 {
+	return b.off - int64(len(b.rem))
+}
+
+func (b *ReaderAt) TakeExactly(n int) (o []byte, err error) {
 	// This is extremely unfortunate. Nothing I do can get this below 80.
-	// ./readeratbytestream.go:30:6: cannot inline (*ReaderAtByteStream).Exactly:
+	// ./ReaderAt.go:30:6: cannot inline (*ReaderAt).Exactly:
 	//		function too complex: cost 83 exceeds budget 80
 	if n > len(b.rem) {
 		return b.takeExactlySlow(n), b.err
@@ -38,7 +48,7 @@ func (b *ReaderAtByteStream) TakeExactly(n int) (o []byte, err error) {
 	return
 }
 
-func (b *ReaderAtByteStream) takeExactlySlow(n int) (out []byte) {
+func (b *ReaderAt) takeExactlySlow(n int) (out []byte) {
 	if b.err != nil {
 		return nil
 	}
@@ -54,7 +64,7 @@ func (b *ReaderAtByteStream) takeExactlySlow(n int) (out []byte) {
 	return
 }
 
-func (b *ReaderAtByteStream) DiscardExactly(n int) (err error) {
+func (b *ReaderAt) DiscardExactly(n int) (err error) {
 	if n > len(b.rem) {
 		return b.discardExactlySlow(n)
 	}
@@ -62,7 +72,7 @@ func (b *ReaderAtByteStream) DiscardExactly(n int) (err error) {
 	return
 }
 
-func (b *ReaderAtByteStream) discardExactlySlow(sz int) error {
+func (b *ReaderAt) discardExactlySlow(sz int) error {
 	if b.err != nil {
 		return b.err
 	}
@@ -97,7 +107,7 @@ func (b *ReaderAtByteStream) discardExactlySlow(sz int) error {
 	return nil
 }
 
-func (b *ReaderAtByteStream) DiscardUpTo(n int) error {
+func (b *ReaderAt) DiscardUpTo(n int) error {
 	if n > len(b.rem) {
 		b.off += int64(n - len(b.rem))
 		b.rem = nil
@@ -107,7 +117,7 @@ func (b *ReaderAtByteStream) DiscardUpTo(n int) error {
 	return nil
 }
 
-func (b *ReaderAtByteStream) PeekExactly(n int) (o []byte, err error) {
+func (b *ReaderAt) PeekExactly(n int) (o []byte, err error) {
 	if n > len(b.rem) {
 		return b.peekExactlySlow(n), b.err
 	}
@@ -115,7 +125,7 @@ func (b *ReaderAtByteStream) PeekExactly(n int) (o []byte, err error) {
 	return
 }
 
-func (b *ReaderAtByteStream) peekExactlySlow(n int) (out []byte) {
+func (b *ReaderAt) peekExactlySlow(n int) (out []byte) {
 	if b.err != nil {
 		return nil
 	}
@@ -131,7 +141,7 @@ func (b *ReaderAtByteStream) peekExactlySlow(n int) (out []byte) {
 	return
 }
 
-func (b *ReaderAtByteStream) PeekUpTo(n int) (o []byte, err error) {
+func (b *ReaderAt) PeekUpTo(n int) (o []byte, err error) {
 	if n > len(b.rem) {
 		return b.peekUpToSlow(n), b.err
 	}
@@ -139,7 +149,7 @@ func (b *ReaderAtByteStream) PeekUpTo(n int) (o []byte, err error) {
 	return
 }
 
-func (b *ReaderAtByteStream) peekUpToSlow(n int) (out []byte) {
+func (b *ReaderAt) peekUpToSlow(n int) (out []byte) {
 	if len(b.rem) > 0 && b.err == io.EOF {
 		out, b.rem = b.rem, nil
 		return
@@ -161,7 +171,7 @@ func (b *ReaderAtByteStream) peekUpToSlow(n int) (out []byte) {
 	return b.rem[:n]
 }
 
-func (b *ReaderAtByteStream) TakeUpTo(n int) (o []byte, err error) {
+func (b *ReaderAt) TakeUpTo(n int) (o []byte, err error) {
 	if n > len(b.rem) {
 		return b.takeUpToSlow(n), b.err
 	}
@@ -169,7 +179,7 @@ func (b *ReaderAtByteStream) TakeUpTo(n int) (o []byte, err error) {
 	return
 }
 
-func (b *ReaderAtByteStream) takeUpToSlow(n int) (out []byte) {
+func (b *ReaderAt) takeUpToSlow(n int) (out []byte) {
 	if b.err != nil {
 		return nil
 	}
@@ -189,7 +199,7 @@ func (b *ReaderAtByteStream) takeUpToSlow(n int) (out []byte) {
 	return
 }
 
-func (b *ReaderAtByteStream) fill() error {
+func (b *ReaderAt) fill() error {
 	left := copy(b.buf, b.rem)
 	n, err := b.rdr.ReadAt(b.buf[left:], b.off)
 	if err != nil && (err != io.EOF || n == 0) {
