@@ -33,6 +33,10 @@ func (b *ReaderAt) Avail() int64 {
 	return int64(len(b.rem))
 }
 
+func (b *ReaderAt) Limit() int64 {
+	return int64(len(b.buf))
+}
+
 func (b *ReaderAt) Tell() int64 {
 	return b.off - int64(len(b.rem))
 }

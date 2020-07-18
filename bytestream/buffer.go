@@ -26,6 +26,10 @@ func (b *Buffer) Err() error {
 	return b.err
 }
 
+func (b *Buffer) Limit() int64 {
+	return int64(len(b.buf))
+}
+
 func (b *Buffer) Tell() int64 {
 	return int64(len(b.buf) - len(b.rem))
 }

@@ -8,9 +8,23 @@ package bytestream
 //
 // This allows calling code to ignore errors until predefined "checkpoints", which
 // are then checked using Err().
+//
+// Individual implementations are free to place their own limits in the maximum
+// number of bytes that can be retrieved in a single call; that limit MUST be
+// available via Limt(). Exceeding this limit MUST result in `errors.Is(err,
+// io.ErrShortBuffer) == true`.
+//
 type ByteStream interface {
 	// Byte position since the start of the stream
 	Tell() int64
+
+	// The maximum number of bytes that you can Peek or Take without seeing an
+	// io.ErrShortBuffer. This limit should be fixed for the entire lifetime of the
+	// stream.
+	//
+	// This does not return the number of bytes remaining, and should not be used
+	// to determine if TakeExactly would succeed.
+	Limit() int64
 
 	// Return any cached errors
 	Err() error
