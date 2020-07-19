@@ -185,7 +185,7 @@ func (b *ReaderAt) peekUpToSlow(n int) (out []byte, err error) {
 	if b.err != nil {
 		return nil, b.err
 	}
-	if err := b.fill(); err != nil && err != io.EOF {
+	if err := b.fill(); err != nil && (len(b.rem) == 0 || err != io.EOF) {
 		b.err = err
 		return nil, err
 	}

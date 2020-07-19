@@ -35,8 +35,13 @@ type ByteStream interface {
 
 	DiscardExactly(n int) (err error)
 	DiscardUpTo(n int) error
+
 	PeekExactly(n int) (o []byte, err error)
+
+	// Peek at the next n bytes in the stream. Returns EOF if the stream is at the end,
+	// otherwise will return the remaining bytes. PeekUpTo may panic if 'n' is 0.
 	PeekUpTo(n int) (o []byte, err error)
+
 	TakeExactly(n int) (o []byte, err error)
 	TakeUpTo(n int) (o []byte, err error)
 }
