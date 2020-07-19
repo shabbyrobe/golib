@@ -1,5 +1,7 @@
 package bytestream
 
+import "io"
+
 // ByteStream allows a stream of bytes to be taken in discrete chunks, allowing
 // things like buffering across reads to be masked from calling code.
 //
@@ -15,6 +17,8 @@ package bytestream
 // io.ErrShortBuffer) == true`.
 //
 type ByteStream interface {
+	io.ByteReader
+
 	// Byte position since the start of the stream
 	Tell() int64
 

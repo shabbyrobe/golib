@@ -66,6 +66,14 @@ func (b *Buffer) PeekUpTo(n int) (o []byte, err error) {
 	return b.rem[:n], nil
 }
 
+func (b *Buffer) ReadByte() (o byte, err error) {
+	if len(b.rem) == 0 {
+		return 0, io.ErrUnexpectedEOF
+	}
+	o, b.rem = b.rem[0], b.rem[1:]
+	return o, nil
+}
+
 func (b *Buffer) TakeExactly(n int) (o []byte, err error) {
 	if n > len(b.rem) {
 		return nil, io.ErrUnexpectedEOF

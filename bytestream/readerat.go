@@ -41,6 +41,26 @@ func (b *ReaderAt) Tell() int64 {
 	return b.off - int64(len(b.rem))
 }
 
+func (b *ReaderAt) ReadByte() (o byte, err error) {
+	if len(b.rem) == 0 {
+		return b.readByteSlow(), b.err
+	}
+	o, b.rem = b.rem[0], b.rem[1:]
+	return
+}
+
+func (b *ReaderAt) readByteSlow() (out byte) {
+	if b.err != nil {
+		return 0
+	}
+	if err := b.fill(); err != nil {
+		b.err = err
+		return 0
+	}
+	out, b.rem = b.rem[0], b.rem[1:]
+	return
+}
+
 func (b *ReaderAt) TakeExactly(n int) (o []byte, err error) {
 	// This is extremely unfortunate. Nothing I do can get this below 80.
 	// ./ReaderAt.go:30:6: cannot inline (*ReaderAt).Exactly:
