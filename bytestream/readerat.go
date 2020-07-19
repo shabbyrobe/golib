@@ -167,36 +167,32 @@ func (b *ReaderAt) peekExactlySlow(n int) (out []byte) {
 
 func (b *ReaderAt) PeekUpTo(n int) (o []byte, err error) {
 	if n > len(b.rem) {
-		return b.peekUpToSlow(n), b.err
+		return b.peekUpToSlow(n)
 	}
 	o = b.rem[:n]
 	return
 }
 
-func (b *ReaderAt) peekUpToSlow(n int) (out []byte) {
+func (b *ReaderAt) peekUpToSlow(n int) (out []byte, err error) {
 	if len(b.rem) > 0 && b.err == io.EOF {
-		out, b.rem = b.rem, nil
-		return
+		out = b.rem
+		return out, nil
 	}
 	if n > len(b.buf) {
 		b.err = io.ErrShortBuffer
-		return nil
+		return nil, b.err
 	}
 	if b.err != nil {
-		return nil
+		return nil, b.err
 	}
-	if err := b.fill(); err != nil {
-		if len(b.rem) > 0 && err == io.EOF {
-			err = nil
-		} else {
-			b.err = err
-			return nil
-		}
+	if err := b.fill(); err != nil && err != io.EOF {
+		b.err = err
+		return nil, err
 	}
 	if n > len(b.rem) {
-		return b.rem
+		return b.rem, nil
 	}
-	return b.rem[:n]
+	return b.rem[:n], nil
 }
 
 func (b *ReaderAt) TakeUpTo(n int) (o []byte, err error) {
