@@ -432,6 +432,15 @@ func TestReaderAtPeekUpTo(t *testing.T) {
 		}
 	})
 
+	t.Run("second-peek-spans-eof", func(t *testing.T) {
+		buf := []byte{0, 1, 2, 3}
+		bra := bytes.NewReader(buf)
+		bs := NewReaderAt(bra, make([]byte, 4))
+		assertPeekUpTo(t, bs, 2, 0, 1)
+		bs.DiscardExactly(2)
+		assertPeekUpTo(t, bs, 3, 2, 3)
+	})
+
 	t.Run("all", func(t *testing.T) {
 		buf := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8}
 		bra := bytes.NewReader(buf)

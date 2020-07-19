@@ -186,8 +186,12 @@ func (b *ReaderAt) peekUpToSlow(n int) (out []byte) {
 		return nil
 	}
 	if err := b.fill(); err != nil {
-		b.err = err
-		return nil
+		if len(b.rem) > 0 && err == io.EOF {
+			err = nil
+		} else {
+			b.err = err
+			return nil
+		}
 	}
 	if n > len(b.rem) {
 		return b.rem
@@ -208,9 +212,9 @@ func (b *ReaderAt) takeUpToSlow(n int) (out []byte) {
 		return nil
 	}
 	if err := b.fill(); err != nil {
-		if len(b.rem) > 0 && b.err == io.EOF {
+		if len(b.rem) > 0 && err == io.EOF {
 			out, b.rem = b.rem, nil
-			b.err = nil
+			err = nil
 			return
 		}
 		b.err = err
@@ -227,7 +231,6 @@ func (b *ReaderAt) fill() error {
 	left := copy(b.buf, b.rem)
 	n, err := b.rdr.ReadAt(b.buf[left:], b.off)
 	if err != nil && (err != io.EOF || n == 0) {
-		b.err = err
 		return err
 	}
 	b.off += int64(n)
