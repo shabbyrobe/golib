@@ -41,6 +41,12 @@ func (b *ReaderAt) Tell() int64 {
 	return b.off - int64(len(b.rem))
 }
 
+// ReadAt provides direct access to the underlying ReaderAt.
+// Calls to ReadAt should not influence the state of the stream.
+func (b *ReaderAt) ReadAt(buf []byte, off int64) (n int, err error) {
+	return b.rdr.ReadAt(buf, off)
+}
+
 func (b *ReaderAt) ReadByte() (o byte, err error) {
 	if len(b.rem) == 0 {
 		return b.readByteSlow(), b.err
@@ -227,6 +233,7 @@ func (b *ReaderAt) fill() error {
 	left := copy(b.buf, b.rem)
 	n, err := b.rdr.ReadAt(b.buf[left:], b.off)
 	if err != nil && (err != io.EOF || n == 0) {
+		b.rem = b.buf[:left]
 		return err
 	}
 	b.off += int64(n)

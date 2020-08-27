@@ -1,6 +1,9 @@
 package bytestream
 
-import "io"
+import (
+	"errors"
+	"io"
+)
 
 type Buffer struct {
 	buf []byte
@@ -32,6 +35,20 @@ func (b *Buffer) Limit() int64 {
 
 func (b *Buffer) Tell() int64 {
 	return int64(len(b.buf) - len(b.rem))
+}
+
+func (b *Buffer) ReadAt(p []byte, off int64) (n int, err error) {
+	if off < 0 {
+		return 0, errors.New("bytetools: BufferAt.ReadAt: negative offset")
+	}
+	if off >= int64(len(b.buf)) {
+		return 0, io.EOF
+	}
+	n = copy(p, b.buf[off:])
+	if n < len(p) {
+		return n, io.EOF
+	}
+	return n, nil
 }
 
 func (b *Buffer) DiscardExactly(n int) (err error) {
