@@ -2,6 +2,7 @@ package bytetools
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -46,10 +47,16 @@ func (w *BufferAt) WriteAt(p []byte, offset int64) (n int, err error) {
 }
 
 func (w *BufferAt) ReadAt(p []byte, off int64) (n int, err error) {
+	if off < 0 {
+		return 0, errors.New("bytetools: BufferAt.ReadAt: negative offset")
+	}
 	if off >= w.len {
 		return 0, io.EOF
 	}
 	n = copy(p, w.buffer[off:])
+	if n < len(p) {
+		return n, io.EOF
+	}
 	return n, nil
 }
 
