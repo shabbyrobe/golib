@@ -110,6 +110,7 @@ func TruncateMonths(t time.Time, n int) time.Time {
 	}
 }
 
+// PeriodMonth returns the period value in month quantities for the given date.
 func PeriodMonth(t time.Time) int {
 	return ((t.Year() - 1970) * 12) + (int(t.Month()) - 1)
 }

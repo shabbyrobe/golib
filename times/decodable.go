@@ -57,6 +57,30 @@ func (d *DurationMsecFloat) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
+// DurationSecFloat provides a time.Duration that marshals to/from a float
+// representing seconds.
+type DurationSecFloat time.Duration
+
+func (d DurationSecFloat) String() string {
+	return time.Duration(d).String()
+}
+
+func (d DurationSecFloat) MarshalJSON() ([]byte, error) {
+	fv := float64(d) / float64(time.Second)
+	fs := strconv.FormatFloat(fv, 'f', 9, 64)
+	return []byte(fs), nil
+}
+
+func (d *DurationSecFloat) UnmarshalJSON(b []byte) (err error) {
+	fv, err := strconv.ParseFloat(string(b), 64)
+	if err != nil {
+		return err
+	}
+	fd := time.Duration(fv * float64(time.Second))
+	*d = DurationSecFloat(fd)
+	return nil
+}
+
 // UnixSecInt provides a time.Time that marshals to/from an int representing
 // the number of whole seconds since the Unix epoch.
 type UnixSecInt time.Time
