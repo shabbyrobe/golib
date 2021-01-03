@@ -61,6 +61,10 @@ func (d *DurationMsecFloat) UnmarshalJSON(b []byte) (err error) {
 // representing seconds.
 type DurationSecFloat time.Duration
 
+func (d DurationSecFloat) Duration() time.Duration {
+	return time.Duration(d)
+}
+
 func (d DurationSecFloat) String() string {
 	return time.Duration(d).String()
 }
@@ -78,6 +82,34 @@ func (d *DurationSecFloat) UnmarshalJSON(b []byte) (err error) {
 	}
 	fd := time.Duration(fv * float64(time.Second))
 	*d = DurationSecFloat(fd)
+	return nil
+}
+
+// DurationSecInt64 provides a time.Duration that marshals to/from an int64
+// representing seconds.
+type DurationSecInt64 time.Duration
+
+func (d DurationSecInt64) Duration() time.Duration {
+	return time.Duration(d)
+}
+
+func (d DurationSecInt64) String() string {
+	return time.Duration(d).String()
+}
+
+func (d DurationSecInt64) MarshalJSON() ([]byte, error) {
+	iv := int64(time.Duration(d) / time.Second)
+	is := strconv.FormatInt(iv, 10)
+	return []byte(is), nil
+}
+
+func (d *DurationSecInt64) UnmarshalJSON(b []byte) (err error) {
+	iv, err := strconv.ParseInt(string(b), 0, 64)
+	if err != nil {
+		return err
+	}
+	fd := time.Duration(iv) * time.Second
+	*d = DurationSecInt64(fd)
 	return nil
 }
 
