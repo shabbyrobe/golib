@@ -37,14 +37,17 @@ func (d *DurationString) UnmarshalJSON(b []byte) (err error) {
 // representing milliseconds.
 type DurationMsecFloat time.Duration
 
+func (d DurationMsecFloat) Duration() time.Duration {
+	return time.Duration(d)
+}
+
 func (d DurationMsecFloat) String() string {
 	return time.Duration(d).String()
 }
 
 func (d DurationMsecFloat) MarshalJSON() ([]byte, error) {
 	fv := float64(d) / float64(time.Millisecond)
-	fs := strconv.FormatFloat(fv, 'f', 9, 64)
-	return []byte(fs), nil
+	return json.Marshal(fv)
 }
 
 func (d *DurationMsecFloat) UnmarshalJSON(b []byte) (err error) {
@@ -71,8 +74,7 @@ func (d DurationSecFloat) String() string {
 
 func (d DurationSecFloat) MarshalJSON() ([]byte, error) {
 	fv := float64(d) / float64(time.Second)
-	fs := strconv.FormatFloat(fv, 'f', 9, 64)
-	return []byte(fs), nil
+	return json.Marshal(fv)
 }
 
 func (d *DurationSecFloat) UnmarshalJSON(b []byte) (err error) {
@@ -110,6 +112,34 @@ func (d *DurationSecInt64) UnmarshalJSON(b []byte) (err error) {
 	}
 	fd := time.Duration(iv) * time.Second
 	*d = DurationSecInt64(fd)
+	return nil
+}
+
+// DurationMsecInt64 provides a time.Duration that marshals to/from an int64
+// representing milliseconds.
+type DurationMsecInt64 time.Duration
+
+func (d DurationMsecInt64) Duration() time.Duration {
+	return time.Duration(d)
+}
+
+func (d DurationMsecInt64) String() string {
+	return time.Duration(d).String()
+}
+
+func (d DurationMsecInt64) MarshalJSON() ([]byte, error) {
+	iv := int64(time.Duration(d) / time.Millisecond)
+	is := strconv.FormatInt(iv, 10)
+	return []byte(is), nil
+}
+
+func (d *DurationMsecInt64) UnmarshalJSON(b []byte) (err error) {
+	iv, err := strconv.ParseInt(string(b), 0, 64)
+	if err != nil {
+		return err
+	}
+	fd := time.Duration(iv) * time.Millisecond
+	*d = DurationMsecInt64(fd)
 	return nil
 }
 

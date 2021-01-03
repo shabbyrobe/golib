@@ -62,6 +62,82 @@ func TestUnixMsecInt(t *testing.T) {
 	}
 }
 
+func TestDurationMsecFloat(t *testing.T) {
+	var x = DurationMsecFloat(time.Microsecond * 123456789)
+	bts, err := json.Marshal(x)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bts) != "123456.789" {
+		t.Fatal(string(bts))
+	}
+
+	var y DurationMsecFloat
+	if err := json.Unmarshal(bts, &y); err != nil {
+		t.Fatal(err)
+	}
+	if y.Duration() != 123456789*time.Microsecond {
+		t.Fatal(y)
+	}
+}
+
+func TestDurationSecFloat(t *testing.T) {
+	var x = DurationSecFloat(time.Millisecond * 12345)
+	bts, err := json.Marshal(x)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bts) != "12.345" {
+		t.Fatal(string(bts))
+	}
+
+	var y DurationSecFloat
+	if err := json.Unmarshal(bts, &y); err != nil {
+		t.Fatal(err)
+	}
+	if y.Duration() != 12345*time.Millisecond {
+		t.Fatal(y)
+	}
+}
+
+func TestDurationMsecInt64(t *testing.T) {
+	var x = DurationMsecInt64(time.Second * 10)
+	bts, err := json.Marshal(x)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bts) != "10000" {
+		t.Fatal(string(bts))
+	}
+
+	var y DurationMsecInt64
+	if err := json.Unmarshal(bts, &y); err != nil {
+		t.Fatal(err)
+	}
+	if y.Duration() != 10*time.Second {
+		t.Fatal(y)
+	}
+}
+
+func TestDurationSecInt64(t *testing.T) {
+	var x = DurationSecInt64(time.Second * 10)
+	bts, err := json.Marshal(x)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bts) != "10" {
+		t.Fatal(string(bts))
+	}
+
+	var y DurationSecInt64
+	if err := json.Unmarshal(bts, &y); err != nil {
+		t.Fatal(err)
+	}
+	if y.Duration() != 10*time.Second {
+		t.Fatal(y)
+	}
+}
+
 func BenchmarkDurationString(b *testing.B) {
 	var ds DurationString
 	var in = []byte(`"1m"`)
