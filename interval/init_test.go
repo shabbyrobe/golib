@@ -5,16 +5,16 @@ import (
 	"time"
 )
 
-var spansLen = len(Spans)
+var unitsLen = len(Units)
 
 func randomInterval(rng *rand.Rand) Interval {
 	gimmeRandom := rand.Intn
 	if rng != nil {
 		gimmeRandom = rng.Intn
 	}
-	span := Span(gimmeRandom(spansLen) + int(firstSpan))
-	qty := Qty(gimmeRandom(int(span.MaxQty())))
-	return OfValid(qty, span)
+	unit := Unit(gimmeRandom(unitsLen) + int(firstUnit))
+	qty := Qty(gimmeRandom(int(unit.MaxQty())))
+	return OfValid(qty, unit)
 }
 
 func randomDifferentIntervals(rng *rand.Rand) (a, b Interval) {
@@ -32,33 +32,33 @@ func randomDivisibleIntervals(rng *rand.Rand) (from, by Interval) {
 		gimmeRandom = rng.Intn
 	}
 
-	var fromSpan Span
-	for fromSpan == 0 || fromSpan == firstSpan {
-		fromSpan = Span(gimmeRandom(spansLen) + int(firstSpan))
+	var fromUnit Unit
+	for fromUnit == 0 || fromUnit == firstUnit {
+		fromUnit = Unit(gimmeRandom(unitsLen) + int(firstUnit))
 	}
 
-	var bySpan Span
-	for bySpan == 0 || bySpan == lastSpan || bySpan >= fromSpan {
-		bySpan = Span(gimmeRandom(spansLen) + int(firstSpan))
+	var byUnit Unit
+	for byUnit == 0 || byUnit == lastUnit || byUnit >= fromUnit {
+		byUnit = Unit(gimmeRandom(unitsLen) + int(firstUnit))
 	}
 
 	for {
-		from = OfValid(randomQty(rng, fromSpan), fromSpan)
-		by = OfValid(randomQty(rng, bySpan), bySpan)
+		from = OfValid(randomQty(rng, fromUnit), fromUnit)
+		by = OfValid(randomQty(rng, byUnit), byUnit)
 		if from.CanDivideBy(by) {
 			return from, by
 		}
 	}
 }
 
-func randomQty(rng *rand.Rand, span Span) Qty {
+func randomQty(rng *rand.Rand, unit Unit) Qty {
 	gimmeRandom := rand.Intn
 	if rng != nil {
 		gimmeRandom = rng.Intn
 	}
 
 	// Qty must not be zero
-	v := gimmeRandom(int(span.MaxQty())-1) + 1
+	v := gimmeRandom(int(unit.MaxQty())-1) + 1
 	return Qty(v)
 }
 

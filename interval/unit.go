@@ -6,27 +6,27 @@ import "fmt"
 // size. Unfortunately, intervals are not perfectly sortable as 24 months will
 // still come before 1 day. The Less function has a red hot go, but it's not
 // perfect either as it checks against a fixed date, but intervals can
-// represent different spans of time at different dates (daylight savings, leap
+// represent different units of time at different dates (daylight savings, leap
 // seconds, etc).
 const (
-	Second Span = 9
-	Minute Span = 10
-	Hour   Span = 11
-	Day    Span = 12
-	Week   Span = 13
-	Month  Span = 14
-	Year   Span = 15
+	Second Unit = 9
+	Minute Unit = 10
+	Hour   Unit = 11
+	Day    Unit = 12
+	Week   Unit = 13
+	Month  Unit = 14
+	Year   Unit = 15
 
 	// This mistake happens so frequently there's no obvious reason not to
 	// support plurals, but there may be a non-obvious one. Including for now,
 	// will remove this comment if the plurals work without incident:
-	Seconds Span = Second
-	Minutes Span = Minute
-	Hours   Span = Hour
-	Days    Span = Day
-	Weeks   Span = Week
-	Months  Span = Month
-	Years   Span = Year
+	Seconds Unit = Second
+	Minutes Unit = Minute
+	Hours   Unit = Hour
+	Days    Unit = Day
+	Weeks   Unit = Week
+	Months  Unit = Month
+	Years   Unit = Year
 
 	// These must not exceed 255.
 	MaxSecond Qty = 60
@@ -38,23 +38,23 @@ const (
 	MaxYear   Qty = 255
 )
 
-// Spans contains all valid interval spans in guaranteed ascending order.
-var Spans = []Span{
+// Units contains all valid interval units in guaranteed ascending order.
+var Units = []Unit{
 	Second, Minute, Hour, Day, Week, Month, Year,
 }
 
-var firstSpan, lastSpan Span
+var firstUnit, lastUnit Unit
 
 func init() {
-	for i, span := range Spans {
+	for i, unit := range Units {
 		if i == 0 {
-			firstSpan = span
+			firstUnit = unit
 		}
-		lastSpan = span
+		lastUnit = unit
 	}
 }
 
-func (p Span) String() string {
+func (p Unit) String() string {
 	switch p {
 	case Second:
 		return "sec"
@@ -75,7 +75,7 @@ func (p Span) String() string {
 	}
 }
 
-func (p Span) MaxQty() Qty {
+func (p Unit) MaxQty() Qty {
 	switch p {
 	case Second:
 		return MaxSecond
@@ -96,4 +96,4 @@ func (p Span) MaxQty() Qty {
 	}
 }
 
-func (p Span) IsZero() bool { return p == 0 }
+func (p Unit) IsZero() bool { return p == 0 }

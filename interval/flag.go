@@ -1,9 +1,5 @@
 package interval
 
-import (
-	"flag"
-)
-
 // FlagVar wraps an Interval for use with flag.Var:
 //
 //	var intvlFlag interval.FlagVar
@@ -12,8 +8,6 @@ import (
 //	intvl := intvlFlag.Interval()
 //
 type FlagVar Interval
-
-var _ flag.Value = new(FlagVar)
 
 func (iv FlagVar) IsZero() bool       { return Interval(iv).IsZero() }
 func (iv FlagVar) String() string     { return iv.Interval().String() }

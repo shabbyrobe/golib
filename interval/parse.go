@@ -15,11 +15,11 @@ func MustParse(intvl string) Interval {
 }
 
 // Parse an interval from a string representation of the interval size
-// as an integer followed by the span as a string, for example:
+// as an integer followed by the unit as a string, for example:
 //	"1min" == interval.Interval(1, interval.Minute)
 //	"1mo"  == interval.Interval(1, interval.Month)
 //
-// See ParseSpan for the list of supported span strings.
+// See ParseUnit for the list of supported unit strings.
 //
 func Parse(intvl string) (Interval, error) {
 	intvl = strings.TrimSpace(intvl)
@@ -39,14 +39,14 @@ func Parse(intvl string) (Interval, error) {
 		return 0, err
 	}
 
-	span, err := ParseSpan(intvl[nidx+1:])
+	unit, err := ParseUnit(intvl[nidx+1:])
 	if err != nil {
 		return 0, err
 	}
-	if err := Validate(span, Qty(qty)); err != nil {
+	if err := Validate(unit, Qty(qty)); err != nil {
 		return 0, err
 	}
-	return Raw(Qty(qty), span), err
+	return Raw(Qty(qty), unit), err
 }
 
 // ParseIntervalPeriod parses a string representing an interval combined with a
@@ -77,8 +77,8 @@ fail:
 	return 0, 0, fmt.Errorf("interval: invalid interval/period %q; expected format '1min:1234'", v)
 }
 
-func Validate(span Span, qty Qty) error {
-	switch span {
+func Validate(unit Unit, qty Qty) error {
+	switch unit {
 	case Second:
 		if qty > MaxSecond {
 			return fmt.Errorf("interval: qty too large for seconds: expected <= %d, found %d", MaxSecond, qty)
@@ -108,14 +108,14 @@ func Validate(span Span, qty Qty) error {
 			return fmt.Errorf("interval: qty too large for years: expected <= %d, found %d", MaxYear, qty)
 		}
 	default:
-		return fmt.Errorf("interval: unknown span %s", span)
+		return fmt.Errorf("interval: unknown unit %s", unit)
 	}
 	return nil
 }
 
-// Parse a span from a string.
+// Parse a unit from a string.
 //
-// Supported span strings are:
+// Supported unit strings are:
 //
 //	Second == "s", "sec", "secs", "second", "seconds"
 //	Minute == "min", "mins", "minute", "minutes"
@@ -125,32 +125,32 @@ func Validate(span Span, qty Qty) error {
 //	Month  == "mo", "mos", "month", "months"
 //	Year   == "y", "yr", "ys", "yrs", "year", "years"
 //
-func ParseSpan(sstr string) (span Span, err error) {
+func ParseUnit(sstr string) (unit Unit, err error) {
 	ips := strings.ToLower(strings.TrimSpace(sstr))
 	switch ips {
 	case "s", "sec", "secs", "second", "seconds":
-		span = Second
+		unit = Second
 
 	case "min", "mins", "minute", "minutes":
-		span = Minute
+		unit = Minute
 
 	case "h", "hr", "hrs", "hour", "hours":
-		span = Hour
+		unit = Hour
 
 	case "d", "ds", "day", "days":
-		span = Day
+		unit = Day
 
 	case "w", "ws", "wk", "wks", "week", "weeks":
-		span = Week
+		unit = Week
 
 	case "mo", "mos", "mnth", "mnths", "month", "months":
-		span = Month
+		unit = Month
 
 	case "y", "ys", "yr", "yrs", "year", "years":
-		span = Year
+		unit = Year
 
 	default:
-		err = fmt.Errorf("interval: unknown span %q", sstr)
+		err = fmt.Errorf("interval: unknown unit %q", sstr)
 	}
 	return
 }

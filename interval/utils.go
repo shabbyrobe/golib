@@ -17,7 +17,7 @@ func DivideNicely(intvl Interval, n int, limit Interval) Interval {
 	partSize := size / time.Duration(n)
 
 	// Handle the upper limit gracefully:
-	if intvl.Span() == Year && intvl.Qty() > Qty(n) {
+	if intvl.Unit() == Year && intvl.Qty() > Qty(n) {
 		return Raw(intvl.Qty()/Qty(n), Year)
 	}
 
@@ -53,7 +53,7 @@ func DivideNicelyFor(intvl Interval, n int, forIntvl Interval) (result Interval,
 	partSize := size / time.Duration(n)
 
 	// Handle the upper limit gracefully:
-	if intvl.Span() == Year && intvl.Qty() > Qty(n) {
+	if intvl.Unit() == Year && intvl.Qty() > Qty(n) {
 		return Raw(intvl.Qty()/Qty(n), Year), true
 	}
 
@@ -77,15 +77,15 @@ func Find(duration time.Duration) Interval {
 // FindAt will find the smallest interval that encapsulates the duration, as
 // observed at the provided time.
 //
-// Currently, FindAt is rather naive. It will first search by Span, then work
-// out how many of that span to use. This may change at some point to attempt
-// several spans to find a better fit.
+// Currently, FindAt is rather naive. It will first search by Unit, then work
+// out how many of that unit to use. This may change at some point to attempt
+// several units to find a better fit.
 //
 // For example, the current behaviour:
 //	FindAt(86400 * time.Second) == Days1
 //	FindAt(86401 * time.Second) == Days2
 //
-// Possible eventual behaviour (accounting for span size limits):
+// Possible eventual behaviour (accounting for unit size limits):
 //	FindAt(86400 * time.Second) == Days1
 //	FindAt(86401 * time.Second) == Raw(25, Hours)
 //
@@ -94,26 +94,26 @@ func FindAt(duration time.Duration, at time.Time) Interval {
 		duration = -duration
 	}
 
-	var foundSpan = Seconds
+	var foundUnit = Seconds
 	var foundDuration time.Duration
 
-	for span := Seconds; span <= Years; span++ {
-		checkInterval := Raw(1, span)
-		spanDuration := checkInterval.DurationAt(at)
-		if spanDuration > duration {
+	for unit := Seconds; unit <= Years; unit++ {
+		checkInterval := Raw(1, unit)
+		unitDuration := checkInterval.DurationAt(at)
+		if unitDuration > duration {
 			break
 		}
-		foundSpan, foundDuration = span, spanDuration
+		foundUnit, foundDuration = unit, unitDuration
 	}
 
 	if foundDuration == 0 || duration <= foundDuration {
-		return Raw(1, foundSpan)
+		return Raw(1, foundUnit)
 
 	} else {
 		// Integer division that 'truncates' up rather than down:
 		qty := Qty((duration-1)/foundDuration + 1)
 
-		return Raw(qty, foundSpan)
+		return Raw(qty, foundUnit)
 	}
 }
 

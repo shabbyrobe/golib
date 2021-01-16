@@ -18,35 +18,35 @@ var intervalRefTime = time.Date(2018, 1, 1, 12, 0, 0, 0, time.UTC)
 
 var epochTime = time.Unix(0, 0)
 
-// Of returns a valid interval from a Qty and a Span, or an error indicating
+// Of returns a valid interval from a Qty and a Unit, or an error indicating
 // why one could not be created.
-func Of(qty Qty, span Span) (Interval, error) {
-	err := Validate(span, qty)
+func Of(qty Qty, unit Unit) (Interval, error) {
+	err := Validate(unit, qty)
 	if err != nil {
 		return 0, err
 	}
-	return Interval((uint(span) << 8) | uint(qty)), nil
+	return Interval((uint(unit) << 8) | uint(qty)), nil
 }
 
-// OfValid returns a guaranteed valid interval from a Qty and a Span, panicking
+// OfValid returns a guaranteed valid interval from a Qty and a Unit, panicking
 // if it is not valid.
-func OfValid(qty Qty, span Span) Interval {
-	i, err := Of(qty, span)
+func OfValid(qty Qty, unit Unit) Interval {
+	i, err := Of(qty, unit)
 	if err != nil {
 		panic(err)
 	}
 	return i
 }
 
-// Raw returns an unchecked Interval from a Qty and a Span, which may be
+// Raw returns an unchecked Interval from a Qty and a Unit, which may be
 // invalid.
 //
 // If you use a Raw interval without validating it, you may get lots of panics
 // well after the Interval has been created. If this matters to you more than
 // raw performance (and it almost certainly does), use interval.Of or
 // interval.OfValid
-func Raw(qty Qty, span Span) Interval {
-	return Interval((uint(span) << 8) | uint(qty))
+func Raw(qty Qty, unit Unit) Interval {
+	return Interval((uint(unit) << 8) | uint(qty))
 }
 
 // FormatIntervalPeriod is the complement to ParseIntervalPeriod.
@@ -64,13 +64,13 @@ func (i Interval) String() string {
 	if is, ok := intervalStrings[i]; ok {
 		return is
 	}
-	return fmt.Sprintf("%d%s", i.Qty(), i.Span().String())
+	return fmt.Sprintf("%d%s", i.Qty(), i.Unit().String())
 }
 
 func (i Interval) IsZero() bool { return i == 0 }
 
-func (i Interval) Span() Span {
-	return Span(i >> 8)
+func (i Interval) Unit() Unit {
+	return Unit(i >> 8)
 }
 
 // Less returns a best-effort guess as to whether one interval is smaller than
@@ -97,7 +97,7 @@ func (i Interval) Qty() Qty {
 }
 
 func (i Interval) Valid() bool {
-	return Validate(i.Span(), i.Qty()) == nil
+	return Validate(i.Unit(), i.Qty()) == nil
 }
 
 // CanDivideBy reports whether this interval can cleanly subdivide into the
@@ -119,39 +119,39 @@ func (i Interval) CanDivideBy(by Interval) bool {
 //
 // This returns false if i == to.
 func (i Interval) CanCombineTo(to Interval) bool {
-	fromSpan := i.Span()
-	toSpan := to.Span()
+	fromUnit := i.Unit()
+	toUnit := to.Unit()
 
-	switch fromSpan {
+	switch fromUnit {
 	case Second, Minute, Hour:
-		if toSpan >= Day {
+		if toUnit >= Day {
 			// Daylight saving time makes it impossible to cleanly combine
-			// "part of day" spans into day-based spans or greater.
+			// "part of day" units into day-based units or greater.
 			return false
 		}
 
 	case Day:
-		if toSpan != Day && toSpan != Week {
-			// Days only combine cleanly into Weeks or larger spans of Days.
+		if toUnit != Day && toUnit != Week {
+			// Days only combine cleanly into Weeks or larger units of Days.
 			return false
 		}
 
 	case Week:
-		if toSpan != Week {
+		if toUnit != Week {
 			// Messy weeks don't combine cleanly into much of anything!
 			return false
 		}
 
 	case Month:
-		if toSpan != Month && toSpan != Year {
+		if toUnit != Month && toUnit != Year {
 			return false
 		}
 	case Year:
-		if toSpan != Year {
+		if toUnit != Year {
 			return false
 		}
 	default:
-		panic(fmt.Errorf("unhandled span %q", fromSpan))
+		panic(fmt.Errorf("unhandled unit %q", fromUnit))
 	}
 
 	if !i.Less(to) {
@@ -197,7 +197,7 @@ func (i Interval) Period(t time.Time) Period {
 	qty := int64(i.Qty())
 
 	var out int64
-	switch i.Span() {
+	switch i.Unit() {
 	case Second:
 		un := t.UnixNano()
 		if un >= 0 {
@@ -270,7 +270,7 @@ func (i Interval) Period(t time.Time) Period {
 		}
 
 	default:
-		panic(fmt.Errorf("unknown span %d", i.Span()))
+		panic(fmt.Errorf("unknown unit %d", i.Unit()))
 	}
 
 	return Period(out)
@@ -284,7 +284,7 @@ func (i Interval) Time(p Period, loc *time.Location) time.Time {
 	qty := int64(i.Qty())
 
 	var out time.Time
-	switch i.Span() {
+	switch i.Unit() {
 	case Second:
 		out = time.Unix(int64(p)*qty, 0).In(loc)
 	case Minute:
@@ -300,7 +300,7 @@ func (i Interval) Time(p Period, loc *time.Location) time.Time {
 	case Year:
 		out = time.Date(int(int64(p)*qty)+1970, 1, 1, 0, 0, 0, 0, loc)
 	default:
-		panic(fmt.Errorf("unknown span %d", i.Span()))
+		panic(fmt.Errorf("unknown unit %d", i.Unit()))
 	}
 
 	return out
@@ -314,7 +314,7 @@ func (i Interval) Start(t time.Time) time.Time {
 	qty := int64(i.Qty())
 
 	var out time.Time
-	switch i.Span() {
+	switch i.Unit() {
 	case Second:
 		out = time.Unix(0, un-(un%(int64(time.Second)*qty)))
 	case Minute:
@@ -330,7 +330,7 @@ func (i Interval) Start(t time.Time) time.Time {
 	case Year:
 		out = time.Date(t.Year()-(t.Year()%int(qty)), 1, 1, 0, 0, 0, 0, time.UTC)
 	default:
-		panic(fmt.Errorf("unknown span %d", i.Span()))
+		panic(fmt.Errorf("unknown unit %d", i.Unit()))
 	}
 
 	return out.In(t.Location())
@@ -344,7 +344,7 @@ func (i Interval) End(t time.Time) time.Time {
 	qty := int64(i.Qty())
 
 	var out time.Time
-	switch i.Span() {
+	switch i.Unit() {
 	case Second:
 		out = i.Start(t).Add(time.Duration(qty) * time.Second)
 	case Minute:
@@ -360,7 +360,7 @@ func (i Interval) End(t time.Time) time.Time {
 	case Year:
 		out = times.AddYears(t, int(qty))
 	default:
-		panic(fmt.Errorf("unknown span %d", i.Span()))
+		panic(fmt.Errorf("unknown unit %d", i.Unit()))
 	}
 
 	return out.In(t.Location())

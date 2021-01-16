@@ -373,7 +373,7 @@ func TestCanCombine(t *testing.T) {
 		{Of1Hour, Of24Hours, true},
 		{Of1Hour, Of48Hours, true},
 		{Of2Hours, Of4Hours, true},
-		{Of1Hour, Raw(120, Minute), true}, // Can combine downwards into smaller spans if it's clean
+		{Of1Hour, Raw(120, Minute), true}, // Can combine downwards into smaller units if it's clean
 
 		{Of1Hour, Of1Day, false},  // Hours don't generally combine into days due to DST
 		{Of1Hour, Of2Days, false}, // Hours don't generally combine into days due to DST

@@ -4,26 +4,26 @@ Go Intervals
 `interval` is a simple way of storing human-centric intervals of time in a
 compact representation.
 
-It is split into four key concepts: `Span`, `Qty`, `Interval`, and `Period`.
+It is split into four key concepts: `Unit`, `Qty`, `Interval`, and `Period`.
 
-`Span` is the amount of time that has passed. `Qty` is the number of `Spans`.
-`Interval` is the combination of `Span` and `Qty`. `Period` is the index of
+`Unit` is the amount of time that has passed. `Qty` is the number of `Units`.
+`Interval` is the combination of `Unit` and `Qty`. `Period` is the index of
 the interval relative to a fixed real time (Unix Epoch).
 
 For example:
 
-- `Span` == Minute
+- `Unit` == Minute
 - `Qty` == Five of them
-- `Interval` == `Qty(Five of them) * Span(Minute)`
+- `Interval` == `Qty(Five of them) * Unit(Minute)`
 - `Period` == The 5,121st `Interval` since the Unix Epoch.
 - `Time` == Do some jiggery pokery with an `Interval` and a `Period`.
 
 And in code:
 
 ```go
-span := interval.Minute
+unit := interval.Minute
 qty := interval.Qty(5)
-intvl := interval.New(qty, span)
+intvl := interval.New(qty, unit)
 period := interval.Period(5121)
 periodTime := intvl.Time(period, time.UTC)
 ```

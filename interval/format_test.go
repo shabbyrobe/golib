@@ -18,6 +18,7 @@ func TestFormat(t *testing.T) {
 		{Of1Day, 10, "1970-01-11Z"},
 		{Of1Week, 10, "1970-03-09Z"},
 		{Of1Month, 10, "1970-11-01Z"},
+		{Of1Year, 10, "1980Z"},
 	} {
 		t.Run("", func(t *testing.T) {
 			result := tc.intvl.Format(tc.period)
@@ -43,6 +44,7 @@ func TestFormatIn(t *testing.T) {
 		{Of1Day, loc, 10, "1970-01-11+10:00"},
 		{Of1Week, loc, 10, "1970-03-09+10:00"},
 		{Of1Month, loc, 10, "1970-11-01+10:00"},
+		{Of1Year, loc, 10, "1980+10:00"},
 	} {
 		t.Run("", func(t *testing.T) {
 			result := tc.intvl.FormatIn(tc.period, tc.loc)
