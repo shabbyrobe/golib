@@ -1,19 +1,18 @@
 package fixvarint
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
-func assertUintSz(tt assert.T, v uint64, sz int, scratch []byte, args ...interface{}) {
-	tt.Helper()
-	assertUintSzInternal(tt, v, sz, scratch, args)
+func assertUintSz(t testing.TB, v uint64, sz int, scratch []byte, args ...interface{}) {
+	t.Helper()
+	assertUintSzInternal(t, v, sz, scratch, args)
 }
 
-func assertUintSzInternal(tt assert.T, v uint64, sz int, scratch []byte, args ...interface{}) {
+func assertUintSzInternal(t testing.TB, v uint64, sz int, scratch []byte, args ...interface{}) {
 	n := PutUvarint(scratch, v)
 
 	// NOTE: there's a lot of duplicated stuff here and in assertDecodeIntSz, but the fuzzer
@@ -21,31 +20,31 @@ func assertUintSzInternal(tt assert.T, v uint64, sz int, scratch []byte, args ..
 
 	vd, osz := Uvarint(scratch[:n])
 	if v != vd {
-		fatalfArgs(tt, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
+		fatalfArgs(t, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
 	}
 
 	if sz != osz {
-		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
+		fatalfArgs(t, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
 	}
 	if sz != n {
-		fatalfArgs(tt, fmt.Sprintf("encoded size %d did not match expected size %d", n, sz), args...)
+		fatalfArgs(t, fmt.Sprintf("encoded size %d did not match expected size %d", n, sz), args...)
 	}
 
 	vd, osz = UvarintTurbo(scratch[:n])
 	if v != vd {
-		fatalfArgs(tt, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
+		fatalfArgs(t, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
 	}
 	if sz != osz {
-		fatalfArgs(tt, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
+		fatalfArgs(t, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
 	}
 }
 
-func assertIntSz(tt assert.T, v int64, sz int, scratch []byte, args ...interface{}) {
-	tt.Helper()
-	assertIntSzInternal(tt, v, sz, scratch, args...)
+func assertIntSz(t testing.TB, v int64, sz int, scratch []byte, args ...interface{}) {
+	t.Helper()
+	assertIntSzInternal(t, v, sz, scratch, args...)
 }
 
-func assertIntSzInternal(tt assert.T, v int64, sz int, scratch []byte, args ...interface{}) {
+func assertIntSzInternal(t testing.TB, v int64, sz int, scratch []byte, args ...interface{}) {
 	n := PutVarint(scratch, v)
 
 	// NOTE: there's a lot of duplicated stuff here and in assertDecodeIntSz, but the fuzzer
@@ -53,81 +52,112 @@ func assertIntSzInternal(tt assert.T, v int64, sz int, scratch []byte, args ...i
 
 	vd, osz := Varint(scratch[:n])
 	if v != vd {
-		fatalfArgs(tt, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
+		fatalfArgs(t, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
 	}
 
 	if sz != osz {
-		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
+		fatalfArgs(t, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
 	}
 	if sz != n {
-		fatalfArgs(tt, fmt.Sprintf("encoded size %d did not match expected size %d", n, sz), args...)
+		fatalfArgs(t, fmt.Sprintf("encoded size %d did not match expected size %d", n, sz), args...)
 	}
 
 	vd, osz = VarintTurbo(scratch[:n])
 	if v != vd {
-		fatalfArgs(tt, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
+		fatalfArgs(t, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
 	}
 	if sz != osz {
-		fatalfArgs(tt, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
+		fatalfArgs(t, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
 	}
 }
 
-func assertDecodeIntSz(tt assert.T, data []byte, v int64, sz int, args ...interface{}) {
-	tt.Helper()
+func assertDecodeIntSz(t testing.TB, data []byte, v int64, sz int, args ...interface{}) {
+	t.Helper()
 
 	vd, osz := Varint(data)
 	if v != vd {
-		fatalfArgs(tt, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
+		fatalfArgs(t, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
 	}
 	if sz != osz {
-		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
+		fatalfArgs(t, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
 	}
 
 	vd, osz = VarintTurbo(data)
 	if v != vd {
-		fatalfArgs(tt, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
+		fatalfArgs(t, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
 	}
 	if sz != osz {
-		fatalfArgs(tt, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
+		fatalfArgs(t, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
 	}
 }
 
-func assertDecodeUintSz(tt assert.T, data []byte, v uint64, sz int, args ...interface{}) {
-	tt.Helper()
+func assertDecodeUintSz(t testing.TB, data []byte, v uint64, sz int, args ...interface{}) {
+	t.Helper()
 
 	vd, osz := Uvarint(data)
 	if v != vd {
-		fatalfArgs(tt, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
+		fatalfArgs(t, fmt.Sprintf("decoded value %d did not match input %d", vd, v), args...)
 	}
 	if sz != osz {
-		fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
+		fatalfArgs(t, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz), args...)
 	}
 
 	vd, osz = UvarintTurbo(data)
 	if v != vd {
-		fatalfArgs(tt, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
+		fatalfArgs(t, fmt.Sprintf("turbo decoded value %d did not match input %d", vd, v), args...)
 	}
 	if sz != osz {
-		fatalfArgs(tt, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
+		fatalfArgs(t, fmt.Sprintf("turbo decoded size %d did not match expected size %d", osz, sz), args...)
+	}
+}
+
+func assertBytes(t testing.TB, exp []byte, act []byte, args ...interface{}) {
+	t.Helper()
+	if !bytes.Equal(exp, act) {
+		t.Fatal(args...)
+	}
+}
+
+func assertUint64(t testing.TB, exp uint64, act uint64, args ...interface{}) {
+	t.Helper()
+	if exp != act {
+		v := []interface{}{exp, "!=", act}
+		t.Fatal(append(v, args...)...)
+	}
+}
+
+func assertInt64(t testing.TB, exp, act int64, args ...interface{}) {
+	t.Helper()
+	if exp != act {
+		v := []interface{}{exp, "!=", act}
+		t.Fatal(append(v, args...)...)
+	}
+}
+
+func assertInt(t testing.TB, exp, act int, args ...interface{}) {
+	t.Helper()
+	if exp != act {
+		v := []interface{}{exp, "!=", act}
+		t.Fatal(append(v, args...)...)
 	}
 }
 
 func TestVarUintOverflow(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	scr := make([]byte, 11)
 
 	{
 		// Sanity check MaxUint64 equals what we expect:
 		n := PutUvarint(scr, math.MaxUint64)
-		tt.MustEqual(10, n)
-		tt.MustEqual([]byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f}, scr[:n])
+		if n != 10 {
+			t.Fatal()
+		}
+		assertBytes(t, []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f}, scr[:n])
 	}
 
 	{
 		// MaxUint64 + 1:
 		in := []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x20}
-		assertDecodeUintSz(tt, in, 0, -10)
+		assertDecodeUintSz(t, in, 0, -10)
 	}
 
 	{
@@ -135,10 +165,10 @@ func TestVarUintOverflow(t *testing.T) {
 		in := []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f}
 		u, n := Uvarint(in)
-		tt.MustEqual(uint64(0), u)
+		assertUint64(t, 0, u)
 
 		// Should read until the end of the number, but then report overflow
-		tt.MustEqual(-19, n)
+		assertInt(t, -19, n)
 	}
 
 	{
@@ -146,18 +176,17 @@ func TestVarUintOverflow(t *testing.T) {
 		in := []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 			0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 		u, n := Uvarint(in)
-		tt.MustEqual(uint64(0), u)
+		assertUint64(t, uint64(0), u)
 
 		// Should read until the end of the number, but then report overflow
 		// (slightly different for turbo version)
-		tt.MustEqual(-18, n)
+		assertInt(t, -18, n)
 	}
 }
 
 func TestVarUintZero(t *testing.T) {
-	tt := assert.WrapTB(t)
 	b := make([]byte, MaxLen64)
-	assertUintSz(tt, 0, 1, b)
+	assertUintSz(t, 0, 1, b)
 }
 
 func TestVarUintSz(t *testing.T) {
@@ -211,8 +240,7 @@ func TestVarUintSz(t *testing.T) {
 		{10, math.MaxUint64},
 	} {
 		t.Run(fmt.Sprintf("%d/%d", idx, tc.in), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			assertUintSz(tt, tc.in, tc.sz, b)
+			assertUintSz(t, tc.in, tc.sz, b)
 		})
 	}
 }
@@ -222,43 +250,39 @@ func TestVarintOverflow(t *testing.T) {
 
 	// Sanity check MaxInt64 equals what we expect:
 	t.Run("", func(t *testing.T) {
-		tt := assert.WrapTB(t)
 		n := PutVarint(scratch, math.MaxInt64)
-		tt.MustEqual(10, n)
-		tt.MustEqual([]byte{0x86, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f}, scratch[:n])
+		assertInt(t, 10, n)
+		assertBytes(t, []byte{0x86, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f}, scratch[:n])
 	})
 
 	// MaxInt64 + 1:
 	t.Run("", func(t *testing.T) {
-		tt := assert.WrapTB(t)
 		in := []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x20}
-		assertDecodeIntSz(tt, in, 0, -10)
+		assertDecodeIntSz(t, in, 0, -10)
 	})
 
 	// MaxInt128:
 	t.Run("", func(t *testing.T) {
-		tt := assert.WrapTB(t)
 		in := []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f}
 		u, n := Varint(in)
-		tt.MustEqual(int64(0), u)
+		assertInt64(t, 0, u)
 
 		// Should read until the end of the number, but then report overflow
 		// (slightly different for turbo version)
-		tt.MustEqual(-19, n)
+		assertInt(t, -19, n)
 	})
 
 	// Overflow with no terminating byte:
 	t.Run("", func(t *testing.T) {
-		tt := assert.WrapTB(t)
 		in := []byte{0x87, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 			0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 		u, n := Varint(in)
-		tt.MustEqual(int64(0), u)
+		assertInt64(t, int64(0), u)
 
 		// Should read until the end of the number, but then report overflow
 		// (slightly different for turbo version)
-		tt.MustEqual(-18, n)
+		assertInt(t, -18, n)
 	})
 }
 
@@ -283,8 +307,6 @@ func TestUvarintOverflow(t *testing.T) {
 				panic("not enough zeros!")
 			}
 
-			tt := assert.WrapTB(t)
-
 			sz := PutUvarint(scratch, tc.v)
 			inZeros := (scratch[0] & 0x78) >> 3
 			if int(inZeros)+int(tc.add) > 15 {
@@ -298,20 +320,32 @@ func TestUvarintOverflow(t *testing.T) {
 			{
 				v, n := Uvarint(scratch[:sz])
 				if tc.over {
-					tt.MustAssert(n < 0)
+					if n >= 0 {
+						t.Fatal()
+					}
 				} else {
-					tt.MustAssert(n > 0)
-					tt.MustEqual(tc.v*zumul[tc.add], v)
+					if n <= 0 {
+						t.Fatal()
+					}
+					if tc.v*zumul[tc.add] != v {
+						t.Fatal()
+					}
 				}
 			}
 
 			{
 				v, n := UvarintTurbo(scratch[:sz])
 				if tc.over {
-					tt.MustAssert(n < 0)
+					if n >= 0 {
+						t.Fatal()
+					}
 				} else {
-					tt.MustAssert(n > 0)
-					tt.MustEqual(tc.v*zumul[tc.add], v)
+					if n <= 0 {
+						t.Fatal()
+					}
+					if tc.v*zumul[tc.add] != v {
+						t.Fatal()
+					}
 				}
 			}
 		})
@@ -359,11 +393,9 @@ func TestVarintSpillToNextByte(t *testing.T) {
 			data[0] = data[0]&0x87 | (zeros << 3)
 
 			t.Run(fmt.Sprintf("uv/sz=%d/z=%d", sz, zeros), func(t *testing.T) {
-				tt := assert.WrapTB(t)
-
 				v, osz := Uvarint(data)
 				if sz != osz {
-					fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz))
+					fatalfArgs(t, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz))
 				}
 
 				if v >= 0 {
@@ -371,16 +403,14 @@ func TestVarintSpillToNextByte(t *testing.T) {
 				}
 				nsz := PutUvarint(scratch, v)
 				if osz >= nsz {
-					fatalfArgs(tt, fmt.Sprintf("next number after %d expected size to be greater than %d", v, osz))
+					fatalfArgs(t, fmt.Sprintf("next number after %d expected size to be greater than %d", v, osz))
 				}
 			})
 
 			t.Run(fmt.Sprintf("iv/sz=%d/z=%d", sz, zeros), func(t *testing.T) {
-				tt := assert.WrapTB(t)
-
 				v, osz := Varint(data)
 				if sz != osz {
-					fatalfArgs(tt, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz))
+					fatalfArgs(t, fmt.Sprintf("decoded size %d did not match expected size %d", osz, sz))
 				}
 
 				if v >= 0 {
@@ -390,7 +420,7 @@ func TestVarintSpillToNextByte(t *testing.T) {
 				}
 				nsz := PutVarint(scratch, v)
 				if osz >= nsz {
-					fatalfArgs(tt, fmt.Sprintf("next number after %d expected size to be greater than %d", v, osz))
+					fatalfArgs(t, fmt.Sprintf("next number after %d expected size to be greater than %d", v, osz))
 				}
 			})
 		}
@@ -398,7 +428,6 @@ func TestVarintSpillToNextByte(t *testing.T) {
 }
 
 func TestVarUintFuzz(t *testing.T) {
-	tt := assert.WrapTB(t)
 	b := make([]byte, MaxLen64)
 
 	rng := globalRNG
@@ -415,12 +444,11 @@ func TestVarUintFuzz(t *testing.T) {
 		uv |= 1 << (bits - 1) // Ensure that the number is definitely the expected number of bits
 
 		sz := expectedBytesFromUint64(uv)
-		assertUintSzInternal(tt, uv, sz, b, "failed at index %d with bits %d, number %d", i, bits, uv)
+		assertUintSzInternal(t, uv, sz, b, "failed at index %d with bits %d, number %d", i, bits, uv)
 	}
 }
 
 func TestVarIntFuzz(t *testing.T) {
-	tt := assert.WrapTB(t)
 	b := make([]byte, MaxLen64)
 
 	rng := globalRNG
@@ -439,7 +467,7 @@ func TestVarIntFuzz(t *testing.T) {
 			iv = -iv
 		}
 		sz := expectedBytesFromInt64(iv)
-		assertIntSzInternal(tt, iv, sz, b, "failed at index %d with bits %d, number %d", i, bits, iv)
+		assertIntSzInternal(t, iv, sz, b, "failed at index %d with bits %d, number %d", i, bits, iv)
 	}
 }
 
@@ -494,8 +522,7 @@ func TestVarUint(t *testing.T) {
 		{2, 1100000000000000},
 	} {
 		t.Run(fmt.Sprintf("%d", tc.in), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			assertUintSz(tt, tc.in, tc.sz, b)
+			assertUintSz(t, tc.in, tc.sz, b)
 		})
 	}
 }
@@ -551,25 +578,22 @@ func TestVarIntSz(t *testing.T) {
 		{10, math.MaxUint64},
 	} {
 		t.Run(fmt.Sprintf("%d/%d", idx, tc.in), func(t *testing.T) {
-			tt := assert.WrapTB(t)
-			assertUintSz(tt, tc.in, tc.sz, b)
+			assertUintSz(t, tc.in, tc.sz, b)
 		})
 	}
 }
 
 func TestVarInt(t *testing.T) {
-	tt := assert.WrapTB(t)
 	b := make([]byte, MaxLen64)
 
-	assertIntSz(tt, -3, 1, b)
-	assertIntSz(tt, int64(-1)<<32, 6, b)
-	assertIntSz(tt, int64(-1<<63), 10, b)
+	assertIntSz(t, -3, 1, b)
+	assertIntSz(t, int64(-1)<<32, 6, b)
+	assertIntSz(t, int64(-1<<63), 10, b)
 }
 
 func TestVarIntZero(t *testing.T) {
-	tt := assert.WrapTB(t)
 	b := make([]byte, MaxLen64)
-	assertIntSz(tt, 0, 1, b)
+	assertIntSz(t, 0, 1, b)
 }
 
 func BenchmarkZero(b *testing.B) {
