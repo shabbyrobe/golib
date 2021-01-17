@@ -4,74 +4,103 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestIncZeroValue(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	var inc Inc
-	tt.MustEqual("0", inc.Current())
-	tt.MustEqual("1", inc.Next())
-	tt.MustEqual("2", inc.Next())
+	if inc.Current() != "0" {
+		t.Fatal()
+	}
+	if inc.Next() != "1" {
+		t.Fatal()
+	}
+	if inc.Next() != "2" {
+		t.Fatal()
+	}
 }
 
 func TestIncTrim(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	var inc Inc
 	for i := 0; i < 100; i++ {
 		v := strings.Repeat("0", i) + "1"
 		inc.Set(v)
-		tt.MustEqual("1", inc.Current())
-		tt.MustEqual("2", inc.Next())
+		if inc.Current() != "1" {
+			t.Fatal()
+		}
+		if inc.Next() != "2" {
+			t.Fatal()
+		}
 	}
 }
 
 func TestIncRange(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	var inc Inc
 	for i := int64(0); i < 10000; i++ {
-		tt.MustEqual(strconv.FormatInt(i, 10), inc.Current())
+		if inc.Current() != strconv.FormatInt(i, 10) {
+			t.Fatal(i)
+		}
 		nxt := inc.Next()
-		// fmt.Println(i, inc.Current(), nxt)
-		tt.MustEqual(strconv.FormatInt(i+1, 10), nxt)
+		if nxt != strconv.FormatInt(i+1, 10) {
+			t.Fatal(nxt)
+		}
 	}
 }
 
 func TestIncIntBoundaries(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	var inc Inc
-	tt.MustOK(inc.Set("2147483647"))
-	tt.MustEqual("2147483647", inc.Current())
-	tt.MustEqual("2147483648", inc.Next())
+	if err := inc.Set("2147483647"); err != nil {
+		t.Fatal(err)
+	}
+	if inc.Current() != "2147483647" {
+		t.Fatal()
+	}
+	if inc.Next() != "2147483648" {
+		t.Fatal()
+	}
 
-	tt.MustOK(inc.Set("4294967295"))
-	tt.MustEqual("4294967295", inc.Current())
-	tt.MustEqual("4294967296", inc.Next())
+	if err := inc.Set("4294967295"); err != nil {
+		t.Fatal(err)
+	}
+	if inc.Current() != "4294967295" {
+		t.Fatal()
+	}
+	if inc.Next() != "4294967296" {
+		t.Fatal()
+	}
 
-	tt.MustOK(inc.Set("9223372036854775807"))
-	tt.MustEqual("9223372036854775807", inc.Current())
-	tt.MustEqual("9223372036854775808", inc.Next())
+	if err := inc.Set("9223372036854775807"); err != nil {
+		t.Fatal(err)
+	}
+	if inc.Current() != "9223372036854775807" {
+		t.Fatal()
+	}
+	if inc.Next() != "9223372036854775808" {
+		t.Fatal()
+	}
 
-	tt.MustOK(inc.Set("18446744073709551615"))
-	tt.MustEqual("18446744073709551615", inc.Current())
-	tt.MustEqual("18446744073709551616", inc.Next())
+	if err := inc.Set("18446744073709551615"); err != nil {
+		t.Fatal(err)
+	}
+	if inc.Current() != "18446744073709551615" {
+		t.Fatal()
+	}
+	if inc.Next() != "18446744073709551616" {
+		t.Fatal()
+	}
 }
 
 func TestIncRidiculous(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	for i := 0; i < 10000; i++ {
 		in := strings.Repeat("9", i)
 		out := "1" + strings.Repeat("0", i)
 
 		var inc Inc
-		tt.MustOK(inc.Set(in))
-		tt.MustEqual(out, inc.Next())
+		if err := inc.Set(in); err != nil {
+			t.Fatal(err)
+		}
+		if inc.Next() != out {
+			t.Fatal()
+		}
 	}
 }
 
