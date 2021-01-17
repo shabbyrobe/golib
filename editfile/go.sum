@@ -1,7 +1,13 @@
 github.com/gofrs/flock v0.7.1 h1:DP+LD/t0njgoPBvT5MJLeliUIVQR03hiKR6vezdwHlc=
 github.com/gofrs/flock v0.7.1/go.mod h1:F1TvTiK9OcQqauNUHlbJvyl9Qa1QvF/gOUDKA14jxHU=
-github.com/shabbyrobe/golib/assert v0.0.0-20200215041705-d919421cac09/go.mod h1:cIzwfpt3wIJbYsMDBU+7ldCmxO4NlGPg2T74neiAF6U=
-github.com/shabbyrobe/golib/iotools v0.0.0-20200215041705-d919421cac09 h1:JICOh7tecy/epUyzdUbvwckseuoS0X8xm5m6Z8vLecI=
-github.com/shabbyrobe/golib/iotools v0.0.0-20200215041705-d919421cac09/go.mod h1:O9HZ3elBJMxT820aBcTktY5JGYBk9Zym6v/lfcwJWNk=
+github.com/kr/pretty v0.2.1 h1:Fmg33tUaq4/8ym9TJN1x7sLJnHVwhP33CNkpYV/7rwI=
+github.com/kr/pretty v0.2.1/go.mod h1:ipq/a2n7PKx3OHsz4KJII5eveXtPO4qwEXGdVfWzfnI=
+github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
+github.com/kr/text v0.1.0 h1:45sCR5RtlFHMR4UwH9sdQ5TC8v0qDQCHnXt+kaKSTVE=
+github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
+github.com/shabbyrobe/golib/assert v0.0.0-20210116152239-5fec500a4f75 h1:RTa+F5l9NgcSiXgoxbPyOjqTA2wiuE/KY+blcuCUYeo=
+github.com/shabbyrobe/golib/assert v0.0.0-20210116152239-5fec500a4f75/go.mod h1:diAhZfaqpWMJgKvPzCEHtmiJG7inBz3m79ejIsjRGe4=
 github.com/shabbyrobe/golib/iotools v0.0.0-20200215042454-96cb28ef70ba h1:EEPaqZ88EerDOvP6wQH8ONgbeuOlolrD7gVSg2BsGmE=
 github.com/shabbyrobe/golib/iotools v0.0.0-20200215042454-96cb28ef70ba/go.mod h1:faoRxLdfSq7rm6UH+CSME+nQ5cw3KVI5xTAiT+uWKhs=
+gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=
+gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=

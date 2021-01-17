@@ -6,9 +6,9 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"reflect"
 	"testing"
 
-	"github.com/shabbyrobe/golib/assert"
 	"github.com/shabbyrobe/golib/iotools"
 )
 
@@ -17,205 +17,282 @@ type ReadWriterAt interface {
 	io.WriterAt
 }
 
-func tempFile(tt assert.T, body []byte) string {
-	tt.Helper()
+func tempFile(t testing.TB, body []byte) string {
+	t.Helper()
 	tmp, err := ioutil.TempFile("", "")
-	tt.MustOK(err)
-	if len(body) > 0 {
-		tt.MustOKAll(tmp.Write(body))
+	if err != nil {
+		t.Fatal(err)
 	}
-	tt.MustOK(tmp.Close())
+	if len(body) > 0 {
+		if _, err := tmp.Write(body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tmp.Close(); err != nil {
+		t.Fatal(err)
+	}
 	return tmp.Name()
 }
 
-func assertExists(tt assert.T, path string) {
-	tt.Helper()
+func assertExists(t testing.TB, path string) {
+	t.Helper()
 	exists, err := iotools.Exists(path)
-	tt.MustOK(err)
-	tt.MustAssert(exists)
-}
-
-func assertNotExists(tt assert.T, path string) {
-	tt.Helper()
-	exists, err := iotools.Exists(path)
-	tt.MustOK(err)
-	tt.MustAssert(!exists)
-}
-
-func assertFile(tt assert.T, path string, contents []byte) {
-	tt.Helper()
-	result, err := ioutil.ReadFile(path)
-	tt.MustOK(err)
-	if !bytes.Equal(contents, result) {
-		tt.Fatalf("compare failed for file %s", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists {
+		t.Fatal(exists)
 	}
 }
 
-func assertWriteAt(tt assert.T, to ReadWriterAt, data []byte, at int64) {
-	tt.Helper()
+func assertNotExists(t testing.TB, path string) {
+	t.Helper()
+	exists, err := iotools.Exists(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exists {
+		t.Fatal(exists)
+	}
+}
+
+func assertFile(t testing.TB, path string, contents []byte) {
+	t.Helper()
+	result, err := ioutil.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(contents, result) {
+		t.Fatalf("compare failed for file %s", path)
+	}
+}
+
+func assertWriteAt(t testing.TB, to ReadWriterAt, data []byte, at int64) {
+	t.Helper()
 	n, err := to.WriteAt(data, at)
-	tt.MustOK(err)
-	tt.MustEqual(len(data), n)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != len(data) {
+		t.Fatal()
+	}
 
 	check := make([]byte, len(data))
 	n, err = to.ReadAt(check, at)
-	tt.MustOK(err)
-	tt.MustEqual(check, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(data, check) {
+		t.Fatal()
+	}
 }
 
 func TestEditFile(t *testing.T) {
-	tt := assert.WrapTB(t)
-
-	f := tempFile(tt, nil)
+	f := tempFile(t, nil)
 	defer os.Remove(f)
 
 	ef, err := Edit(f)
-	tt.MustOK(err)
-	tt.MustOK(ef.Close())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ef.Close(); err != nil {
+		t.Fatal(err)
+	}
 
-	assertExists(tt, f)
+	assertExists(t, f)
 }
 
 func TestEditFileModifyExisting(t *testing.T) {
-	tt := assert.WrapTB(t)
-
-	f := tempFile(tt, []byte{1, 2, 3})
+	f := tempFile(t, []byte{1, 2, 3})
 	defer os.Remove(f)
 
 	ef, err := Edit(f)
-	tt.MustOK(err)
-	assertWriteAt(tt, ef, []byte{9}, 1)
-	tt.MustOK(ef.Close())
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	assertFile(tt, f, []byte{1, 9, 3})
+	assertWriteAt(t, ef, []byte{9}, 1)
+	if err := ef.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	assertFile(t, f, []byte{1, 9, 3})
 }
 
 func TestEditFileModifyExistingExtend(t *testing.T) {
-	tt := assert.WrapTB(t)
-
-	f := tempFile(tt, []byte{1, 2, 3})
+	f := tempFile(t, []byte{1, 2, 3})
 	defer os.Remove(f)
 
 	ef, err := Edit(f)
-	tt.MustOK(err)
-	assertWriteAt(tt, ef, []byte{9}, 5)
-	tt.MustOK(ef.Close())
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	assertFile(tt, f, []byte{1, 2, 3, 0, 0, 9})
+	assertWriteAt(t, ef, []byte{9}, 5)
+	if err := ef.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	assertFile(t, f, []byte{1, 2, 3, 0, 0, 9})
 }
 
 func TestEditFileModifyExistingTruncate(t *testing.T) {
-	tt := assert.WrapTB(t)
-
-	f := tempFile(tt, []byte{1, 2, 3})
+	f := tempFile(t, []byte{1, 2, 3})
 	defer os.Remove(f)
 
 	ef, err := Edit(f)
-	tt.MustOK(err)
-	tt.MustOK(ef.Truncate(1))
-	tt.MustOK(ef.Close())
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	assertFile(tt, f, []byte{1})
+	if err := ef.Truncate(1); err != nil {
+		t.Fatal(err)
+	}
+	if err := ef.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	assertFile(t, f, []byte{1})
 }
 
 func TestEditFileModifyExistingTruncateExtend(t *testing.T) {
-	tt := assert.WrapTB(t)
-
-	f := tempFile(tt, []byte{1, 2, 3})
+	f := tempFile(t, []byte{1, 2, 3})
 	defer os.Remove(f)
 
 	ef, err := Edit(f)
-	tt.MustOK(err)
-	tt.MustOK(ef.Truncate(1))
-	assertWriteAt(tt, ef, []byte{9}, 5)
-	tt.MustOK(ef.Close())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ef.Truncate(1); err != nil {
+		t.Fatal(err)
+	}
+	assertWriteAt(t, ef, []byte{9}, 5)
+	if err := ef.Close(); err != nil {
+		t.Fatal(err)
+	}
 
-	assertFile(tt, f, []byte{1, 0, 0, 0, 0, 9})
+	assertFile(t, f, []byte{1, 0, 0, 0, 0, 9})
 }
 
 func TestEditFileLock(t *testing.T) {
-	tt := assert.WrapTB(t)
-
-	f := tempFile(tt, []byte{1, 2, 3})
+	f := tempFile(t, []byte{1, 2, 3})
 	defer os.Remove(f)
 
 	ef, err := Edit(f)
-	tt.MustOK(err)
-	defer ef.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ef.Close() // Ignore errors
 
 	_, err = Edit(f)
-	tt.MustAssert(IsLocked(err))
-	tt.MustOK(ef.Close())
+	if !IsLocked(err) {
+		t.Fatal()
+	}
+	if err := ef.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	ef2, err := Edit(f)
-	tt.MustOK(err)
-	defer ef2.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		if err := ef2.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 }
 
 func TestEditFileDisabledWhenReadAtFails(t *testing.T) {
-	tt := assert.WrapTB(t)
-
-	f := tempFile(tt, []byte{1, 2, 3})
+	f := tempFile(t, []byte{1, 2, 3})
 	defer os.Remove(f)
 
 	ef, err := Edit(f)
-	tt.MustOK(err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	defer ef.Close()
 
 	ef.buf = iotools.NewFullyBufferedWriterAt(&bungReadSeeker{}, &bungWriteDestination{})
 	buf := make([]byte, 1)
 	n, err := ef.ReadAt(buf, 0)
-	tt.MustEqual(0, n)
-	tt.MustAssert(err != nil)
+	if n != 0 {
+		t.Fatal()
+	}
+	if err == nil {
+		t.Fatal(err)
+	}
 
 	_, nextErr := ef.ReadAt(buf, 0)
-	tt.MustAssert(IsDisabled(nextErr))
-	tt.MustOK(ef.Close())
+	if !IsDisabled(nextErr) {
+		t.Fatal()
+	}
+	if err := ef.Close(); err != nil {
+		t.Fatal(err)
+	}
 
-	assertNotExists(tt, ef.tmp.Name())
+	assertNotExists(t, ef.tmp.Name())
 }
 
 func TestEditFileDisabledWhenWriteAtFails(t *testing.T) {
-	tt := assert.WrapTB(t)
-
-	f := tempFile(tt, []byte{1, 2, 3})
+	f := tempFile(t, []byte{1, 2, 3})
 	defer os.Remove(f)
 
 	ef, err := Edit(f)
-	tt.MustOK(err)
-	defer ef.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := ef.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	ef.buf = iotools.NewFullyBufferedWriterAt(&bungReadSeeker{}, &bungWriteDestination{})
 	buf := make([]byte, 1)
 	n, err := ef.WriteAt(buf, 0)
-	tt.MustEqual(0, n)
-	tt.MustAssert(err != nil)
+	if err == nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatal()
+	}
 
 	_, nextErr := ef.ReadAt(buf, 0)
-	tt.MustAssert(IsDisabled(nextErr))
+	if !IsDisabled(nextErr) {
+		t.Fatal()
+	}
 }
 
 func TestEditFileCloseLeavesOriginalWhenOpFails(t *testing.T) {
-	tt := assert.WrapTB(t)
-
-	f := tempFile(tt, []byte{1, 2, 3})
+	f := tempFile(t, []byte{1, 2, 3})
 	defer os.Remove(f)
 
 	ef, err := Edit(f)
-	tt.MustOK(err)
-	defer ef.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ef.Close() // Error ignored
 
-	assertWriteAt(tt, ef, []byte{9, 9}, 2)
+	assertWriteAt(t, ef, []byte{9, 9}, 2)
 
 	// This is a bit nasty, we are fussing around with the internals in a potentially
 	// very brittle way.
 	ef.buf = iotools.NewFullyBufferedWriterAt(bytes.NewReader([]byte{0}), &bungWriteDestination{})
-	tt.MustOKAll(ef.ReadAt([]byte{0}, 0))
-	tt.MustAssert(ef.Flush() != nil)
+	if _, err := ef.ReadAt([]byte{0}, 0); err != nil {
+		t.Fatal()
+	}
+	if err := ef.Flush(); err == nil { // Error is expected here
+		t.Fatal(err)
+	}
+	if err := ef.Close(); err == nil { // Error is expected here
+		t.Fatal(err)
+	}
 
-	tt.MustAssert(ef.Close() != nil)
-	assertFile(tt, f, []byte{1, 2, 3})
-	assertNotExists(tt, ef.tmp.Name())
+	assertFile(t, f, []byte{1, 2, 3})
+	assertNotExists(t, ef.tmp.Name())
 }
 
 func TestEditFileFuzz(t *testing.T) {
@@ -227,24 +304,27 @@ func TestEditFileFuzz(t *testing.T) {
 
 	for i := 0; i < iters; i++ {
 		t.Run("", func(t *testing.T) {
-			tt := assert.WrapTB(t)
 			var check byteWriterAt
 
-			f := tempFile(tt, nil)
+			f := tempFile(t, nil)
 			defer os.Remove(f)
 
 			ef, err := Edit(f)
-			tt.MustOK(err)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			for i := 0; i < maxWritesPerIter; i++ {
 				sz := rand.Intn(len(buf)-1) + 1
 				at := rand.Int63n(maxOffset)
 				check.WriteAt(buf[:sz], at)
-				assertWriteAt(tt, ef, buf[:sz], at)
+				assertWriteAt(t, ef, buf[:sz], at)
 			}
 
-			tt.MustOK(ef.Close())
-			assertFile(tt, f, check.buf)
+			if err := ef.Close(); err != nil {
+				t.Fatal(err)
+			}
+			assertFile(t, f, check.buf)
 		})
 	}
 }
