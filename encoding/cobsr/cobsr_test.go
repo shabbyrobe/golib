@@ -2,29 +2,36 @@ package cobsr
 
 import (
 	"math/rand"
+	"reflect"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestCOBSR(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		t.Run("", func(t *testing.T) {
-			tt := assert.WrapTB(t)
-
 			in := make([]byte, i)
 			result := make([]byte, i+1)
 			out := make([]byte, (i+1)*2)
 			rand.Read(in)
 			n, err := Encode(in, out)
-			tt.MustOK(err)
-
-			tt.MustAssert(n <= MaxEncodedSize(len(in)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if n > MaxEncodedSize(len(in)) {
+				t.Fatal()
+			}
 
 			n, err = Decode(out[:n], result)
-			tt.MustOK(err)
-			tt.MustEqual(in, result[:n])
-			tt.MustEqual(i, n)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !reflect.DeepEqual(in, result[:n]) {
+				t.Fatal()
+			}
+			if i != n {
+				t.Fatal()
+			}
 		})
 	}
 }
