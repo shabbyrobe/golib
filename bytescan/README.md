@@ -16,9 +16,9 @@ and the license is permissive.
 I have hacked this together quickly to solve a specific problem that doesn't
 require high accuracy. I can't guarantee I've caught all the corner cases yet.
 
-I _strongly_ recommend you vendor this into your project, in an `internal/`
-directory, if you decide to use it as I may change it without warning or regard
-to backward compatibility.
+As with all modules in this collection, I _strongly_ recommend you vendor this
+into your project, in an `internal/` directory, if you decide to use it as I
+may change it without warning or regard to backward compatibility.
 
 
 ## Silly Benchmarks Game
