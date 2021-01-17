@@ -12,7 +12,6 @@ import (
 	"time"
 
 	num "github.com/shabbyrobe/go-num"
-	"github.com/shabbyrobe/golib/assert"
 )
 
 const (
@@ -127,10 +126,10 @@ func expectedBytesFromI128(i num.I128) (bytes int) {
 // fatalfArgs allows you to call tb.Fatalf(msg, args...) using a single, fully
 // optional "args ...interface{}" param. If v[0] is not a string, FatalfArgs
 // will panic.
-func fatalfArgs(tt assert.T, msg string, v ...interface{}) {
-	tt.Helper()
+func fatalfArgs(t testing.TB, msg string, v ...interface{}) {
+	t.Helper()
 	if len(v) == 0 {
-		tt.Fatal(msg)
+		t.Fatal(msg)
 	}
-	tt.Fatalf(v[0].(string)+": "+msg, v[1:]...)
+	t.Fatalf(v[0].(string)+": "+msg, v[1:]...)
 }
