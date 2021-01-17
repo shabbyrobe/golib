@@ -1,6 +1,7 @@
 package errtools
 
 import (
+	"errors"
 	"io"
 	"os"
 )
@@ -27,8 +28,7 @@ func DeferEnsureClose(err *error, closer io.Closer) {
 	if cerr == nil || *err != nil {
 		return
 	}
-	cause := Cause(cerr)
-	if pathErr, ok := cause.(*os.PathError); ok && pathErr.Err == os.ErrClosed {
+	if errors.Is(cerr, os.ErrClosed) {
 		return
 	}
 
