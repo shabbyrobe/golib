@@ -6,7 +6,39 @@ import (
 	"math"
 	"strconv"
 	"time"
+	"unsafe"
 )
+
+// Without this wrapper, json.Unmarshal can't parse "2021-02-04T08:00:59.754+0000" because
+// it doesn't have a colon in the timezone specifier. This is pretty janky because plenty
+// of APIs will give you times in this format.
+type RFC3339 struct {
+	time.Time
+}
+
+func (r RFC3339) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.Time)
+}
+
+func (r *RFC3339) UnmarshalJSON(b []byte) (err error) {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		t, err = time.Parse(`2006-01-02T15:04:05.999999999Z0700`, s)
+	}
+	if err != nil {
+		return err
+	}
+	*r = RFC3339{t}
+	return nil
+}
+
+func unsafeString(bs []byte) string {
+	return *(*string)(unsafe.Pointer(&bs))
+}
 
 // DurationString provides a time.Duration that marshals to/from a string
 // using time.Duration.String()/time.ParseDuration().
