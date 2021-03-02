@@ -7,6 +7,14 @@ import (
 
 var unitsLen = len(Units)
 
+func tm(rfc3339 string) time.Time {
+	t, err := time.Parse(time.RFC3339, rfc3339)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+
 func randomInterval(rng *rand.Rand) Interval {
 	gimmeRandom := rand.Intn
 	if rng != nil {

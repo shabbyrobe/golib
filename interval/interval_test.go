@@ -423,6 +423,114 @@ func TestCanCombine(t *testing.T) {
 	}
 }
 
+func TestStart(t *testing.T) {
+	for idx, tc := range []struct {
+		i Interval
+		t time.Time
+		x time.Time
+	}{
+		{OfValid(1, Minute), tm("2020-01-01T00:00:00Z"), tm("2020-01-01T00:00:00Z")},
+		{OfValid(1, Minute), tm("2020-01-01T00:01:00Z"), tm("2020-01-01T00:01:00Z")},
+		{OfValid(1, Minute), tm("2020-01-01T00:01:30Z"), tm("2020-01-01T00:01:00Z")},
+
+		{OfValid(1, Hour), tm("2020-01-01T00:00:00Z"), tm("2020-01-01T00:00:00Z")},
+		{OfValid(1, Hour), tm("2020-01-01T01:00:00Z"), tm("2020-01-01T01:00:00Z")},
+		{OfValid(1, Hour), tm("2020-01-01T01:30:00Z"), tm("2020-01-01T01:00:00Z")},
+
+		{OfValid(1, Day), tm("2020-01-01T00:00:00Z"), tm("2020-01-01T00:00:00Z")},
+		{OfValid(1, Day), tm("2020-01-01T12:00:00Z"), tm("2020-01-01T00:00:00Z")},
+
+		{OfValid(2, Days), tm("2020-01-01T00:00:00Z"), tm("2020-01-01T00:00:00Z")},
+		{OfValid(2, Days), tm("2020-01-01T12:00:00Z"), tm("2020-01-01T00:00:00Z")},
+		{OfValid(2, Days), tm("2020-01-02T00:00:00Z"), tm("2020-01-01T00:00:00Z")},
+
+		{OfValid(1, Week), tm("2019-12-30T00:00:00Z"), tm("2019-12-30T00:00:00Z")},
+		{OfValid(1, Week), tm("2020-01-01T12:00:00Z"), tm("2019-12-30T00:00:00Z")},
+
+		{OfValid(2, Weeks), tm("2019-12-23T00:00:00Z"), tm("2019-12-23T00:00:00Z")},
+		{OfValid(2, Weeks), tm("2020-01-01T12:00:00Z"), tm("2019-12-23T00:00:00Z")},
+
+		{OfValid(1, Month), tm("2020-01-01T00:00:00Z"), tm("2020-01-01T00:00:00Z")},
+		{OfValid(1, Month), tm("2020-01-03T12:00:00Z"), tm("2020-01-01T00:00:00Z")},
+
+		{OfValid(2, Months), tm("2020-01-01T00:00:00Z"), tm("2020-01-01T00:00:00Z")},
+		{OfValid(2, Months), tm("2020-01-03T12:00:00Z"), tm("2020-01-01T00:00:00Z")},
+		{OfValid(2, Months), tm("2020-02-01T00:00:00Z"), tm("2020-01-01T00:00:00Z")},
+
+		{OfValid(1, Year), tm("2020-01-01T00:00:00Z"), tm("2020-01-01T00:00:00Z")},
+		{OfValid(1, Year), tm("2020-02-03T12:00:00Z"), tm("2020-01-01T00:00:00Z")},
+
+		{OfValid(2, Year), tm("2020-01-01T00:00:00Z"), tm("2020-01-01T00:00:00Z")},
+		{OfValid(2, Year), tm("2020-02-03T12:00:00Z"), tm("2020-01-01T00:00:00Z")},
+		{OfValid(2, Year), tm("2021-02-03T12:00:00Z"), tm("2020-01-01T00:00:00Z")},
+	} {
+		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
+			start := tc.i.Start(tc.t)
+			if !start.Equal(tc.x) {
+				t.Fatal(start, "!=", tc.x)
+			}
+		})
+	}
+}
+
+func TestNextEnd(t *testing.T) {
+	for idx, tc := range []struct {
+		i Interval
+		t time.Time
+		x time.Time
+	}{
+		{OfValid(1, Minute), tm("2020-01-01T00:00:00Z"), tm("2020-01-01T00:01:00Z")},
+		{OfValid(1, Minute), tm("2020-01-01T00:00:59Z"), tm("2020-01-01T00:01:00Z")},
+		{OfValid(1, Minute), tm("2020-01-01T00:01:00Z"), tm("2020-01-01T00:02:00Z")},
+
+		{OfValid(1, Hour), tm("2020-01-01T00:00:00Z"), tm("2020-01-01T01:00:00Z")},
+		{OfValid(1, Hour), tm("2020-01-01T00:59:59Z"), tm("2020-01-01T01:00:00Z")},
+		{OfValid(1, Hour), tm("2020-01-01T01:00:00Z"), tm("2020-01-01T02:00:00Z")},
+
+		{OfValid(1, Day), tm("2020-01-01T00:00:00Z"), tm("2020-01-02T00:00:00Z")},
+		{OfValid(1, Day), tm("2020-01-01T23:59:59Z"), tm("2020-01-02T00:00:00Z")},
+		{OfValid(1, Day), tm("2020-01-02T00:00:00Z"), tm("2020-01-03T00:00:00Z")},
+
+		{OfValid(2, Days), tm("2020-01-01T00:00:00Z"), tm("2020-01-03T00:00:00Z")},
+		{OfValid(2, Days), tm("2020-01-02T23:59:59Z"), tm("2020-01-03T00:00:00Z")},
+		{OfValid(2, Days), tm("2020-01-03T00:00:00Z"), tm("2020-01-05T00:00:00Z")},
+
+		{OfValid(1, Week), tm("2019-12-30T00:00:00Z"), tm("2020-01-06T00:00:00Z")},
+		{OfValid(1, Week), tm("2020-01-05T23:59:59Z"), tm("2020-01-06T00:00:00Z")},
+		{OfValid(1, Week), tm("2020-01-06T00:00:00Z"), tm("2020-01-13T00:00:00Z")},
+
+		{OfValid(4, Weeks), tm("2019-12-23T00:00:00Z"), tm("2020-01-20T00:00:00Z")},
+		{OfValid(4, Weeks), tm("2020-01-19T23:59:59Z"), tm("2020-01-20T00:00:00Z")},
+		{OfValid(4, Weeks), tm("2020-01-20T00:00:00Z"), tm("2020-02-17T00:00:00Z")},
+
+		{OfValid(1, Month), tm("2020-01-01T00:00:00Z"), tm("2020-02-01T00:00:00Z")},
+		{OfValid(1, Month), tm("2020-01-31T23:59:59Z"), tm("2020-02-01T00:00:00Z")},
+		{OfValid(1, Month), tm("2020-02-01T00:00:00Z"), tm("2020-03-01T00:00:00Z")},
+
+		{OfValid(2, Months), tm("2020-01-01T00:00:00Z"), tm("2020-03-01T00:00:00Z")},
+		{OfValid(2, Months), tm("2020-02-29T23:59:59Z"), tm("2020-03-01T00:00:00Z")},
+		{OfValid(2, Months), tm("2020-03-01T00:00:00Z"), tm("2020-05-01T00:00:00Z")},
+
+		{OfValid(1, Year), tm("2020-01-01T00:00:00Z"), tm("2021-01-01T00:00:00Z")},
+		{OfValid(1, Year), tm("2020-12-31T23:59:59Z"), tm("2021-01-01T00:00:00Z")},
+		{OfValid(1, Year), tm("2021-01-01T00:00:00Z"), tm("2022-01-01T00:00:00Z")},
+
+		{OfValid(2, Year), tm("2020-01-01T00:00:00Z"), tm("2022-01-01T00:00:00Z")},
+		{OfValid(2, Year), tm("2021-12-31T23:59:59Z"), tm("2022-01-01T00:00:00Z")},
+		{OfValid(2, Year), tm("2022-01-01T00:00:00Z"), tm("2024-01-01T00:00:00Z")},
+	} {
+		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
+			end := tc.i.End(tc.t)
+			if !end.Equal(tc.x) {
+				t.Fatal(end, "!=", tc.x)
+			}
+			if tc.x != tc.i.Next(tc.t) {
+				t.Fatal(tc.i.Next(tc.t), "!=", tc.x)
+			}
+		})
+	}
+}
+
 var benchStart, benchEnd time.Time
 
 func BenchmarkRangeMonth(b *testing.B) {

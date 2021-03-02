@@ -146,10 +146,12 @@ func (i Interval) CanCombineTo(to Interval) bool {
 		if toUnit != Month && toUnit != Year {
 			return false
 		}
+
 	case Year:
 		if toUnit != Year {
 			return false
 		}
+
 	default:
 		panic(fmt.Errorf("unhandled unit %q", fromUnit))
 	}
@@ -339,31 +341,7 @@ func (i Interval) Start(t time.Time) time.Time {
 // End returns the time that represents the exclusive end of the Period
 // that contains t, such that End(t) == Next(t).
 func (i Interval) End(t time.Time) time.Time {
-	// FIXME: is this functionally identical to Next()?
-
-	qty := int64(i.Qty())
-
-	var out time.Time
-	switch i.Unit() {
-	case Second:
-		out = i.Start(t).Add(time.Duration(qty) * time.Second)
-	case Minute:
-		out = i.Start(t).Add(time.Duration(qty) * time.Minute)
-	case Hour:
-		out = i.Start(t).Add(time.Duration(qty) * time.Hour)
-	case Day:
-		out = i.Start(t).Add(time.Duration(qty) * 24 * time.Hour)
-	case Week:
-		out = i.Start(t).Add(time.Duration(qty) * 7 * 24 * time.Hour)
-	case Month:
-		out = times.AddMonths(t, int(qty))
-	case Year:
-		out = times.AddYears(t, int(qty))
-	default:
-		panic(fmt.Errorf("unknown unit %d", i.Unit()))
-	}
-
-	return out.In(t.Location())
+	return i.Next(t)
 }
 
 // Range returns the start and end time for the period represented by the passed-in time.
