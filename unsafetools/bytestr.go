@@ -47,6 +47,16 @@ func Bytes(s string) (b []byte) {
 	return b
 }
 
+// Alternative:
+// func Bytes(str string) []byte {
+//     hdr := *(*reflect.StringHeader)(unsafe.Pointer(&str))
+//     return *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
+//         Data: hdr.Data,
+//         Len:  hdr.Len,
+//         Cap:  hdr.Len,
+//     }))
+// }
+
 func init() {
 	// Check to make sure string header is what reflect thinks it is.
 	// They should be the same except for the type of the Data field.
