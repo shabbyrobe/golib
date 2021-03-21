@@ -2,9 +2,8 @@ package iotools
 
 import (
 	"bytes"
+	"reflect"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 type testBufferedWriterDestination struct {
@@ -28,64 +27,87 @@ func (tb *testBufferedWriterDestination) Truncate(sz int64) error {
 
 func TestFullyBufferedWriterAt(t *testing.T) {
 	t.Run("simple-write-flush", func(t *testing.T) {
-		tt := assert.WrapTB(t)
-
 		var tbw testBufferedWriterDestination
 		bwa := NewFullyBufferedWriterAt(bytes.NewReader([]byte{}), &tbw)
-		assertWriteAt(tt, bwa, []byte{1, 2}, 0)
-		tt.MustEqual(0, len(tbw.events))
-
-		tt.MustOK(bwa.Flush())
-		tt.MustEqual([]writeEvent{
+		assertWriteAt(t, bwa, []byte{1, 2}, 0)
+		if len(tbw.events) != 0 {
+			t.Fatal()
+		}
+		if err := bwa.Flush(); err != nil {
+			t.Fatal()
+		}
+		if !reflect.DeepEqual(tbw.events, []writeEvent{
 			{op: "truncate"},
-			{op: "write", p: []byte{1, 2}},
-		}, tbw.events)
+			{op: "write", p: []byte{1, 2}}},
+		) {
+			t.Fatal(tbw.events)
+		}
 	})
 
 	t.Run("extends", func(t *testing.T) {
-		tt := assert.WrapTB(t)
-
 		var tbw testBufferedWriterDestination
 		bwa := NewFullyBufferedWriterAt(bytes.NewReader([]byte{}), &tbw)
-		assertWriteAt(tt, bwa, []byte{1, 2}, 0)
-		tt.MustEqual(0, len(tbw.events))
+		assertWriteAt(t, bwa, []byte{1, 2}, 0)
+		if len(tbw.events) != 0 {
+			t.Fatal()
+		}
 
-		assertWriteAt(tt, bwa, []byte{4, 5}, 3)
-		tt.MustEqual(0, len(tbw.events))
-
-		tt.MustOK(bwa.Flush())
-		tt.MustEqual([]writeEvent{
+		assertWriteAt(t, bwa, []byte{4, 5}, 3)
+		if len(tbw.events) != 0 {
+			t.Fatal()
+		}
+		if err := bwa.Flush(); err != nil {
+			t.Fatal()
+		}
+		if !reflect.DeepEqual(tbw.events, []writeEvent{
 			{op: "truncate"},
 			{op: "write", p: []byte{1, 2, 0, 4, 5}},
-		}, tbw.events)
+		}) {
+			t.Fatal()
+		}
 	})
 
 	t.Run("refresh", func(t *testing.T) {
-		tt := assert.WrapTB(t)
-
 		buf := []byte{1, 2, 3, 4}
 		rdr := bytes.NewReader(buf)
 		var tbw testBufferedWriterDestination
 		bwa := NewFullyBufferedWriterAt(rdr, &tbw)
-		assertWriteAt(tt, bwa, []byte{9, 9}, 0)
-
-		tt.MustOK(bwa.Flush())
-		tt.MustEqual([]writeEvent{
+		assertWriteAt(t, bwa, []byte{9, 9}, 0)
+		if err := bwa.Flush(); err != nil {
+			t.Fatal()
+		}
+		if !reflect.DeepEqual(tbw.events, []writeEvent{
 			{op: "truncate"},
 			{op: "write", p: []byte{9, 9, 3, 4}},
-		}, tbw.events)
+		}) {
+			t.Fatal()
+		}
 
 		buf[2] = 9
 		into := make([]byte, 4)
 		n, err := bwa.ReadAt(into, 0)
-		tt.MustOK(err)
-		tt.MustEqual(4, n)
-		tt.MustEqual([]byte{9, 9, 3, 4}, into)
-		tt.MustOK(bwa.Refresh())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 4 {
+			t.Fatal()
+		}
+		if !reflect.DeepEqual([]byte{9, 9, 3, 4}, into) {
+			t.Fatal()
+		}
+		if err := bwa.Refresh(); err != nil {
+			t.Fatal()
+		}
 
 		n, err = bwa.ReadAt(into, 0)
-		tt.MustOK(err)
-		tt.MustEqual(4, n)
-		tt.MustEqual([]byte{1, 2, 9, 4}, into)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 4 {
+			t.Fatal()
+		}
+		if !reflect.DeepEqual([]byte{1, 2, 9, 4}, into) {
+			t.Fatal()
+		}
 	})
 }

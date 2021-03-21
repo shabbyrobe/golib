@@ -5,14 +5,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"reflect"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestMessageReaderBytePrefix(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	buf := []byte{}
 	expected := [][]byte{}
 
@@ -40,19 +37,25 @@ func TestMessageReaderBytePrefix(t *testing.T) {
 				break
 			}
 			if i < len(expected) {
-				tt.MustOK(err)
-				tt.MustEqual(len(out), n)
-				tt.MustEqual(expected[i], out, "failed at index %d", i)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if n != len(out) {
+					t.Fatalf("failed at index %d", i)
+				}
+				if !reflect.DeepEqual(expected[i], out) {
+					t.Fatalf("failed at index %d", i)
+				}
 			}
 			i++
 		}
-		tt.MustEqual(i, 255) // 255, not 256: the '0' case doesn't yield a message.
+		if i != 255 { // 255, not 256: the '0' case doesn't yield a message.
+			t.Fatal()
+		}
 	}
 }
 
 func TestMessageReaderBytePrefixReadEmpty(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	pr := NewMessageReaderBytePrefix(bytes.NewReader([]byte{}), nil)
 	i := 0
 	for {
@@ -60,11 +63,17 @@ func TestMessageReaderBytePrefixReadEmpty(t *testing.T) {
 		if err == io.EOF {
 			break
 		}
-		tt.MustEqual([]byte{}, out)
-		tt.MustEqual(0, n)
+		if len(out) != 0 {
+			t.Fatal()
+		}
+		if n != 0 {
+			t.Fatal()
+		}
 		i++
 	}
-	tt.MustEqual(i, 0)
+	if i != 0 {
+		t.Fatal()
+	}
 }
 
 func TestMessageReaderBytePrefixSplitRead(t *testing.T) {
@@ -75,7 +84,6 @@ func TestMessageReaderBytePrefixSplitRead(t *testing.T) {
 	// in the middle of a single message.
 	for i := 1; i < 256; i++ {
 		t.Run(fmt.Sprintf("sz=%db", i), func(t *testing.T) {
-			tt := assert.WrapTB(t)
 			msgs := make([]byte, 1024)
 			msgs[0] = byte(i)
 			lens := []int{i}
@@ -99,11 +107,15 @@ func TestMessageReaderBytePrefixSplitRead(t *testing.T) {
 				if err == io.EOF {
 					break
 				}
-				tt.MustOK(err)
+				if err != nil {
+					t.Fatal(err)
+				}
 				result = append(result, n)
 			}
 
-			tt.MustEqual(lens, result)
+			if !reflect.DeepEqual(lens, result) {
+				t.Fatal()
+			}
 		})
 	}
 }
@@ -143,7 +155,6 @@ func TestMessageReaderShortPrefix(t *testing.T) {
 	for i := 1; i < 65536; i += 128 {
 		buf := in[:i+2]
 
-		tt := assert.WrapTB(t)
 		binary.LittleEndian.PutUint16(buf, uint16(i))
 		pr := NewMessageReaderShortPrefix(bytes.NewReader(buf), scratch)
 		if i > 2 {
@@ -151,30 +162,47 @@ func TestMessageReaderShortPrefix(t *testing.T) {
 		}
 
 		out, n, err := pr.ReadNext()
-		tt.MustOK(err)
-		tt.MustEqual(buf[2:], out)
-		tt.MustEqual(i, n)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !reflect.DeepEqual(buf[2:], out) {
+			t.Fatal()
+		}
+		if i != n {
+			t.Fatal()
+		}
 
 		out, n, err = pr.ReadNext()
-		tt.MustEqual(io.EOF, err)
-		tt.MustEqual(0, len(out))
-		tt.MustEqual(0, n)
+		if err != io.EOF {
+			t.Fatal()
+		}
+		if len(out) != 0 {
+			t.Fatal()
+		}
+		if n != 0 {
+			t.Fatal()
+		}
 	}
 }
 
 func TestMessageReaderShortPrefixReadEmpty(t *testing.T) {
-	tt := assert.WrapTB(t)
-
 	pr := NewMessageReaderShortPrefix(bytes.NewReader([]byte{}), nil)
 	i := 0
 	for {
 		out, n, err := pr.ReadNext()
+		if len(out) != 0 {
+			t.Fatal()
+		}
+		if n != 0 {
+			t.Fatal()
+		}
 		if err == io.EOF {
 			break
 		}
-		tt.MustEqual([]byte{}, out)
-		tt.MustEqual(0, n)
 		i++
 	}
-	tt.MustEqual(i, 0)
+	if i != 0 {
+		t.Fatal()
+	}
 }

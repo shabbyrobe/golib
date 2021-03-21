@@ -4,40 +4,59 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"testing"
-
-	"github.com/shabbyrobe/golib/assert"
 )
 
 func TestReaderAtReaderEOFAssumption(t *testing.T) {
-	tt := assert.WrapTB(t)
 	tmp, err := ioutil.TempFile("", "")
-	tt.MustOK(err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	defer os.Remove(tmp.Name())
 	defer tmp.Close()
 
-	tt.MustOKAll(tmp.WriteAt([]byte{1, 2}, 0))
+	if _, err := tmp.WriteAt([]byte{1, 2}, 0); err != nil {
+		t.Fatal(err)
+	}
 
 	read := make([]byte, 2)
-	tt.MustOKAll(tmp.ReadAt(read, 0))
-	tt.MustEqual([]byte{1, 2}, read)
+	if _, err := tmp.ReadAt(read, 0); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual([]byte{1, 2}, read) {
+		t.Fatal()
+	}
 
 	n, err := tmp.ReadAt(read, 1)
-	tt.MustEqual(1, n)
-	tt.MustEqual(io.EOF, err)
+	if n != 1 {
+		t.Fatal()
+	}
+	if err != io.EOF {
+		t.Fatal()
+	}
 }
 
 func TestReaderAtReader(t *testing.T) {
-	tt := assert.WrapTB(t)
 	tmp, err := ioutil.TempFile("", "")
-	tt.MustOK(err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer os.Remove(tmp.Name())
 	defer tmp.Close()
 
 	data := []byte{1, 2, 3, 4, 5}
-	tt.MustOKAll(tmp.WriteAt(data, 0))
+	if _, err := tmp.WriteAt(data, 0); err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := ioutil.ReadAll(NewReaderAtReader(tmp, 0))
-	tt.MustOK(err)
-	tt.MustEqual(data, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(data, result) {
+		t.Fatal()
+	}
 }
