@@ -6,13 +6,17 @@ import (
 	"os"
 )
 
-// DeferClose closes an io.Closer and sets the error into err if one occurs and the
-// value of err is nil.
-func DeferClose(err *error, closer io.Closer) {
-	cerr := closer.Close()
+func DeferCall(err *error, call func() error) {
+	cerr := call()
 	if *err == nil && cerr != nil {
 		*err = cerr
 	}
+}
+
+// DeferClose closes an io.Closer and sets the error into err if one occurs and the
+// value of err is nil.
+func DeferClose(err *error, closer io.Closer) {
+	DeferCall(err, closer.Close)
 }
 
 // DeferEnsureClose closes an io.Closer and sets the error into err if one
