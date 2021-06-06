@@ -20,9 +20,9 @@ func TestDiff(t *testing.T) {
 	}{
 		{mdt(2018, 1, 1, 12, 0, 0, 0), mdt(2018, 1, 1, 12, 0, 0, 1), TimeDiff{Nanoseconds: 1}},
 		{mdt(2018, 1, 1, 12, 0, 0, 0), mdt(2018, 1, 1, 12, 0, 1, 1), TimeDiff{Seconds: 1, Nanoseconds: 1}},
-		{mdt(2018, 2, 2, 2, 2, 2, 2), mdt(2018, 2, 2, 2, 2, 2, 1), TimeDiff{Nanoseconds: 1, Inverted: true}},
+		{mdt(2018, 2, 2, 2, 2, 2, 2), mdt(2018, 2, 2, 2, 2, 2, 1), TimeDiff{Nanoseconds: 1, Negative: true}},
 
-		{mdt(2019, 1, 1, 1, 1, 1, 1), mdt(2018, 2, 2, 2, 2, 2, 2), TimeDiff{Months: 10, Days: 29, Hours: 22, Minutes: 58, Seconds: 58, Nanoseconds: 999999999, Inverted: true}},
+		{mdt(2019, 1, 1, 1, 1, 1, 1), mdt(2018, 2, 2, 2, 2, 2, 2), TimeDiff{Months: 10, Days: 29, Hours: 22, Minutes: 58, Seconds: 58, Nanoseconds: 999999999, Negative: true}},
 		{mdt(2018, 2, 2, 2, 2, 2, 2), mdt(2019, 1, 1, 1, 1, 1, 1), TimeDiff{Months: 10, Days: 29, Hours: 22, Minutes: 58, Seconds: 58, Nanoseconds: 999999999}},
 
 		{mdt(2018, 2, 2, 1, 1, 1, 1), mdt(2019, 1, 1, 0, 0, 0, 0), TimeDiff{Months: 10, Days: 29, Hours: 22, Minutes: 58, Seconds: 58, Nanoseconds: 999999999}},

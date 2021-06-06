@@ -10,7 +10,7 @@ type TimeDiff struct {
 	Minutes     int
 	Seconds     int
 	Nanoseconds int
-	Inverted    bool
+	Negative    bool
 }
 
 // Diff calculates the difference between two dates, grouped into units of time.
@@ -37,7 +37,7 @@ func Diff(t1, t2 time.Time) TimeDiff {
 	hour2, min2, sec2 := t2.Clock()
 
 	diff := TimeDiff{
-		Inverted:    rev,
+		Negative:    rev,
 		Years:       year2 - year1,
 		Months:      int(month2 - month1),
 		Days:        day2 - day1,
