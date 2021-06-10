@@ -30,13 +30,17 @@ func Parse(intvl string) (Interval, error) {
 		}
 		nidx = idx
 	}
-	if nidx < 0 {
-		return 0, fmt.Errorf("interval: invalid input %q", intvl)
-	}
 
-	qty, err := strconv.ParseInt(intvl[:nidx+1], 10, 64)
-	if err != nil {
-		return 0, err
+	var qty int64
+	if nidx < 0 {
+		qty = 1
+
+	} else {
+		var err error
+		qty, err = strconv.ParseInt(intvl[:nidx+1], 10, 64)
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	unit, err := ParseUnit(intvl[nidx+1:])
