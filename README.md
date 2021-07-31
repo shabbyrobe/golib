@@ -2,12 +2,11 @@ Go Toolbelt
 ===========
 
 This is a collection of Go modules I use to augment the Go standard library in
-my own personal projects. There's some useful bits and pieces in here, but there's
-also a lot of half-baked stuff and things can be very under-tested. Some parts of
-this have not been used in a very long time and it could stand a bit of spring
-cleaning.
+my own personal projects. Please read the section titled "Expectation
+Management" before using any of this code.
 
-Having said that, there are also some very handy nuggets in here.
+Some parts of this repo have not been used in a very long time and it could
+stand a bit of spring cleaning.
 
 All code is available under the MIT license unless otherwise stated in the
 particular file or package.
