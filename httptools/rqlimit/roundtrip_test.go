@@ -1,4 +1,4 @@
-package httpagent
+package rqlimit
 
 import (
 	"net/http"

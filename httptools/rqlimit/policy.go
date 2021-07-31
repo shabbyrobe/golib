@@ -1,4 +1,4 @@
-package httpagent
+package rqlimit
 
 type Policy interface {
 	Name() string

@@ -1,4 +1,4 @@
-package httpagent
+package rqlimit
 
 type Logger interface {
 	Println(v ...interface{})
