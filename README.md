@@ -10,9 +10,11 @@ particular file or package.
 
 ## Expectation Management
 
-This is a grab-bag of utility code that I add to in a very ad-hoc fashion.
-*No API stability guarantees are made* and the code is *not guaranteed to work*.
-Having said that, there are some extremely useful things in here that are
+This is a personal grab-bag of utility code that I add to in a very ad-hoc
+fashion. *No API stability guarantees are made*, the code is *not guaranteed
+to work*, and anything may be removed at any time as I see fit.
+
+Having said that, there are some useful things in here, some of which are
 reasonably well tested, and you may get some use out of them.
 
 I recommend you copy-paste pieces as-needed (including tests and
