@@ -1,4 +1,4 @@
-module github.com/shabbyrobe/docset
+module github.com/shabbyrobe/golib/docset
 
 go 1.16
 
