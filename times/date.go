@@ -147,3 +147,20 @@ func (d *Date) UnmarshalText(data []byte) error {
 	*d, err = ParseDate(string(data))
 	return err
 }
+
+type DateFlag struct {
+	Date
+	IsSet bool
+}
+
+func (df DateFlag) String() string {
+	if df.IsSet {
+		return df.Date.String()
+	}
+	return ""
+}
+
+func (df *DateFlag) Set(s string) (err error) {
+	df.Date, err = ParseDate(s)
+	return err
+}
