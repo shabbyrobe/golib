@@ -8,7 +8,7 @@ import (
 
 var atoiError = errors.New("date: invalid number")
 
-func Epoch() Date {
+func EpochDate() Date {
 	return Date{1970, 0, 0}
 }
 
@@ -23,7 +23,7 @@ func New(y int, m time.Month, d int) Date {
 	return Date{y, m, d}
 }
 
-func FromTime(t time.Time) (d Date) {
+func DateFromTime(t time.Time) (d Date) {
 	d.Year, d.Month, d.Day = t.Date()
 	return d
 }
