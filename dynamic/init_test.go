@@ -1,4 +1,4 @@
-package unstructured
+package dynamic
 
 import (
 	"strings"

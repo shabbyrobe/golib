@@ -1,4 +1,4 @@
-package unstructured
+package dynamic
 
 import (
 	"strings"
@@ -9,7 +9,7 @@ type Context interface {
 	AddError(err error)
 }
 
-// An unstructured.Context that collects errors into a buffer:
+// An dynamic.Context that collects errors into a buffer:
 type ErrContext struct {
 	errs []error
 }

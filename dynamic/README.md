@@ -11,9 +11,9 @@ var v any
 json.Unmarshal(`{"foo": {"bar": [{"baz": "qux"}]}}`, &v)
 
 // Errors are collected in here:
-var ctx = &unstructured.ErrContext{}
+var ctx = &dynamic.ErrContext{}
 
-var uv = unstructured.ValueOf(ctx, "", v)
+var uv = dynamic.ValueOf(ctx, "", v)
 var baz = uv.Map().Key("foo").Map().Key("bar").Slice().At(0).Key("baz").Str()
 fmt.Println(baz) // Outputs 'qux'
 ```
@@ -24,14 +24,14 @@ subsequent traversals of the same value do not push further errors:
 ```go
 var v any
 json.Unmarshal(`{"foo": {"bar": [{"baz": "qux"}]}}`, &v)
-var ctx = &unstructured.ErrContext{}
-var uv = unstructured.ValueOf(ctx, "", v)
+var ctx = &dynamic.ErrContext{}
+var uv = dynamic.ValueOf(ctx, "", v)
 var baz = uv.
     Map().Key("bork"). // KeyNotFoundError pushed here
     Map().Key("nope"). // No error pushed
     Slice().At(999) // No error pushed
 
-// The unstructured.Value will now be a 'null', which can be checked like so:
+// The dynamic.Value will now be a 'null', which can be checked like so:
 if (baz.IsNull()) {
     fmt.Println("no baz found")
     // Attempting to use Str() here would normally push another error, but

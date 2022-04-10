@@ -1,9 +1,8 @@
-package unstructured
+package dynamic
 
 import (
 	"errors"
 	"fmt"
-	"reflect"
 )
 
 var (
@@ -21,14 +20,14 @@ var (
 type TypeInvalid struct {
 	Path     string
 	Expected Kind
-	Found    reflect.Type
+	Found    Kind
 	Msg      string
 }
 
 func (err *TypeInvalid) Is(check error) bool { return check == TypeInvalidKind }
 
 func (err *TypeInvalid) Error() string {
-	msg := fmt.Sprintf("unstructured: %q: expected type %q, found %q", err.Path, err.Expected, err.Found)
+	msg := fmt.Sprintf("%q: expected type %q, found %q", err.Path, err.Expected, err.Found)
 	if err.Msg != "" {
 		msg = fmt.Sprintf("%s: %s", msg, err.Msg)
 	}
@@ -43,7 +42,7 @@ type ValueInvalid struct {
 func (err *ValueInvalid) Is(check error) bool { return check == ValueInvalidKind }
 
 func (err *ValueInvalid) Error() string {
-	msg := fmt.Sprintf("unstructured: %q: tried to create unstructured.Value from invalid value", err.Path)
+	msg := fmt.Sprintf("%q: tried to create dynamic.Value from invalid value", err.Path)
 	if err.Msg != "" {
 		msg = fmt.Sprintf("%s: %s", msg, err.Msg)
 	}
@@ -61,7 +60,7 @@ func (err *NumericConversionInvalid) Is(check error) bool {
 }
 
 func (err *NumericConversionInvalid) Error() string {
-	msg := fmt.Sprintf("unstructured: %q: number cannot be converted to kind %q", err.Path, err.To)
+	msg := fmt.Sprintf("%q: number cannot be converted to kind %q", err.Path, err.To)
 	if err.Msg != "" {
 		msg = fmt.Sprintf("%s: %s", msg, err.Msg)
 	}
@@ -84,7 +83,7 @@ func (err *NumericConversionFailed) Is(check error) bool {
 }
 
 func (err *NumericConversionFailed) Error() string {
-	msg := fmt.Sprintf("unstructured: %q: number cannot be converted to kind %q: %s", err.Path, err.To, err.err)
+	msg := fmt.Sprintf("%q: number cannot be converted to kind %q: %s", err.Path, err.To, err.err)
 	if err.Msg != "" {
 		msg = fmt.Sprintf("%s: %s", msg, err.Msg)
 	}
@@ -103,7 +102,7 @@ func (err *NumericOverflow) Is(check error) bool {
 }
 
 func (err *NumericOverflow) Error() string {
-	msg := fmt.Sprintf("unstructured: %q: overflow when converting %q to %q", err.Path, err.From, err.To)
+	msg := fmt.Sprintf("%q: overflow when converting %q to %q", err.Path, err.From, err.To)
 	if err.Msg != "" {
 		msg = fmt.Sprintf("%s: %s", msg, err.Msg)
 	}
@@ -120,7 +119,7 @@ func (err *KeyNotFound) Is(check error) bool {
 }
 
 func (err *KeyNotFound) Error() string {
-	return fmt.Sprintf("unstructured: %q: key %q not found in map", err.Path, err.Key)
+	return fmt.Sprintf("%q: key %q not found in map", err.Path, err.Key)
 }
 
 type IndexNotFound struct {
@@ -133,13 +132,13 @@ func (err *IndexNotFound) Is(check error) bool {
 }
 
 func (err *IndexNotFound) Error() string {
-	return fmt.Sprintf("unstructured: %q: idx %d not found in slice", err.Path, err.Idx)
+	return fmt.Sprintf("%q: idx %d not found in slice", err.Path, err.Idx)
 }
 
 // Error indicating that a key found in a map was not allowed. Note that this is never
-// raised directly by 'unstructured', it must be raised yourself via MapIter:
+// raised directly by 'dynamic', it must be raised yourself via MapIter:
 //
-//   v := unstructured.ValueOf(yourMap)
+//   v := dynamic.ValueOf(yourMap)
 //   iter := v.Map().Iterate()
 //   for iter.Next() {
 //      switch iter.Key() {
@@ -164,7 +163,11 @@ func (err *KeyInvalid) Is(check error) bool {
 }
 
 func (err *KeyInvalid) Error() string {
-	return fmt.Sprintf("unstructured: %q: invalid key %q found in map: %s", err.Path, err.Key, err.err)
+	msg := fmt.Sprintf("%q: invalid key %q found in map", err.Path, err.Key)
+	if err.err != nil {
+		msg = fmt.Sprintf("%s: %s", msg, err.err)
+	}
+	return msg
 }
 
 type ValueError struct {
@@ -182,5 +185,9 @@ func (err *ValueError) Is(check error) bool {
 }
 
 func (err *ValueError) Error() string {
-	return fmt.Sprintf("unstructured: %q: value error for kind %q: %s", err.Path, err.Kind, err.err)
+	msg := fmt.Sprintf("%q: value error for kind %q", err.Path, err.Kind)
+	if err.err != nil {
+		msg = fmt.Sprintf("%s: %s", msg, err.err)
+	}
+	return msg
 }

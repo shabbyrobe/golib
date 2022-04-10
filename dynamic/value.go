@@ -1,4 +1,4 @@
-package unstructured
+package dynamic
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ func ValueOf(ctx Context, path string, v any) Value {
 	}
 
 	if !rv.IsValid() {
-		return Value{ctx: ctx, kind: NullKind, path: path, dead: true}
+		return Value{ctx: ctx, kind: NullKind, path: path}
 	}
 
 	if rv.Kind() == reflect.Interface {
@@ -37,14 +37,17 @@ func ValueOf(ctx Context, path string, v any) Value {
 		// element. This can happen if you retrieve a reflect.Value via
 		// reflect.Value.Index() and pass it in directly:
 		rv = rv.Elem()
+		if !rv.IsValid() {
+			return Value{ctx: ctx, kind: NullKind, path: path}
+		}
 	}
 
-	if num, ok := numberFromInterface(rv); ok {
+	if isNullable(rv.Kind()) && rv.IsNil() {
+		kind = NullKind
+	} else if num, ok := numberFromInterface(rv); ok {
 		kind = NumberKind
 		number = num
 		rv = reflect.ValueOf(num)
-	} else if isNullable(rv.Kind()) && rv.IsNil() {
-		kind = NullKind
 	} else {
 		typ := rv.Type()
 		if typ.Kind() == reflect.Ptr {
@@ -108,7 +111,7 @@ func (v Value) Str() string {
 		return ""
 	}
 	if v.inner.Kind() != reflect.String {
-		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: StrKind, Found: v.inner.Type()})
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: StrKind, Found: v.kind})
 		return ""
 	}
 	return v.unnamed().Interface().(string)
@@ -137,7 +140,7 @@ func (v Value) Int() int {
 		return i
 
 	} else if v.kind != IntKind {
-		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: IntKind, Found: v.inner.Type()})
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: IntKind, Found: v.kind})
 		return 0
 	}
 	return v.unnamed().Interface().(int)
@@ -167,7 +170,7 @@ func (v Value) Int64() int64 {
 		return v.unnamed().Interface().(int64)
 	}
 
-	v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: Int64Kind, Found: v.inner.Type()})
+	v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: Int64Kind, Found: v.kind})
 	return 0
 }
 
@@ -188,7 +191,7 @@ func (v Value) Uint() uint {
 		return u
 
 	} else if v.kind != UintKind {
-		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: UintKind, Found: v.inner.Type()})
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: UintKind, Found: v.kind})
 		return 0
 	}
 
@@ -219,7 +222,7 @@ func (v Value) Uint64() uint64 {
 		return v.unnamed().Interface().(uint64)
 	}
 
-	v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: Uint64Kind, Found: v.inner.Type()})
+	v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: Uint64Kind, Found: v.kind})
 	return 0
 }
 
@@ -240,7 +243,7 @@ func (v Value) Float64() float64 {
 		return f
 
 	} else if v.kind != Float64Kind {
-		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: Float64Kind, Found: v.inner.Type()})
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: Float64Kind, Found: v.kind})
 		return 0
 	}
 
@@ -259,7 +262,7 @@ func (v Value) Bool() bool {
 		return false
 	}
 	if v.kind != BoolKind {
-		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: BoolKind, Found: v.inner.Type()})
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: BoolKind, Found: v.kind})
 		return false
 	}
 	return v.unnamed().Interface().(bool)
@@ -278,7 +281,7 @@ func (v Value) Map() (m MapValue) {
 	}
 
 	if v.kind != MapKind {
-		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: MapKind, Found: v.inner.Type()})
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: MapKind, Found: v.kind})
 		return MapValue{v: v.kill()}
 	}
 
@@ -286,7 +289,7 @@ func (v Value) Map() (m MapValue) {
 		v.ctx.AddError(&TypeInvalid{
 			Path:     string(v.path),
 			Expected: StrKind,
-			Found:    v.inner.Type().Key(),
+			Found:    kindOf(v.inner.Type().Key()),
 			Msg:      "map must have string keys",
 		})
 		return MapValue{v: v.kill()}
@@ -337,7 +340,7 @@ func (v Value) Slice() (m SliceValue) {
 		return SliceValue{v: v.kill()}
 	}
 	if v.kind != SliceKind {
-		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: SliceKind, Found: v.inner.Type()})
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: SliceKind, Found: v.kind})
 		return SliceValue{v: v.kill()}
 	}
 	return SliceValue{v: v}
@@ -522,7 +525,11 @@ func (m MapValue) Iterate() *MapIter {
 	if m.v.kind == NullKind {
 		return &MapIter{MapValue: MapValue{v: m.v.kill()}}
 	}
-	return m.Iterate()
+	return &MapIter{
+		MapValue: m,
+		inner:    m.v.inner.MapRange(),
+		valid:    true,
+	}
 }
 
 type MapIter struct {
@@ -533,10 +540,17 @@ type MapIter struct {
 }
 
 func (iter *MapIter) Len() int {
+	if !iter.valid {
+		return 0
+	}
 	return iter.v.inner.Len()
 }
 
 func (iter *MapIter) Next() bool {
+	if !iter.valid {
+		return false
+	}
+
 	for {
 		if ok := iter.inner.Next(); !ok {
 			iter.valid = false
@@ -548,7 +562,7 @@ func (iter *MapIter) Next() bool {
 			iter.v.ctx.AddError(&TypeInvalid{
 				Path:     string(iter.v.path),
 				Expected: StrKind,
-				Found:    key.Type(),
+				Found:    kindOf(key.Type()),
 				Msg:      "map must have string keys",
 			})
 			continue
@@ -562,14 +576,14 @@ func (iter *MapIter) Next() bool {
 
 func (iter *MapIter) Key() string {
 	if !iter.valid {
-		panic(fmt.Errorf("unstructured: %q: attempt to access key in invalid map iterator", iter.v.path))
+		panic(fmt.Errorf("dynamic: %q: attempt to access key in invalid map iterator", iter.v.path))
 	}
 	return iter.key
 }
 
 func (iter *MapIter) Value() Value {
 	if !iter.valid {
-		panic(fmt.Errorf("unstructured: %q: attempt to access value in invalid map iterator", iter.v.path))
+		panic(fmt.Errorf("dynamic: %q: attempt to access value in invalid map iterator", iter.v.path))
 	}
 	return ValueOf(
 		iter.v.ctx,
@@ -580,7 +594,7 @@ func (iter *MapIter) Value() Value {
 
 func (iter *MapIter) RejectKey(err error) {
 	if !iter.valid {
-		panic(fmt.Errorf("unstructured: %q: attempt to reject key in invalid map iterator", iter.v.path))
+		panic(fmt.Errorf("dynamic: %q: attempt to reject key in invalid map iterator", iter.v.path))
 	}
 	iter.v.ctx.AddError(&KeyInvalid{
 		Path: string(iter.v.path),
