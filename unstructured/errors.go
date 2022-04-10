@@ -7,10 +7,10 @@ import (
 )
 
 var (
-	InvalidTypeErrorKind  = errors.New("invalid type")
-	InvalidValueErrorKind = errors.New("invalid value")
-	KeyNotFoundErrorKind  = errors.New("key not found")
-	IdxNotFoundErrorKind  = errors.New("idx not found")
+	InvalidTypeErrorKind   = errors.New("invalid type")
+	InvalidValueErrorKind  = errors.New("invalid value")
+	KeyNotFoundErrorKind   = errors.New("key not found")
+	IndexNotFoundErrorKind = errors.New("idx not found")
 )
 
 type InvalidTypeError struct {
@@ -61,18 +61,18 @@ func (err *KeyNotFoundError) Error() string {
 	return fmt.Sprintf("unstructured: %q: key %q not found in map", err.Path, err.Key)
 }
 
-type IdxNotFoundError struct {
+type IndexNotFoundError struct {
 	Path string
 	Idx  int
 	Msg  string
 }
 
-func (err *IdxNotFoundError) descendNotFound() {}
+func (err *IndexNotFoundError) descendNotFound() {}
 
-func (err *IdxNotFoundError) Is(check error) bool {
-	return check == IdxNotFoundErrorKind
+func (err *IndexNotFoundError) Is(check error) bool {
+	return check == IndexNotFoundErrorKind
 }
 
-func (err *IdxNotFoundError) Error() string {
+func (err *IndexNotFoundError) Error() string {
 	return fmt.Sprintf("unstructured: %q: idx %d not found in slice", err.Path, err.Idx)
 }

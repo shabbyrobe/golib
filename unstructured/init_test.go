@@ -17,62 +17,29 @@ func nilOf[V any]() *V {
 }
 
 type testingContext struct {
-	errs []error
+	ErrContext
 }
 
 var _ Context = (*testingContext)(nil)
 
-func PopAllErrors(ctx Context) (errs []error) {
-	for {
-		err := ctx.PopError()
-		if err == nil {
-			break
-		}
-		errs = append(errs, err)
-	}
-	return errs
-}
-
-func (tctx *testingContext) PopError() error {
-	if len(tctx.errs) == 0 {
-		return nil
-	}
-	var err error
-	err, tctx.errs = tctx.errs[len(tctx.errs)-1], tctx.errs[:len(tctx.errs)-1]
-	return err
-}
-
-func (tctx *testingContext) ShiftError() error {
-	if len(tctx.errs) == 0 {
-		return nil
-	}
-	var err error
-	err, tctx.errs = tctx.errs[0], tctx.errs[1:]
-	return err
-}
-
-func (t *testingContext) Defer() {
-	if len(t.errs) > 0 {
+func (tctx *testingContext) Defer(t *testing.T) {
+	t.Helper()
+	if len(tctx.errs) > 0 {
 		var sb strings.Builder
-		for idx, err := range t.errs {
+		for idx, err := range tctx.errs {
 			if idx > 0 {
 				sb.WriteString(", ")
 			}
 			sb.WriteString(err.Error())
 		}
-		panic(sb.String())
+		t.Fatal(sb.String())
 	}
-}
-
-func (t *testingContext) AddError(err error) error {
-	t.errs = append(t.errs, err)
-	return nil
 }
 
 func ensureValueOfKind[T any](t *testing.T, v T, kind Kind) Value {
 	t.Helper()
 	ctx := &testingContext{}
-	defer ctx.Defer()
+	defer ctx.Defer(t)
 	result := ValueOf(ctx, "", v)
 	if result.kind != kind {
 		t.Fatal("expected", "kind", kind, "== actual", result.kind)
@@ -88,50 +55,48 @@ func assertNull(t *testing.T, v Value) {
 	if v.Kind() != NullKind {
 		t.Fatal()
 	}
-	if _, set := v.BoolOptional(); set {
-		t.Fatal("optional bool set for null")
+	if c := v.BoolOptional(); c != false {
+		t.Fatal("optional bool was not zero:", c)
 	}
-	if _, set := v.Float64Optional(); set {
-		t.Fatal("optional float64 set for null")
+	if c := v.Float64Optional(); c != 0 {
+		t.Fatal("optional float64 was not zero:", c)
 	}
-	if _, set := v.IntOptional(); set {
-		t.Fatal("optional int set for null")
+	if c := v.IntOptional(); c != 0 {
+		t.Fatal("optional int was not zero:", c)
 	}
-	if _, set := v.Int64Optional(); set {
-		t.Fatal("optional int64 set for null")
+	if c := v.Int64Optional(); c != 0 {
+		t.Fatal("optional int64 was not zero:", c)
 	}
-	if _, set := v.MapOptional(); set {
-		t.Fatal("optional map set for null")
+	if c := v.MapOptional(); !c.IsNull() {
+		t.Fatal("optional map was not null:", c)
 	}
-	if _, set := v.SliceOptional(); set {
-		t.Fatal("optional slice set for null")
+	if c := v.SliceOptional(); !c.IsNull() {
+		t.Fatal("optional slice was not null:", c)
 	}
-	if _, set := v.StrOptional(); set {
-		t.Fatal("optional str set for null")
+	if c := v.StrOptional(); c != "" {
+		t.Fatal("optional str was not zero:", c)
 	}
-	if _, set := v.UintOptional(); set {
-		t.Fatal("optional uint set for null")
+	if c := v.UintOptional(); c != 0 {
+		t.Fatal("optional uint was not zero:", c)
 	}
-	if _, set := v.Uint64Optional(); set {
-		t.Fatal("optional uint64 set for null")
+	if c := v.Uint64Optional(); c != 0 {
+		t.Fatal("optional uint64 was not zero:", c)
 	}
 }
 
 func assertBool(t *testing.T, v Value, s bool) {
 	t.Helper()
 	if v.IsNull() {
-		t.Fatal()
+		t.Fatal("bool was null")
 	}
 	if v.Kind() != BoolKind {
-		t.Fatal()
+		t.Fatalf("kind is not bool, found %s", v.Kind())
 	}
 	if v.Bool() != s {
 		t.Fatal("expected", "s", s, "== actual", v.Str())
 	}
-	if r, set := v.BoolOptional(); r != s {
+	if r := v.BoolOptional(); r != s {
 		t.Fatal("expected", "s", s, "== actual", r)
-	} else if !set {
-		t.Fatal()
 	}
 }
 
@@ -147,18 +112,16 @@ func assertBoolOptional(t *testing.T, v Value, s *bool) {
 func assertFloat64(t *testing.T, v Value, s float64) {
 	t.Helper()
 	if v.IsNull() {
-		t.Fatal()
+		t.Fatal("float64 was null")
 	}
 	if v.Kind() != Float64Kind {
-		t.Fatal()
+		t.Fatalf("kind is not float64, found %s", v.Kind())
 	}
 	if v.Float64() != s {
 		t.Fatal("expected", "s", s, "== actual", v.Str())
 	}
-	if r, set := v.Float64Optional(); r != s {
+	if r := v.Float64Optional(); r != s {
 		t.Fatal("expected", "s", s, "== actual", r)
-	} else if !set {
-		t.Fatal()
 	}
 }
 
@@ -174,18 +137,16 @@ func assertFloat64Optional(t *testing.T, v Value, s *float64) {
 func assertInt(t *testing.T, v Value, s int) {
 	t.Helper()
 	if v.IsNull() {
-		t.Fatal()
+		t.Fatal("int was null")
 	}
 	if v.Kind() != IntKind {
-		t.Fatal()
+		t.Fatalf("kind is not int, found %s", v.Kind())
 	}
 	if v.Int() != s {
 		t.Fatal("expected", "s", s, "== actual", v.Str())
 	}
-	if r, set := v.IntOptional(); r != s {
+	if r := v.IntOptional(); r != s {
 		t.Fatal("expected", "s", s, "== actual", r)
-	} else if !set {
-		t.Fatal()
 	}
 
 	assertInt64(t, v, int64(s))
@@ -203,18 +164,16 @@ func assertIntOptional(t *testing.T, v Value, s *int) {
 func assertInt64(t *testing.T, v Value, s int64) {
 	t.Helper()
 	if v.IsNull() {
-		t.Fatal()
+		t.Fatal("int64 was null")
 	}
 	if v.Kind() != Int64Kind && v.Kind() != IntKind {
-		t.Fatal()
+		t.Fatalf("kind is not int or int64, found %s", v.Kind())
 	}
 	if v.Int64() != s {
 		t.Fatal("expected", "s", s, "== actual", v.Str())
 	}
-	if r, set := v.Int64Optional(); r != s {
+	if r := v.Int64Optional(); r != s {
 		t.Fatal("expected", "s", s, "== actual", r)
-	} else if !set {
-		t.Fatal()
 	}
 }
 
@@ -227,39 +186,19 @@ func assertInt64Optional(t *testing.T, v Value, s *int64) {
 	}
 }
 
-func assertUint64(t *testing.T, v Value, s uint64) {
-	t.Helper()
-	if v.IsNull() {
-		t.Fatal()
-	}
-	if v.Kind() != Uint64Kind && v.Kind() != UintKind {
-		t.Fatal()
-	}
-	if v.Uint64() != s {
-		t.Fatal("expected", "s", s, "== actual", v.Str())
-	}
-	if r, set := v.Uint64Optional(); r != s {
-		t.Fatal("expected", "s", s, "== actual", r)
-	} else if !set {
-		t.Fatal()
-	}
-}
-
 func assertStr(t *testing.T, v Value, s string) {
 	t.Helper()
 	if v.IsNull() {
-		t.Fatal()
+		t.Fatal("str was null")
 	}
 	if v.Kind() != StrKind {
-		t.Fatal()
+		t.Fatalf("kind is not str, found %s", v.Kind())
 	}
 	if v.Str() != s {
 		t.Fatal("expected", "s", s, "== actual", v.Str())
 	}
-	if r, set := v.StrOptional(); r != s {
+	if r := v.StrOptional(); r != s {
 		t.Fatal("expected", "s", s, "== actual", r)
-	} else if !set {
-		t.Fatal()
 	}
 }
 
@@ -269,6 +208,22 @@ func assertStrOptional(t *testing.T, v Value, s *string) {
 		assertNull(t, v)
 	} else {
 		assertStr(t, v, *s)
+	}
+}
+
+func assertUint64(t *testing.T, v Value, s uint64) {
+	t.Helper()
+	if v.IsNull() {
+		t.Fatal("uint64 was null")
+	}
+	if v.Kind() != Uint64Kind && v.Kind() != UintKind {
+		t.Fatalf("kind is not uint or uint64, found %s", v.Kind())
+	}
+	if v.Uint64() != s {
+		t.Fatal("expected", "s", s, "== actual", v.Str())
+	}
+	if r := v.Uint64Optional(); r != s {
+		t.Fatal("expected", "s", s, "== actual", r)
 	}
 }
 
@@ -284,18 +239,16 @@ func assertUint64Optional(t *testing.T, v Value, s *uint64) {
 func assertUint(t *testing.T, v Value, s uint) {
 	t.Helper()
 	if v.IsNull() {
-		t.Fatal()
+		t.Fatal("uint was null")
 	}
 	if v.Kind() != UintKind {
-		t.Fatal()
+		t.Fatalf("kind is not uint, found %s", v.Kind())
 	}
 	if v.Uint() != s {
 		t.Fatal("expected", "s", s, "== actual", v.Str())
 	}
-	if r, set := v.UintOptional(); r != s {
+	if r := v.UintOptional(); r != s {
 		t.Fatal("expected", "s", s, "== actual", r)
-	} else if !set {
-		t.Fatal()
 	}
 }
 
@@ -319,7 +272,7 @@ func assertSlice[T any](t *testing.T, v Value, s []T, get func(v Value) T) {
 	}
 
 	r := v.Slice()
-	if err := v.ctx.PopError(); err != nil {
+	if err := v.ctx.(*testingContext).PopError(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -337,10 +290,8 @@ func assertSlice[T any](t *testing.T, v Value, s []T, get func(v Value) T) {
 		i++
 	}
 
-	if ro, set := v.SliceOptional(); ro.inner != r.inner {
+	if ro := v.SliceOptional(); ro.v.inner != r.v.inner {
 		t.Fatal("expected", "s", s, "== actual", r)
-	} else if !set {
-		t.Fatal()
 	}
 }
 

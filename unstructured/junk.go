@@ -1,34 +1,5 @@
 package unstructured
 
-// type FromUnstructured interface {
-//     FromUnstructured(dctx any, value Value) error
-// }
-//
-// func BuildMap[K ~string, V FromUnstructured](value Value) (map[K]V, error) {
-//     iter, err := IterateMap(value)
-//     if err != nil {
-//         return nil, err
-//     }
-//
-//     out := make(map[K]V, iter.Len())
-//     for iter.Next() {
-//         value := iter.Value()
-//         rawKey, err := String(value)
-//         if err != nil {
-//             return nil, err
-//         }
-//
-//         key := K(rawKey)
-//         var m V
-//         if err := m.FromUnstructured(nil, value); err != nil {
-//             return nil, err
-//         }
-//         out[key] = m
-//     }
-//
-//     return out, nil
-// }
-//
 // func Str[T ~string](v Value) T {
 //     if v.inner.Kind() != reflect.String {
 //         v.ctx.AddError(&InvalidTypeError{Path: string(v.path), Expected: reflect.String, Found: v.inner.Kind()})

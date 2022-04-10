@@ -24,21 +24,29 @@ func TestValueOf(t *testing.T) {
 		seen = append(seen, k)
 	}
 
-	run("any-nil")
-	run("any-bool-val")
-	run("any-bool-zero")
-	run("any-float64-val")
-	run("any-float64-zero")
-	run("any-int-val")
-	run("any-int-zero")
-	run("any-int64-val")
-	run("any-int64-zero")
-	run("any-str-val")
-	run("any-str-zero")
-	run("any-uint-val")
-	run("any-uint-zero")
-	run("any-uint64-val")
-	run("any-uint64-zero")
+	// Values in 'any' vars at the top scope
+	run("any-direct-nil")
+	run("any-direct-bool-val")
+	run("any-direct-bool-zero")
+	run("any-direct-float64-val")
+	run("any-direct-float64-zero")
+	run("any-direct-int-val")
+	run("any-direct-int-zero")
+	run("any-direct-int64-val")
+	run("any-direct-int64-zero")
+	run("any-direct-slice-val")
+	run("any-direct-slice-nil")
+	run("any-direct-str-val")
+	run("any-direct-str-zero")
+	run("any-direct-uint-val")
+	run("any-direct-uint-zero")
+	run("any-direct-uint64-val")
+	run("any-direct-uint64-zero")
+
+	// Values in 'any' vars nested in an []any
+	run("any-inslice-nil")
+	run("any-inslice-slice-val")
+	run("any-inslice-slice-nil")
 
 	run("ptr-bool-nil")
 	run("ptr-bool-val")
@@ -114,6 +122,8 @@ func TestValueOf(t *testing.T) {
 	run("slice-uint64-empty")
 	run("slice-uint64-vals")
 
+	run("reflect-interface")
+
 	sort.Strings(seen)
 	sort.Strings(all)
 	if !reflect.DeepEqual(seen, all) {
@@ -122,94 +132,125 @@ func TestValueOf(t *testing.T) {
 }
 
 var valueOfCases = map[string]func(t *testing.T){
-	"any-nil": func(t *testing.T) {
+	"any-direct-nil": func(t *testing.T) {
 		var v any
 		var result = ensureValueOfKind(t, v, NullKind)
 		assertNull(t, result)
 	},
 
-	"any-bool-val": func(t *testing.T) {
+	"any-direct-bool-val": func(t *testing.T) {
 		var v any = bool(true)
 		var result = ensureValueOfKind(t, v, BoolKind)
 		assertBool(t, result, true)
 	},
 
-	"any-bool-zero": func(t *testing.T) {
+	"any-direct-bool-zero": func(t *testing.T) {
 		var v any = bool(false)
 		var result = ensureValueOfKind(t, v, BoolKind)
 		assertBool(t, result, false)
 	},
 
-	"any-float64-val": func(t *testing.T) {
+	"any-direct-float64-val": func(t *testing.T) {
 		var v any = float64(1.1)
 		var result = ensureValueOfKind(t, v, Float64Kind)
 		assertFloat64(t, result, 1.1)
 	},
 
-	"any-float64-zero": func(t *testing.T) {
+	"any-direct-float64-zero": func(t *testing.T) {
 		var v any = float64(0.0)
 		var result = ensureValueOfKind(t, v, Float64Kind)
 		assertFloat64(t, result, 0.0)
 	},
 
-	"any-int-val": func(t *testing.T) {
+	"any-direct-int-val": func(t *testing.T) {
 		var v any = int(1)
 		var result = ensureValueOfKind(t, v, IntKind)
 		assertInt(t, result, 1)
 	},
 
-	"any-int-zero": func(t *testing.T) {
+	"any-direct-int-zero": func(t *testing.T) {
 		var v any = int(0)
 		var result = ensureValueOfKind(t, v, IntKind)
 		assertInt(t, result, 0)
 	},
 
-	"any-int64-val": func(t *testing.T) {
+	"any-direct-int64-val": func(t *testing.T) {
 		var v any = int64(1)
 		var result = ensureValueOfKind(t, v, Int64Kind)
 		assertInt64(t, result, 1)
 	},
 
-	"any-int64-zero": func(t *testing.T) {
+	"any-direct-int64-zero": func(t *testing.T) {
 		var v any = int64(0)
 		var result = ensureValueOfKind(t, v, Int64Kind)
 		assertInt64(t, result, 0)
 	},
 
-	"any-str-val": func(t *testing.T) {
+	"any-direct-slice-val": func(t *testing.T) {
+		var v any = []int64{1, 2}
+		var result = ensureValueOfKind(t, v, SliceKind)
+		assertSlice(t, result, []int64{1, 2}, func(v Value) int64 { return v.Int64() })
+	},
+
+	"any-direct-slice-nil": func(t *testing.T) {
+		var v []int64 = nil
+		var i any = v
+		var result = ensureValueOfKind(t, i, NullKind)
+		assertNull(t, result)
+	},
+
+	"any-direct-str-val": func(t *testing.T) {
 		var v any = "yep"
 		var result = ensureValueOfKind(t, v, StrKind)
 		assertStr(t, result, "yep")
 	},
 
-	"any-str-zero": func(t *testing.T) {
+	"any-direct-str-zero": func(t *testing.T) {
 		var v any = ""
 		var result = ensureValueOfKind(t, v, StrKind)
 		assertStr(t, result, "")
 	},
 
-	"any-uint-val": func(t *testing.T) {
+	"any-direct-uint-val": func(t *testing.T) {
 		var v any = uint(1)
 		var result = ensureValueOfKind(t, v, UintKind)
 		assertUint(t, result, 1)
 	},
 
-	"any-uint-zero": func(t *testing.T) {
+	"any-direct-uint-zero": func(t *testing.T) {
 		var v any = uint(0)
 		var result = ensureValueOfKind(t, v, UintKind)
 		assertUint(t, result, 0)
 	},
 
-	"any-uint64-val": func(t *testing.T) {
+	"any-direct-uint64-val": func(t *testing.T) {
 		var v any = uint64(1)
 		var result = ensureValueOfKind(t, v, Uint64Kind)
 		assertUint64(t, result, 1)
 	},
 
-	"any-uint64-zero": func(t *testing.T) {
+	"any-direct-uint64-zero": func(t *testing.T) {
 		var v any = uint64(0)
 		var result = ensureValueOfKind(t, v, Uint64Kind)
 		assertUint64(t, result, 0)
+	},
+
+	"any-inslice-nil": func(t *testing.T) {
+		var v = []any{nil}
+		var result = ensureValueOfKind(t, v[0], NullKind)
+		assertNull(t, result)
+	},
+
+	"any-inslice-slice-val": func(t *testing.T) {
+		var v = []any{[]int64{1, 2}}
+		var result = ensureValueOfKind(t, v[0], SliceKind)
+		assertSlice(t, result, []int64{1, 2}, func(v Value) int64 { return v.Int64() })
+	},
+
+	"any-inslice-slice-nil": func(t *testing.T) {
+		var v = []any{([]int64)(nil)}
+		var result = ensureValueOfKind(t, v[0], NullKind)
+		assertNull(t, result)
 	},
 
 	"ptr-bool-nil": func(t *testing.T) {
@@ -599,23 +640,115 @@ var valueOfCases = map[string]func(t *testing.T){
 		var result = ensureValueOfKind(t, v, SliceKind)
 		assertSlice(t, result, v, func(v Value) uint64 { return v.Uint64() })
 	},
+
+	"reflect-interface": func(t *testing.T) {
+		// Covers the case where we pass a reflect.Value in directly that represents
+		// an interface:
+		var v any = []any{map[string]any{}}
+		var rv = reflect.ValueOf(v)
+		var iface = rv.Index(0)
+		ensureValueOfKind(t, iface, MapKind)
+	},
 }
 
-func TestMapDescentStopsCollectingAfterError(t *testing.T) {
+func TestMapDescentTryProducesNoError(t *testing.T) {
 	ctx := &testingContext{}
-	defer ctx.Defer()
+	defer ctx.Defer(t)
 	v := ValueOf(ctx, "", map[string]any{
 		"pants": map[string]any{
 			"foo": "yep",
 		},
 	})
-	result := v.Key("pants").Key("foo").Key("wat").Key("bork").Key("foo")
+
+	result := v.IfMap().Try("pants").
+		IfMap().Try("foo").
+		IfMap().Try("wat").
+		IfMap().Try("bork").
+		IfMap().Try("foo")
+
+	if err := ctx.PopError(); err != nil {
+		t.Fatal(err)
+	}
+	assertNull(t, result)
+}
+
+func TestMapDescentStopsCollectingAfterError(t *testing.T) {
+	ctx := &testingContext{}
+	defer ctx.Defer(t)
+	v := ValueOf(ctx, "", map[string]any{
+		"pants": map[string]any{
+			"foo": "yep",
+		},
+	})
+	result := v.
+		Map().Key("pants").
+		Map().Key("foo").
+		Map().Key("wat").
+		Map().Key("bork").
+		Map().Key("foo")
 
 	exp := &InvalidTypeError{Path: "/pants/foo", Expected: MapKind, Found: reflect.TypeOf("")}
 	if err := ctx.PopError(); !reflect.DeepEqual(err, exp) {
 		t.Fatalf("%+v != %+v", err, exp)
 	}
 	assertNull(t, result)
+}
+
+func TestMapTryDescend(t *testing.T) {
+	ctx := &testingContext{}
+	defer ctx.Defer(t)
+	v := ValueOf(ctx, "", map[string]any{
+		"pants": map[string]any{
+			"foo": map[string]any{
+				"bar": "yep",
+				"qux": []any{
+					0: 1, 1: 2, 2: 3, 3: map[string]any{
+						"deep": "very",
+					},
+				},
+			},
+		},
+	})
+
+	t.Run("", func(t *testing.T) {
+		result := v.TryDescend("pants", "foo", "qux", 3)
+		if err := ctx.PopError(); err != nil {
+			t.Fatal(err)
+		}
+		assertStr(t, result, "very")
+	})
+
+	t.Run("", func(t *testing.T) {
+		result := v.TryDescend("pants", "foo", "wat", "bork", "foo")
+		if err := ctx.PopError(); err != nil {
+			t.Fatal(err)
+		}
+		assertNull(t, result)
+	})
+
+	t.Run("", func(t *testing.T) {
+		result := v.TryDescend("pants", "foo", "wat", "bork")
+		if err := ctx.PopError(); err != nil {
+			t.Fatal(err)
+		}
+		assertNull(t, result)
+	})
+
+	t.Run("", func(t *testing.T) {
+		result := v.Map().TryDescend("pants", "foo", "wat")
+		if err := ctx.PopError(); err != nil {
+			t.Fatal(err)
+		}
+		assertNull(t, result)
+	})
+
+	t.Run("", func(t *testing.T) {
+		result := v.TryDescend("pants", "foo", "bar")
+		if err := ctx.PopError(); err != nil {
+			t.Fatal(err)
+		}
+		assertStr(t, result, "yep")
+	})
 }
 
 /*
