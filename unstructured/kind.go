@@ -16,6 +16,7 @@ const (
 	MapKind
 	SliceKind
 	StrKind
+	NumberKind
 )
 
 func (k Kind) String() string {
@@ -40,12 +41,17 @@ func (k Kind) String() string {
 		return "str"
 	case NullKind:
 		return "null"
+	case NumberKind:
+		return "number"
 	default:
 		return "<unknown>"
 	}
 }
 
 func kindOf(v reflect.Type) Kind {
+	if v == numberType {
+		return NumberKind
+	}
 	switch v.Kind() {
 	case reflect.Bool:
 		return BoolKind

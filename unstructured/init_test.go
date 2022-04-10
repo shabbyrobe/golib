@@ -134,6 +134,34 @@ func assertFloat64Optional(t *testing.T, v Value, s *float64) {
 	}
 }
 
+func assertFloat64Number(t *testing.T, v Value, s float64) {
+	t.Helper()
+	if v.IsNull() {
+		t.Fatal("float64 number was null")
+	}
+	if v.Kind() != NumberKind {
+		t.Fatalf("kind is not number, found %s", v.Kind())
+	}
+	if !v.CanBe(Float64Kind) {
+		t.Fatalf("number can not be float64")
+	}
+	if v.Float64() != s {
+		t.Fatal("expected", "s", s, "== actual", v.Str())
+	}
+	if r := v.Float64Optional(); r != s {
+		t.Fatal("expected", "s", s, "== actual", r)
+	}
+}
+
+func assertFloat64NumberOptional(t *testing.T, v Value, s *float64) {
+	t.Helper()
+	if s == nil {
+		assertNull(t, v)
+	} else {
+		assertFloat64Number(t, v, *s)
+	}
+}
+
 func assertInt(t *testing.T, v Value, s int) {
 	t.Helper()
 	if v.IsNull() {
@@ -148,8 +176,6 @@ func assertInt(t *testing.T, v Value, s int) {
 	if r := v.IntOptional(); r != s {
 		t.Fatal("expected", "s", s, "== actual", r)
 	}
-
-	assertInt64(t, v, int64(s))
 }
 
 func assertIntOptional(t *testing.T, v Value, s *int) {
@@ -161,13 +187,41 @@ func assertIntOptional(t *testing.T, v Value, s *int) {
 	}
 }
 
+func assertIntNumber(t *testing.T, v Value, s int) {
+	t.Helper()
+	if v.IsNull() {
+		t.Fatal("int number was null")
+	}
+	if v.Kind() != NumberKind {
+		t.Fatalf("kind is not number, found %s", v.Kind())
+	}
+	if !v.CanBe(IntKind) {
+		t.Fatalf("number can not be int")
+	}
+	if v.Int() != s {
+		t.Fatal("expected", "s", s, "== actual", v.Str())
+	}
+	if r := v.IntOptional(); r != s {
+		t.Fatal("expected", "s", s, "== actual", r)
+	}
+}
+
+func assertIntNumberOptional(t *testing.T, v Value, s *int) {
+	t.Helper()
+	if s == nil {
+		assertNull(t, v)
+	} else {
+		assertIntNumber(t, v, *s)
+	}
+}
+
 func assertInt64(t *testing.T, v Value, s int64) {
 	t.Helper()
 	if v.IsNull() {
 		t.Fatal("int64 was null")
 	}
-	if v.Kind() != Int64Kind && v.Kind() != IntKind {
-		t.Fatalf("kind is not int or int64, found %s", v.Kind())
+	if v.Kind() != Int64Kind {
+		t.Fatalf("kind is not int64, found %s", v.Kind())
 	}
 	if v.Int64() != s {
 		t.Fatal("expected", "s", s, "== actual", v.Str())
@@ -183,6 +237,34 @@ func assertInt64Optional(t *testing.T, v Value, s *int64) {
 		assertNull(t, v)
 	} else {
 		assertInt64(t, v, *s)
+	}
+}
+
+func assertInt64Number(t *testing.T, v Value, s int64) {
+	t.Helper()
+	if v.IsNull() {
+		t.Fatal("int64 number was null")
+	}
+	if v.Kind() != NumberKind {
+		t.Fatalf("kind is not number, found %s", v.Kind())
+	}
+	if !v.CanBe(Int64Kind) {
+		t.Fatalf("number can not be int64")
+	}
+	if v.Int64() != s {
+		t.Fatal("expected", "s", s, "== actual", v.Str())
+	}
+	if r := v.Int64Optional(); r != s {
+		t.Fatal("expected", "s", s, "== actual", r)
+	}
+}
+
+func assertInt64NumberOptional(t *testing.T, v Value, s *int64) {
+	t.Helper()
+	if s == nil {
+		assertNull(t, v)
+	} else {
+		assertInt64Number(t, v, *s)
 	}
 }
 
@@ -216,8 +298,8 @@ func assertUint64(t *testing.T, v Value, s uint64) {
 	if v.IsNull() {
 		t.Fatal("uint64 was null")
 	}
-	if v.Kind() != Uint64Kind && v.Kind() != UintKind {
-		t.Fatalf("kind is not uint or uint64, found %s", v.Kind())
+	if v.Kind() != Uint64Kind {
+		t.Fatalf("kind is not uint64, found %s", v.Kind())
 	}
 	if v.Uint64() != s {
 		t.Fatal("expected", "s", s, "== actual", v.Str())
@@ -258,6 +340,62 @@ func assertUintOptional(t *testing.T, v Value, s *uint) {
 		assertNull(t, v)
 	} else {
 		assertUint(t, v, *s)
+	}
+}
+
+func assertUintNumber(t *testing.T, v Value, s uint) {
+	t.Helper()
+	if v.IsNull() {
+		t.Fatal("uint number was null")
+	}
+	if v.Kind() != NumberKind {
+		t.Fatalf("kind is not number, found %s", v.Kind())
+	}
+	if !v.CanBe(UintKind) {
+		t.Fatalf("number can not be uint")
+	}
+	if v.Uint() != s {
+		t.Fatal("expected", "s", s, "== actual", v.Str())
+	}
+	if r := v.UintOptional(); r != s {
+		t.Fatal("expected", "s", s, "== actual", r)
+	}
+}
+
+func assertUintNumberOptional(t *testing.T, v Value, s *uint) {
+	t.Helper()
+	if s == nil {
+		assertNull(t, v)
+	} else {
+		assertUintNumber(t, v, *s)
+	}
+}
+
+func assertUint64Number(t *testing.T, v Value, s uint64) {
+	t.Helper()
+	if v.IsNull() {
+		t.Fatal("uint64 number was null")
+	}
+	if v.Kind() != NumberKind {
+		t.Fatalf("kind is not number, found %s", v.Kind())
+	}
+	if !v.CanBe(Uint64Kind) {
+		t.Fatalf("number can not be uint64")
+	}
+	if v.Uint64() != s {
+		t.Fatal("expected", "s", s, "== actual", v.Str())
+	}
+	if r := v.Uint64Optional(); r != s {
+		t.Fatal("expected", "s", s, "== actual", r)
+	}
+}
+
+func assertUint64NumberOptional(t *testing.T, v Value, s *uint64) {
+	t.Helper()
+	if s == nil {
+		assertNull(t, v)
+	} else {
+		assertUint64Number(t, v, *s)
 	}
 }
 

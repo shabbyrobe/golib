@@ -5,14 +5,12 @@ import (
 	"reflect"
 )
 
-type Path string
-
-func (p Path) withIdx(idx int) Path {
-	return Path(fmt.Sprintf("%s/%d", p, idx))
+func pathWithIdx(p string, idx int) string {
+	return fmt.Sprintf("%s/%d", p, idx)
 }
 
-func (p Path) withKey(key string) Path {
-	return Path(fmt.Sprintf("%s/%s", p, key))
+func pathWithKey(p string, key string) string {
+	return fmt.Sprintf("%s/%s", p, key)
 }
 
 type value interface {
@@ -23,15 +21,17 @@ type value interface {
 	Unwrap() any
 	Descend(part ...any) Value
 	TryDescend(part ...any) Value
+	Reject(err error)
 }
 
 type Value struct {
-	ctx   Context
-	inner reflect.Value
-	kind  Kind
-	path  Path
-	named bool
-	dead  bool
+	ctx    Context
+	inner  reflect.Value
+	kind   Kind
+	path   string
+	named  bool
+	dead   bool
+	number number
 }
 
 var _ value = Value{}
@@ -41,22 +41,28 @@ func ValueOf(ctx Context, path string, v any) Value {
 	var ok bool
 	var kind Kind
 	var named bool
+	var number number
 
 	if rv, ok = v.(reflect.Value); !ok {
 		rv = reflect.ValueOf(v)
 	}
 
 	if !rv.IsValid() {
-		return Value{ctx: ctx, kind: NullKind, path: Path(path), dead: true}
+		return Value{ctx: ctx, kind: NullKind, path: path, dead: true}
 	}
 
-	// If a type comes in wrapped in an interface, unwrap its element. This can happen if
-	// you retrieve a reflect.Value via reflect.Value.Index() and pass it in directly:
 	if rv.Kind() == reflect.Interface {
+		// If a value is passed in that is wrapped in an interface, unwrap its
+		// element. This can happen if you retrieve a reflect.Value via
+		// reflect.Value.Index() and pass it in directly:
 		rv = rv.Elem()
 	}
 
-	if isNullable(rv.Kind()) && rv.IsNil() {
+	if num, ok := numberFromInterface(rv); ok {
+		kind = NumberKind
+		number = num
+		rv = reflect.ValueOf(num)
+	} else if isNullable(rv.Kind()) && rv.IsNil() {
 		kind = NullKind
 	} else {
 		typ := rv.Type()
@@ -69,11 +75,12 @@ func ValueOf(ctx Context, path string, v any) Value {
 	}
 
 	return Value{
-		ctx:   ctx,
-		inner: rv,
-		kind:  kind,
-		path:  Path(path),
-		named: named,
+		ctx:    ctx,
+		inner:  rv,
+		kind:   kind,
+		path:   path,
+		named:  named,
+		number: number,
 	}
 }
 
@@ -96,9 +103,23 @@ func (v Value) unnamed() reflect.Value {
 
 func (v Value) IsNull() bool  { return v.dead || v.kind == NullKind }
 func (v Value) IsValid() bool { return !v.dead }
-func (v Value) Kind() Kind    { return v.kind }
 func (v Value) Path() string  { return string(v.path) }
 func (v Value) Unwrap() any   { return unwrap(v) }
+
+func (v Value) CanBe(kind Kind) bool {
+	if v.kind == kind {
+		return true
+	}
+	if v.kind == NumberKind {
+		return v.number.canBe(kind)
+	}
+	return false
+}
+
+// Returns the underlying Kind in this Value. Note that instead of switching
+// on the return of this, you should instead use Value.CanBe(...) to test
+// as this supports the interface-based types (i.e. json.Number).
+func (v Value) Kind() Kind { return v.kind }
 
 func (v Value) Str() string {
 	// XXX: don't call this String(), it makes a mess with fmt.Stringer.
@@ -106,10 +127,16 @@ func (v Value) Str() string {
 		return ""
 	}
 	if v.inner.Kind() != reflect.String {
-		v.ctx.AddError(&InvalidTypeError{Path: string(v.path), Expected: StrKind, Found: v.inner.Type()})
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: StrKind, Found: v.inner.Type()})
 		return ""
 	}
 	return v.unnamed().Interface().(string)
+}
+
+func (v Value) Reject(err error) {
+	// XXX: deliberately not dropping these if 'dead'; this seems prudent as this
+	// has to be explicitly called?
+	v.ctx.AddError(&ValueError{Path: v.path, Kind: v.kind, err: err})
 }
 
 func (v Value) StrOptional() string {
@@ -123,8 +150,13 @@ func (v Value) Int() int {
 	if v.dead {
 		return 0
 	}
-	if v.kind != IntKind {
-		v.ctx.AddError(&InvalidTypeError{Path: string(v.path), Expected: IntKind, Found: v.inner.Type()})
+
+	if v.kind == NumberKind {
+		i, _ := v.number.asInt(v)
+		return i
+
+	} else if v.kind != IntKind {
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: IntKind, Found: v.inner.Type()})
 		return 0
 	}
 	return v.unnamed().Interface().(int)
@@ -141,14 +173,20 @@ func (v Value) Int64() int64 {
 	if v.dead {
 		return 0
 	}
-	if v.kind == IntKind {
+
+	if v.kind == NumberKind {
+		i, _ := v.number.asInt64(v)
+		return i
+
+	} else if v.kind == IntKind {
 		i := v.unnamed().Interface().(int)
 		return int64(i)
-	}
-	if v.kind == Int64Kind {
+
+	} else if v.kind == Int64Kind {
 		return v.unnamed().Interface().(int64)
 	}
-	v.ctx.AddError(&InvalidTypeError{Path: string(v.path), Expected: Int64Kind, Found: v.inner.Type()})
+
+	v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: Int64Kind, Found: v.inner.Type()})
 	return 0
 }
 
@@ -163,10 +201,16 @@ func (v Value) Uint() uint {
 	if v.dead {
 		return 0
 	}
-	if v.kind != UintKind {
-		v.ctx.AddError(&InvalidTypeError{Path: string(v.path), Expected: UintKind, Found: v.inner.Type()})
+
+	if v.kind == NumberKind {
+		u, _ := v.number.asUint(v)
+		return u
+
+	} else if v.kind != UintKind {
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: UintKind, Found: v.inner.Type()})
 		return 0
 	}
+
 	return v.unnamed().Interface().(uint)
 }
 
@@ -181,14 +225,20 @@ func (v Value) Uint64() uint64 {
 	if v.dead {
 		return 0
 	}
-	if v.kind == UintKind {
+
+	if v.kind == NumberKind {
+		u, _ := v.number.asUint64(v)
+		return u
+
+	} else if v.kind == UintKind {
 		u := v.unnamed().Interface().(uint)
 		return uint64(u)
-	}
-	if v.kind == Uint64Kind {
+
+	} else if v.kind == Uint64Kind {
 		return v.unnamed().Interface().(uint64)
 	}
-	v.ctx.AddError(&InvalidTypeError{Path: string(v.path), Expected: Uint64Kind, Found: v.inner.Type()})
+
+	v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: Uint64Kind, Found: v.inner.Type()})
 	return 0
 }
 
@@ -203,10 +253,16 @@ func (v Value) Float64() float64 {
 	if v.dead {
 		return 0
 	}
-	if v.kind != Float64Kind {
-		v.ctx.AddError(&InvalidTypeError{Path: string(v.path), Expected: Float64Kind, Found: v.inner.Type()})
+
+	if v.kind == NumberKind {
+		f, _ := v.number.asFloat64(v)
+		return f
+
+	} else if v.kind != Float64Kind {
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: Float64Kind, Found: v.inner.Type()})
 		return 0
 	}
+
 	return v.unnamed().Interface().(float64)
 }
 
@@ -222,7 +278,7 @@ func (v Value) Bool() bool {
 		return false
 	}
 	if v.kind != BoolKind {
-		v.ctx.AddError(&InvalidTypeError{Path: string(v.path), Expected: BoolKind, Found: v.inner.Type()})
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: BoolKind, Found: v.inner.Type()})
 		return false
 	}
 	return v.unnamed().Interface().(bool)
@@ -241,12 +297,12 @@ func (v Value) Map() (m MapValue) {
 	}
 
 	if v.kind != MapKind {
-		v.ctx.AddError(&InvalidTypeError{Path: string(v.path), Expected: MapKind, Found: v.inner.Type()})
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: MapKind, Found: v.inner.Type()})
 		return MapValue{v: v.kill()}
 	}
 
 	if v.inner.Type().Key().Kind() != reflect.String {
-		v.ctx.AddError(&InvalidTypeError{
+		v.ctx.AddError(&TypeInvalid{
 			Path:     string(v.path),
 			Expected: StrKind,
 			Found:    v.inner.Type().Key(),
@@ -300,7 +356,7 @@ func (v Value) Slice() (m SliceValue) {
 		return SliceValue{v: v.kill()}
 	}
 	if v.kind != SliceKind {
-		v.ctx.AddError(&InvalidTypeError{Path: string(v.path), Expected: SliceKind, Found: v.inner.Type()})
+		v.ctx.AddError(&TypeInvalid{Path: string(v.path), Expected: SliceKind, Found: v.inner.Type()})
 		return SliceValue{v: v.kill()}
 	}
 	return SliceValue{v: v}
@@ -320,6 +376,8 @@ type SliceValue struct {
 	v Value
 }
 
+var _ value = SliceValue{}
+
 func (s SliceValue) IsNull() bool                 { return s.v.dead || s.v.kind == NullKind }
 func (s SliceValue) IsValid() bool                { return !s.v.dead }
 func (s SliceValue) Kind() Kind                   { return s.v.kind }
@@ -327,8 +385,7 @@ func (s SliceValue) Path() string                 { return string(s.v.path) }
 func (s SliceValue) Descend(part ...any) Value    { return descend(s.v, part...) }
 func (s SliceValue) TryDescend(part ...any) Value { return tryDescend(s.v, part...) }
 func (s SliceValue) Unwrap() any                  { return unwrap(s.v) }
-
-var _ value = SliceValue{}
+func (s SliceValue) Reject(err error)             { s.v.Reject(err) }
 
 func (s SliceValue) Len() int {
 	if s.v.dead || !s.v.inner.IsValid() {
@@ -351,7 +408,7 @@ func (s SliceValue) At(idx int) Value {
 		idx = s.Len() - idx
 	}
 	if idx >= ln {
-		s.v.ctx.AddError(&IndexNotFoundError{
+		s.v.ctx.AddError(&IndexNotFound{
 			Path: string(s.v.path),
 			Idx:  idx,
 		})
@@ -368,7 +425,7 @@ func (s SliceValue) Try(idx int) (v Value) {
 		return s.v.kill()
 	}
 	iv := s.v.inner.Index(idx)
-	return ValueOf(s.v.ctx, string(s.v.path.withIdx(idx)), iv)
+	return ValueOf(s.v.ctx, pathWithIdx(s.v.path, idx), iv)
 }
 
 func (s SliceValue) Iterate() *SliceIter {
@@ -401,7 +458,7 @@ func (iter *SliceIter) Len() int { return iter.len }
 
 func (iter *SliceIter) Value() Value {
 	return ValueOf(iter.v.ctx,
-		string(iter.v.path.withIdx(iter.idx)),
+		pathWithIdx(iter.v.path, iter.idx),
 		iter.v.inner.Index(iter.idx))
 }
 
@@ -418,6 +475,7 @@ func (m MapValue) Path() string                 { return string(m.v.path) }
 func (m MapValue) Descend(part ...any) Value    { return descend(m.v, part...) }
 func (m MapValue) TryDescend(part ...any) Value { return tryDescend(m.v, part...) }
 func (m MapValue) Unwrap() any                  { return unwrap(m.v) }
+func (m MapValue) Reject(err error)             { m.v.Reject(err) }
 
 func (m MapValue) Len() int {
 	if m.v.dead || !m.v.inner.IsValid() {
@@ -432,7 +490,7 @@ func (m MapValue) Key(key string) Value {
 	}
 	v, ok := m.tryInner(key)
 	if !ok {
-		m.v.ctx.AddError(&KeyNotFoundError{
+		m.v.ctx.AddError(&KeyNotFound{
 			Path: string(m.v.path),
 			Key:  key,
 		})
@@ -463,11 +521,22 @@ func (m MapValue) tryInner(key string) (v Value, ok bool) {
 	}
 	return ValueOf(
 		m.v.ctx,
-		string(m.v.path.withKey(key)),
+		pathWithKey(m.v.path, key),
 		iv,
 	), true
 }
 
+// Iterate over a Map.
+//
+// If the value is null, an iterator with zero items is returned and no error is raised.
+// If the iteration encounters a key that is not a string, an error is raised.
+//
+// Example:
+//   for iter := value.Map().Iterate(); iter.Next(); {
+//      key := iter.Key()
+//      val := iter.Value()
+//   }
+//
 func (m MapValue) Iterate() *MapIter {
 	if m.v.kind == NullKind {
 		return &MapIter{MapValue: MapValue{v: m.v.kill()}}
@@ -479,6 +548,7 @@ type MapIter struct {
 	MapValue
 	inner *reflect.MapIter
 	key   string
+	valid bool
 }
 
 func (iter *MapIter) Len() int {
@@ -488,12 +558,13 @@ func (iter *MapIter) Len() int {
 func (iter *MapIter) Next() bool {
 	for {
 		if ok := iter.inner.Next(); !ok {
+			iter.valid = false
 			return false
 		}
 
 		key := iter.inner.Key()
 		if key.Kind() != reflect.String {
-			iter.v.ctx.AddError(&InvalidTypeError{
+			iter.v.ctx.AddError(&TypeInvalid{
 				Path:     string(iter.v.path),
 				Expected: StrKind,
 				Found:    key.Type(),
@@ -509,18 +580,37 @@ func (iter *MapIter) Next() bool {
 }
 
 func (iter *MapIter) Key() string {
+	if !iter.valid {
+		panic(fmt.Errorf("unstructured: %q: attempt to access key in invalid map iterator", iter.v.path))
+	}
 	return iter.key
 }
 
 func (iter *MapIter) Value() Value {
+	if !iter.valid {
+		panic(fmt.Errorf("unstructured: %q: attempt to access value in invalid map iterator", iter.v.path))
+	}
 	return ValueOf(
 		iter.v.ctx,
-		string(iter.v.path.withKey(iter.key)),
+		pathWithKey(iter.v.path, iter.key),
 		iter.inner.Value(),
 	)
 }
 
-func MapEach[C any, K ~string, V any](ctx C, value Value, fn func(ctx C, k K, v Value) V) map[K]V {
+func (iter *MapIter) RejectKey(err error) {
+	if !iter.valid {
+		panic(fmt.Errorf("unstructured: %q: attempt to reject key in invalid map iterator", iter.v.path))
+	}
+	iter.v.ctx.AddError(&KeyInvalid{
+		Path: string(iter.v.path),
+		Key:  iter.key,
+		err:  err,
+	})
+}
+
+type MapEachFn[C Context, K ~string, V any] func(ctx C, k K, v Value) V
+
+func MapEach[C Context, K ~string, V any](ctx C, value Value, fn MapEachFn[C, K, V]) map[K]V {
 	iter := value.Map().Iterate()
 
 	out := make(map[K]V, iter.Len())
@@ -533,7 +623,9 @@ func MapEach[C any, K ~string, V any](ctx C, value Value, fn func(ctx C, k K, v 
 	return out
 }
 
-func SliceEach[C any, V any](ctx C, value Value, fn func(ctx C, idx int, v Value) V) []V {
+type SliceEachFn[C Context, V any] func(ctx C, idx int, v Value) V
+
+func SliceEach[C Context, V any](ctx C, value Value, fn SliceEachFn[C, V]) []V {
 	iter := value.Slice().Iterate()
 
 	out := make([]V, iter.Len())
@@ -544,6 +636,30 @@ func SliceEach[C any, V any](ctx C, value Value, fn func(ctx C, idx int, v Value
 	}
 
 	return out
+}
+
+func SliceFloat64s[C Context](ctx C, value Value) []float64 {
+	return SliceEach(ctx, value, func(ctx C, idx int, v Value) float64 { return v.Float64() })
+}
+
+func SliceInts[C Context](ctx C, value Value) []int {
+	return SliceEach(ctx, value, func(ctx C, idx int, v Value) int { return v.Int() })
+}
+
+func SliceInt64s[C Context](ctx C, value Value) []int64 {
+	return SliceEach(ctx, value, func(ctx C, idx int, v Value) int64 { return v.Int64() })
+}
+
+func SliceStrings[C Context](ctx C, value Value) []string {
+	return SliceEach(ctx, value, func(ctx C, idx int, v Value) string { return v.Str() })
+}
+
+func SliceUints[C Context](ctx C, value Value) []uint {
+	return SliceEach(ctx, value, func(ctx C, idx int, v Value) uint { return v.Uint() })
+}
+
+func SliceUint64s[C Context](ctx C, value Value) []uint64 {
+	return SliceEach(ctx, value, func(ctx C, idx int, v Value) uint64 { return v.Uint64() })
 }
 
 func tryDescend(v Value, part ...any) Value {

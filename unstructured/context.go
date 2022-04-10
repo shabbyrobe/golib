@@ -6,7 +6,7 @@ import (
 )
 
 type Context interface {
-	AddError(err error) error
+	AddError(err error)
 }
 
 // An unstructured.Context that collects errors into a buffer:
@@ -16,9 +16,8 @@ type ErrContext struct {
 
 var _ Context = (*ErrContext)(nil)
 
-func (ctx *ErrContext) AddError(err error) error {
+func (ctx *ErrContext) AddError(err error) {
 	ctx.errs = append(ctx.errs, err)
-	return nil
 }
 
 // Return all errors currently in the context. The returned slice is only valid until
