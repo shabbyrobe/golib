@@ -592,7 +592,7 @@ func (iter *MapIter) Value() Value {
 	)
 }
 
-func (iter *MapIter) RejectKey(err error) {
+func (iter *MapIter) Reject(err error) {
 	if !iter.valid {
 		panic(fmt.Errorf("dynamic: %q: attempt to reject key in invalid map iterator", iter.v.path))
 	}
@@ -606,7 +606,7 @@ func (iter *MapIter) RejectKey(err error) {
 type MapEachFn[C Context, K ~string, V any] func(ctx C, k K, v Value) V
 
 func MapEach[C Context, K ~string, V any](ctx C, value Value, fn MapEachFn[C, K, V]) map[K]V {
-	iter := value.Map().Iterate()
+	iter := value.MapOptional().Iterate()
 
 	out := make(map[K]V, iter.Len())
 	for iter.Next() {
@@ -621,7 +621,7 @@ func MapEach[C Context, K ~string, V any](ctx C, value Value, fn MapEachFn[C, K,
 type SliceEachFn[C Context, V any] func(ctx C, idx int, v Value) V
 
 func SliceEach[C Context, V any](ctx C, value Value, fn SliceEachFn[C, V]) []V {
-	iter := value.Slice().Iterate()
+	iter := value.SliceOptional().Iterate()
 
 	out := make([]V, iter.Len())
 	for iter.Next() {
