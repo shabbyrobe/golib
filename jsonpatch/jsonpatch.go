@@ -74,6 +74,22 @@ func (Test) OpKind() OpKind { return OpTest }
 // https://datatracker.ietf.org/doc/html/rfc6901
 type Path []PathSegment
 
+func (p Path) String() string {
+	var sb strings.Builder
+	sb.WriteByte('/')
+	for idx, s := range p {
+		if idx > 0 {
+			sb.WriteByte('/')
+		}
+		if s.String != "" {
+			sb.WriteString(s.String)
+		} else {
+			sb.WriteString(strconv.FormatInt(int64(s.Int), 10))
+		}
+	}
+	return sb.String()
+}
+
 // Segments can be string for fields, or integer for indexes.
 // Can't do `interface{ int | ~string }` like one would expect/hope
 // so we have to go back to 'any' and type assertions, or old-style
