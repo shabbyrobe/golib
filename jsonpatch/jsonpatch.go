@@ -90,7 +90,9 @@ func (p Path) String() string {
 	return sb.String()
 }
 
-// Segments can be string for fields, or integer for indexes.
+// Segments can be string for fields, integer for indexes, or the
+// special value '-', which, for arrays, means "add to the end".
+//
 // Can't do `interface{ int | ~string }` like one would expect/hope
 // so we have to go back to 'any' and type assertions, or old-style
 // "let's pretend it's a union".
