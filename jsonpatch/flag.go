@@ -18,6 +18,11 @@ func (p *Arg) String() string {
 	return p.Raw
 }
 
+func (p *Arg) Type() string {
+	// XXX: pflag compat
+	return ""
+}
+
 func (p *Arg) Set(s string) error {
 	if len(p.Raw) > 0 {
 		p.Raw += " "
