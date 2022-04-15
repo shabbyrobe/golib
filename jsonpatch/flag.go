@@ -33,7 +33,7 @@ func (p *Arg) Set(s string) error {
 	match := patchArgPattern.FindStringSubmatch(s)
 	if match == nil {
 		return fmt.Errorf("invalid patch arg. expected format: --patch=op:path=value, " +
-			"e.g. --patch=add:/port/magickraum=10202/tcp")
+			"e.g. --patch=add:/port/mysvc=9999/tcp")
 	}
 
 	path, err := ParsePath(match[patchArgPathIndex])
