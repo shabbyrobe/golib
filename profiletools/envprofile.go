@@ -2,6 +2,7 @@ package profiletools
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -10,13 +11,20 @@ import (
 	"time"
 
 	"github.com/pkg/profile"
-	"github.com/shabbyrobe/golib/iotools"
 )
 
 // EnvProfile starts a profile based on environment variables.
 //
+// Expected env vars are prefixed with envPrefix. Env vars used:
+// - PROFILE: (cpu|block|mem|trace)
+// - PROFILE_PATH: save profiles to this path, instead of OS temp dir
+// - PROFILE_RATE: if using cpu, passed to runtime.SetCPUProfileRate(). if using "block",
+//   passed to runtime.SetBlockProfileRate()
+// - PROFILE_QUIET: if not empty, no messages are logged to stderr.
+//
 // You MUST call Stop() on the returned value when done, even
 // if no profile was started:
+//
 //	defer EnvProfile("MYAPP_").Stop()
 //
 func EnvProfile(envPrefix string) EnvProfiler {
@@ -97,13 +105,12 @@ func EnvProfile(envPrefix string) EnvProfiler {
 	return stopper{
 		func() {
 			stop.Stop()
-			iotools.CopyFile(expectedFile, lastFile)
+			_ = copyFile(expectedFile, lastFile)
 			if !quiet {
 				log.Printf("profile: %s available at %s\n", prof, lastFile)
 			}
 		},
 	}
-	return stop
 }
 
 type EnvProfiler interface {
@@ -118,4 +125,42 @@ func (d stopper) Stop() {
 	if d.stop != nil {
 		d.stop()
 	}
+}
+
+func copyFile(from, to string) (rerr error) {
+	in, err := os.Open(from)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	st, err := in.Stat()
+	if err != nil {
+		return err
+	}
+
+	expected := st.Size()
+
+	out, err := os.Create(to)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		cerr := out.Close()
+		if rerr == nil && cerr != nil {
+			rerr = cerr
+		}
+	}()
+
+	n, err := io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+
+	if n != expected {
+		return fmt.Errorf("iotools: copy expected %d bytes, but only copied %d", expected, n)
+	}
+
+	return nil
 }
