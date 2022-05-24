@@ -50,7 +50,7 @@ loop:
 //      panic("FLEEB")
 //  }()
 //
-func Capture() {
+func DeferCapture() {
 	if r := recover(); r != nil {
 		if atomic.LoadInt64(&done) == 1 {
 			return
