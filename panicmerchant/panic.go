@@ -10,6 +10,10 @@ type Panic struct {
 	Value any
 }
 
+func (p Panic) String() string {
+	return fmt.Sprintf("Panic!\n%s\nValue: %#v\n", string(p.Stack), p.Value)
+}
+
 var (
 	panics = make(chan Panic, 1024)
 	done   int64
@@ -34,6 +38,18 @@ loop:
 	return out
 }
 
+// Call this in a defer to capture any unhandled panic and send it to the Panics()
+// channel.
+//
+// Consume the Panics() channel in your main() so you can centralise graceful shutdowns.
+//
+// Example:
+//
+//  go func() {
+//      defer panicmerchant.DeferCapture()
+//      panic("FLEEB")
+//  }()
+//
 func Capture() {
 	if r := recover(); r != nil {
 		if atomic.LoadInt64(&done) == 1 {
