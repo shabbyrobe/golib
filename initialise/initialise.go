@@ -1,4 +1,5 @@
-// Simple copy-pasta for initialising structs in a manual recursive-descent
+// Simple copy-pasta for initialising structs and collecting validation messages
+// using manual recursive-descent.
 
 package initialise
 
@@ -64,12 +65,28 @@ func (err *Error) Error() string {
 }
 
 type Context struct {
-	Errors []*Error
-	path   []any
+	Errors   []*Error
+	Warnings []*Error
+	path     []any
 }
 
-func (val *Context) Addf(msg string, args ...interface{}) {
+func (val *Context) Failed() bool {
+	return len(val.Errors) > 0
+}
+
+func (val *Context) Warned() bool {
+	return len(val.Warnings) > 0
+}
+
+func (val *Context) Failf(msg string, args ...interface{}) {
 	val.Errors = append(val.Errors, &Error{
+		Path:    val.pathString(),
+		Message: fmt.Sprintf(msg, args...),
+	})
+}
+
+func (val *Context) Warnf(msg string, args ...interface{}) {
+	val.Warnings = append(val.Warnings, &Error{
 		Path:    val.pathString(),
 		Message: fmt.Sprintf(msg, args...),
 	})
@@ -87,7 +104,7 @@ func (val *Context) Pop() {
 	val.path = val.path[:len(val.path)-1]
 }
 
-func (val *Context) DrillIndex(idx int, initialise func() error) {
+func (val *Context) DrillIndex(idx int, initialise func()) {
 	val.PushIndex(idx)
 	defer val.Pop()
 	initialise()
@@ -97,6 +114,14 @@ func (val *Context) DrillKey(key string, initialise func()) {
 	val.PushKey(key)
 	defer val.Pop()
 	initialise()
+}
+
+func Each[T any](val *Context, vs []T, eachFn func(idx int, v T)) {
+	for i := 0; i < len(vs); i++ {
+		val.DrillIndex(i, func() {
+			eachFn(i, vs[i])
+		})
+	}
 }
 
 func (val *Context) pathString() string {
