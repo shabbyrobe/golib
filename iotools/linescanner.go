@@ -47,7 +47,20 @@ func (lscn *LineScanner) OnDiscard(discard func(limit int, start int) error) *Li
 	return lscn
 }
 
+func (lscn *LineScanner) Reset(rdr io.Reader) {
+	lscn.rdr.Reset(rdr)
+	lscn.bufSize = 0
+	lscn.bufPos = 0
+	lscn.streamPos = 0
+	lscn.line = nil
+	lscn.err = nil
+}
+
 func (lscn *LineScanner) nextLine() (line []byte, ok bool) {
+	if lscn.err != nil && lscn.err != io.EOF {
+		return nil, false
+	}
+
 	var discard bool
 	var idx int
 	var start = lscn.streamPos

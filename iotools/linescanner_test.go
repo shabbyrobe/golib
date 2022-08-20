@@ -1,6 +1,8 @@
 package iotools
 
 import (
+	"bufio"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -81,5 +83,53 @@ func TestLineScanner(t *testing.T) {
 		scn := NewScanner(strings.NewReader("a\nbcdefghi\nj\n"), 2).OnDiscard(discard)
 		assertLines(t, scn, "a", "j")
 		assertDiscards(t, starts, 2)
+	})
+}
+
+func BenchmarkLineScanner(b *testing.B) {
+	b.Run("3-short-lines", func(b *testing.B) {
+		b.ReportAllocs()
+
+		rdr := strings.NewReader("abcd\nefgh\nijkl")
+		scn := NewScanner(rdr, 4)
+		for i := 0; i < b.N; i++ {
+			rdr.Seek(0, io.SeekStart)
+			scn.Reset(rdr)
+			for scn.Scan() {
+			}
+		}
+	})
+
+	b.Run("3-long-lines", func(b *testing.B) {
+		b.ReportAllocs()
+
+		rdr := strings.NewReader("" +
+			strings.Repeat("a", 1000) + "\n" +
+			strings.Repeat("b", 1000) + "\n" +
+			strings.Repeat("c", 1000) + "\n")
+
+		scn := NewScanner(rdr, 1024)
+		for i := 0; i < b.N; i++ {
+			rdr.Seek(0, io.SeekStart)
+			scn.Reset(rdr)
+			for scn.Scan() {
+			}
+		}
+	})
+
+	b.Run("3-long-lines-stdlib", func(b *testing.B) {
+		b.ReportAllocs()
+
+		rdr := strings.NewReader("" +
+			strings.Repeat("a", 1000) + "\n" +
+			strings.Repeat("b", 1000) + "\n" +
+			strings.Repeat("c", 1000) + "\n")
+
+		for i := 0; i < b.N; i++ {
+			rdr.Seek(0, io.SeekStart)
+			scn := bufio.NewScanner(rdr)
+			for scn.Scan() {
+			}
+		}
 	})
 }
