@@ -56,7 +56,6 @@ search:
 	for {
 		// Is there a newline in the buffer?
 		idx = bytes.IndexByte(lscn.buf[lscn.bufPos:lscn.bufSize], '\n')
-		fmt.Println(idx, string(lscn.buf[lscn.bufPos:lscn.bufSize]))
 
 		if idx >= 0 && discard {
 			// If so, and we are in "discard" mode, chuck everything away up to the
@@ -75,12 +74,13 @@ search:
 			lscn.streamPos += idx + 1
 			break search
 
-		} else if discard || lscn.bufSize > lscn.readLimit {
+		} else if discard || lscn.bufSize-lscn.bufPos > lscn.readLimit {
 			lscn.streamPos += lscn.bufSize
 
 			// If there is no newline in the buffer AND:
 			// - We are in discard mode OR:
-			// - The buffer does not have enough room in it for a full read:
+			// - The buffer does not have enough room in it for a full read if we
+			//   slide what's left in it to the start:
 			//
 			// Replace the entire buffer with a fresh read and enter discard mode
 			// if we're not in it already.
