@@ -4,6 +4,11 @@ Beyond a certain level of complexity, serial execution is much easier to reason
 about than a rats-nest of mutexes and goroutines coordinating themselves in the
 aether.
 
+This library provides a starting point for serial execution of structs
+representing function calls. It can be very useful when strapped directly to an
+API to drive the state at the heart of a complex service. See example_test.go
+for a fully worked example.
+
 **This is intended to be copy-pasted into a project's `internal` folder and hit
 with a rock until it resembles the shape you need.** It **should not** be
 included in a project directly.
