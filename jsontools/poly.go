@@ -37,7 +37,9 @@ func MarshalPolymorphic[K ~string, V any](
 	if err != nil {
 		return nil, err
 	}
-	m[kindKey] = string(keyFn(v))
+	if m != nil {
+		m[kindKey] = string(keyFn(v))
+	}
 	return json.Marshal(m)
 }
 
@@ -51,7 +53,9 @@ func MarshalIndentPolymorphic[K ~string](
 	if err != nil {
 		return nil, err
 	}
-	m[kindKey] = string(keyFn(v))
+	if m != nil {
+		m[kindKey] = string(keyFn(v))
+	}
 	return json.MarshalIndent(m, "", indent)
 }
 
