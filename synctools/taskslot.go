@@ -19,7 +19,7 @@ type Task interface {
 //     does not handle serialisation, only mutual exclusion.
 //
 // --
-type TaskRunner struct {
+type TaskSlot struct {
 	stopped chan struct{}
 	wake    *sync.Cond
 	mu      sync.Mutex
@@ -33,8 +33,8 @@ type TaskRunner struct {
 	}
 }
 
-func NewTaskRunner() *TaskRunner {
-	tr := &TaskRunner{
+func NewTaskSlot() *TaskSlot {
+	tr := &TaskSlot{
 		stopped: make(chan struct{}, 0),
 	}
 	tr.wake = sync.NewCond(&tr.mu)
@@ -42,53 +42,53 @@ func NewTaskRunner() *TaskRunner {
 	return tr
 }
 
-// Inform the TaskRunner of the next task to run. Cancel any task currently running. The
+// Inform the TaskSlot of the next task to run. Cancel any task currently running. The
 // task may be nil to indicate "cancel, but there is no next task".
-func (runner *TaskRunner) Next(task Task) {
-	runner.mu.Lock()
-	defer runner.mu.Unlock()
-	if runner.locked.ctx != nil {
-		runner.locked.cancel()
+func (slot *TaskSlot) Next(task Task) {
+	slot.mu.Lock()
+	defer slot.mu.Unlock()
+	if slot.locked.ctx != nil {
+		slot.locked.cancel()
 	}
-	if runner.locked.next != nil {
-		runner.locked.next.Dropped()
+	if slot.locked.next != nil {
+		slot.locked.next.Dropped()
 	}
-	runner.locked.next = task
-	runner.wake.Broadcast()
+	slot.locked.next = task
+	slot.wake.Broadcast()
 }
 
-func (runner *TaskRunner) Stop() {
+func (slot *TaskSlot) Stop() {
 	func() {
-		runner.mu.Lock()
-		defer runner.mu.Unlock()
-		if runner.locked.cancel != nil {
-			runner.locked.cancel()
+		slot.mu.Lock()
+		defer slot.mu.Unlock()
+		if slot.locked.cancel != nil {
+			slot.locked.cancel()
 		}
-		runner.locked.stop = true
-		runner.wake.Broadcast()
+		slot.locked.stop = true
+		slot.wake.Broadcast()
 	}()
-	<-runner.stopped
+	<-slot.stopped
 }
 
-func (runner *TaskRunner) worker() {
-	defer close(runner.stopped)
+func (slot *TaskSlot) worker() {
+	defer close(slot.stopped)
 
 	prepareTask := func() (task Task, ctx context.Context, cancel func(), done bool) {
-		runner.mu.Lock()
-		defer runner.mu.Unlock()
+		slot.mu.Lock()
+		defer slot.mu.Unlock()
 
 		for task == nil {
-			if runner.locked.stop {
+			if slot.locked.stop {
 				return nil, nil, nil, true
-			} else if runner.locked.next != nil {
-				task = runner.locked.next
+			} else if slot.locked.next != nil {
+				task = slot.locked.next
 			} else {
-				runner.wake.Wait()
+				slot.wake.Wait()
 			}
 		}
-		runner.locked.next, runner.locked.current = nil, task
+		slot.locked.next, slot.locked.current = nil, task
 		ctx, cancel = context.WithCancel(context.Background())
-		runner.locked.ctx, runner.locked.cancel = ctx, cancel
+		slot.locked.ctx, slot.locked.cancel = ctx, cancel
 		return task, ctx, cancel, false
 	}
 

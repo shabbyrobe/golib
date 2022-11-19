@@ -30,9 +30,9 @@ func failAfter(t *testing.T, dur time.Duration, f func(t *testing.T)) {
 	}
 }
 
-func TestTaskRunnerRunsATask(t *testing.T) {
+func TestTaskSlotRunsATask(t *testing.T) {
 	failAfter(t, 2*time.Second, func(t *testing.T) {
-		tr := NewTaskRunner()
+		tr := NewTaskSlot()
 		defer tr.Stop()
 
 		var done = make(chan struct{}, 0)
@@ -46,9 +46,9 @@ func TestTaskRunnerRunsATask(t *testing.T) {
 	})
 }
 
-func TestTaskRunnerCancelsATask(t *testing.T) {
+func TestTaskSlotCancelsATask(t *testing.T) {
 	failAfter(t, 2*time.Second, func(t *testing.T) {
-		tr := NewTaskRunner()
+		tr := NewTaskSlot()
 		defer tr.Stop()
 
 		var cancelled, completed bool
@@ -81,9 +81,9 @@ func TestTaskRunnerCancelsATask(t *testing.T) {
 	})
 }
 
-func TestTaskRunnerStopCancelsTask(t *testing.T) {
+func TestTaskSlotStopCancelsTask(t *testing.T) {
 	failAfter(t, 2*time.Second, func(t *testing.T) {
-		tr := NewTaskRunner()
+		tr := NewTaskSlot()
 		defer tr.Stop()
 
 		var cancelled bool
@@ -106,9 +106,9 @@ func TestTaskRunnerStopCancelsTask(t *testing.T) {
 	})
 }
 
-func TestTaskRunnerSpam(t *testing.T) {
+func TestTaskSlotSpam(t *testing.T) {
 	failAfter(t, 10*time.Second, func(t *testing.T) {
-		tr := NewTaskRunner()
+		tr := NewTaskSlot()
 		defer tr.Stop()
 
 		var workers = 100
