@@ -11,7 +11,7 @@ type exampleLoopState struct {
 
 type queryThing struct{}
 
-func (task queryThing) Query(ctx context.Context, state *exampleLoopState) (string, error) {
+func (task queryThing) Do(ctx context.Context, state *exampleLoopState) (string, error) {
 	return state.thing, nil
 }
 
@@ -19,9 +19,9 @@ type updateThing struct {
 	value string
 }
 
-func (task updateThing) Do(ctx context.Context, state *exampleLoopState) error {
+func (task updateThing) Do(ctx context.Context, state *exampleLoopState) (Nothing, error) {
 	state.thing = task.value
-	return nil
+	return Nothing{}, nil
 }
 
 // It's potentially worth defining your own one of these, to save you having to type out
@@ -29,15 +29,15 @@ func (task updateThing) Do(ctx context.Context, state *exampleLoopState) error {
 // hopefully get better).
 func QueryExampleLoop[TResponse any](
 	ctx context.Context,
-	loop Doer[exampleLoopState],
-	query QueryTask[exampleLoopState, TResponse],
+	loop Doer[*exampleLoopState],
+	query Task[*exampleLoopState, TResponse],
 ) (TResponse, error) {
 	return Query(ctx, loop, query)
 }
 
 func ExampleLoop() {
-	initial := func() exampleLoopState {
-		return exampleLoopState{
+	initial := func() *exampleLoopState {
+		return &exampleLoopState{
 			thing: "initial",
 		}
 	}
