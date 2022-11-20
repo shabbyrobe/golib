@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 )
 
-var Done = errors.New("context: done")
+var ErrDone = errors.New("context: done")
 
 type doneContext struct {
 	context.Context
@@ -14,6 +14,8 @@ type doneContext struct {
 	done chan struct{}
 }
 
+// Combine a context with an externally created 'done' channel such that the context is
+// Done() when either the parent context, or the provided 'done' channel yield.
 func WithDone(parent context.Context, done chan struct{}) context.Context {
 	ch := make(chan struct{})
 	doneCtx := &doneContext{
@@ -24,7 +26,7 @@ func WithDone(parent context.Context, done chan struct{}) context.Context {
 	go func() {
 		select {
 		case <-done:
-			doneCtx.err.Store(Done)
+			doneCtx.err.Store(ErrDone)
 		case <-parent.Done():
 			doneCtx.err.Store(parent.Err())
 		}

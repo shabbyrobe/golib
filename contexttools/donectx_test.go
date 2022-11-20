@@ -17,7 +17,7 @@ func TestDoneCtx(t *testing.T) {
 		panic("timeout")
 	case <-doneCtx.Done():
 	}
-	if doneCtx.Err() != Done {
+	if doneCtx.Err() != ErrDone {
 		t.Fatal()
 	}
 }
@@ -35,7 +35,7 @@ func TestDoneCtxWithCancel(t *testing.T) {
 		panic("timeout")
 	case <-cancelCtx.Done():
 	}
-	if cancelCtx.Err() != Done {
+	if cancelCtx.Err() != ErrDone {
 		t.Fatal()
 	}
 
@@ -44,7 +44,7 @@ func TestDoneCtxWithCancel(t *testing.T) {
 		panic("timeout")
 	case <-doneCtx.Done():
 	}
-	if doneCtx.Err() != Done {
+	if doneCtx.Err() != ErrDone {
 		t.Fatal()
 	}
 }
