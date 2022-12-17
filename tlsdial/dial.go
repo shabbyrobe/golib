@@ -45,6 +45,8 @@ func (timeoutError) Temporary() bool { return true }
 //
 // DialContextWithDialer interprets a nil configuration as equivalent to
 // the zero configuration; see the documentation of Config for the defaults.
+//
+// Deprecated: supported in stdlib since 1.15.
 func DialContextWithDialer(ctx context.Context, dialer *net.Dialer, network, addr string, config *tls.Config) (*tls.Conn, error) {
 	// We want the Timeout and Deadline values from dialer to cover the
 	// whole process: TCP connection and TLS handshake. This means that we
@@ -123,6 +125,8 @@ func DialContextWithDialer(ctx context.Context, dialer *net.Dialer, network, add
 //
 // DialWithDialer interprets a nil configuration as equivalent to the zero
 // configuration; see the documentation of Config for the defaults.
+//
+// Deprecated: supported in stdlib since 1.15.
 func DialWithDialer(dialer *net.Dialer, network, addr string, config *tls.Config) (*tls.Conn, error) {
 	return DialContextWithDialer(context.Background(), dialer, network, addr, config)
 }
