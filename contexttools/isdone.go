@@ -2,14 +2,16 @@ package contexttools
 
 import "context"
 
-type Done interface {
+type DoneContext interface {
 	Done() <-chan struct{}
 }
 
-var testCtx context.Context
-var _ Done = testCtx
+var (
+	testCtx context.Context
+	_       DoneContext = testCtx
+)
 
-func IsDone(ctx Done) bool {
+func IsDone(ctx DoneContext) bool {
 	select {
 	case <-ctx.Done():
 		return true

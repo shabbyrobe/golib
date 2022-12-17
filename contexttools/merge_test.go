@@ -2,67 +2,141 @@ package contexttools
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
 
-func isDone(ctx context.Context) bool {
-	t := time.After(1 * time.Second)
+func waitOrFail(t *testing.T, ctx context.Context, timeout time.Duration) {
+	t.Helper()
 	select {
 	case <-ctx.Done():
-	case <-t:
-		return false
+		return
+	case <-time.After(timeout):
+		t.Fatal("timeout waiting for ctx")
 	}
-	return true
 }
 
-func TestMergePropagatesCancelFromParent(t *testing.T) {
-	parent, parentCancel := context.WithCancel(context.Background())
-	ctx1, cancel1 := context.WithCancel(context.Background())
-	ctx2, cancel2 := context.WithCancel(context.Background())
-	defer parentCancel()
-	defer cancel1()
-	defer cancel2()
+func TestMergeParentCancel(t *testing.T) {
+	ctx1 := context.Background()
+	ctx2 := context.Background()
 
-	merged, cancel := MergeCancel(parent, ctx1, ctx2)
-	defer cancel()
-
-	parentCancel()
-	if !isDone(merged) {
+	merged, cancelParent := MergeCancel(ctx1, ctx2)
+	cancelParent()
+	waitOrFail(t, merged, 10*time.Millisecond)
+	if merged.Err() != context.Canceled {
 		t.Fatal()
 	}
 }
 
-func TestMergePropagatesCancelFromChild1(t *testing.T) {
-	parent, parentCancel := context.WithCancel(context.Background())
+func TestMergeChild1Cancel(t *testing.T) {
 	ctx1, cancel1 := context.WithCancel(context.Background())
-	ctx2, cancel2 := context.WithCancel(context.Background())
-	defer parentCancel()
-	defer cancel1()
-	defer cancel2()
+	ctx2 := context.Background()
 
-	merged, cancel := MergeCancel(parent, ctx1, ctx2)
-	defer cancel()
-
+	merged, _ := MergeCancel(ctx1, ctx2)
 	cancel1()
-	if !isDone(merged) {
+	waitOrFail(t, merged, 10*time.Millisecond)
+	if merged.Err() != context.Canceled {
 		t.Fatal()
 	}
 }
 
-func TestMergePropagatesCancelFromChild2(t *testing.T) {
-	parent, parentCancel := context.WithCancel(context.Background())
+func TestMergeChild2Cancel(t *testing.T) {
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	ctx2, cancel2 := context.WithCancel(context.Background())
-	defer parentCancel()
-	defer cancel1()
-	defer cancel2()
 
-	merged, cancel := MergeCancel(parent, ctx1, ctx2)
-	defer cancel()
-
+	merged, _ := MergeCancel(ctx1, ctx2)
+	cancel1()
 	cancel2()
-	if !isDone(merged) {
+	waitOrFail(t, merged, 10*time.Millisecond)
+	if merged.Err() != context.Canceled {
 		t.Fatal()
+	}
+}
+
+func TestMergLotsaChildrenCancel(t *testing.T) {
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	ctx3, cancel3 := context.WithCancel(context.Background())
+
+	merged, _ := MergeCancel(ctx1, ctx2, ctx3)
+	cancel1()
+	cancel2()
+	cancel3()
+	waitOrFail(t, merged, 10*time.Millisecond)
+	if merged.Err() != context.Canceled {
+		t.Fatal()
+	}
+}
+
+func TestMergeParentDeadline(t *testing.T) {
+	deadline1 := time.Now().Add(100 * time.Millisecond)
+	deadline2 := time.Now().Add(200 * time.Millisecond)
+	ctx1, cancel1 := context.WithDeadline(context.Background(), deadline1)
+	ctx2, cancel2 := context.WithDeadline(context.Background(), deadline2)
+	_, _ = cancel1, cancel2
+
+	merged, _ := MergeCancel(ctx1, ctx2)
+	deadline, ok := merged.Deadline()
+	if !ok {
+		t.Fatal()
+	}
+	if deadline != deadline1 {
+		t.Fatal()
+	}
+	waitOrFail(t, merged, 120*time.Millisecond)
+	if merged.Err() != context.DeadlineExceeded {
+		t.Fatal(merged.Err())
+	}
+}
+
+func TestMergeChildDeadline(t *testing.T) {
+	deadline1 := time.Now().Add(200 * time.Millisecond)
+	deadline2 := time.Now().Add(100 * time.Millisecond)
+	ctx1, cancel1 := context.WithDeadline(context.Background(), deadline1)
+	ctx2, cancel2 := context.WithDeadline(context.Background(), deadline2)
+	_, _ = cancel1, cancel2
+
+	merged, _ := MergeCancel(ctx1, ctx2)
+	deadline, ok := merged.Deadline()
+	if !ok {
+		t.Fatal()
+	}
+	if deadline != deadline2 {
+		t.Fatal()
+	}
+	waitOrFail(t, merged, 120*time.Millisecond)
+	if merged.Err() != context.DeadlineExceeded {
+		t.Fatal(merged.Err())
+	}
+}
+
+func TestMergeParentCause(t *testing.T) {
+	var oops = errors.New("oops")
+	ctx1, cancel1 := WithCancelCause(context.Background())
+	ctx2 := context.Background()
+
+	merged, _ := MergeCancel(ctx1, ctx2)
+	cancel1(oops)
+	waitOrFail(t, merged, 120*time.Millisecond)
+
+	cause := Cause(merged)
+	if cause != oops {
+		t.Fatal(cause)
+	}
+}
+
+func TestMergeChildCause(t *testing.T) {
+	var oops = errors.New("oops")
+	ctx1 := context.Background()
+	ctx2, cancel2 := WithCancelCause(context.Background())
+
+	merged, _ := MergeCancel(ctx1, ctx2)
+	cancel2(oops)
+	waitOrFail(t, merged, 120*time.Millisecond)
+
+	cause := Cause(merged)
+	if cause != oops {
+		t.Fatal(cause)
 	}
 }
