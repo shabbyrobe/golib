@@ -610,7 +610,7 @@ func TestMapDescentStopsCollectingAfterError(t *testing.T) {
 		Map().Key("bork").
 		Map().Key("foo")
 
-	exp := &TypeInvalid{Path: "/pants/foo", Expected: MapKind, Found: reflect.TypeOf("")}
+	exp := &TypeInvalid{Path: "/pants/foo", Expected: MapKind, Found: kindOf(reflect.TypeOf(""))}
 	if err := ctx.PopError(); !reflect.DeepEqual(err, exp) {
 		t.Fatalf("%+v != %+v", err, exp)
 	}

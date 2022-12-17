@@ -37,12 +37,9 @@ func ValueOf(ctx Context, path string, v any) Value {
 		// element. This can happen if you retrieve a reflect.Value via
 		// reflect.Value.Index() and pass it in directly:
 		rv = rv.Elem()
-		if !rv.IsValid() {
-			return Value{ctx: ctx, kind: NullKind, path: path}
-		}
 	}
 
-	if isNullable(rv.Kind()) && rv.IsNil() {
+	if !rv.IsValid() || (isNullable(rv.Kind()) && rv.IsNil()) {
 		kind = NullKind
 	} else if num, ok := numberFromInterface(rv); ok {
 		kind = NumberKind
