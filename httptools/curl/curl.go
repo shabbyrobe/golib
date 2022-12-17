@@ -41,6 +41,8 @@ type Transport struct {
 	// --path-as-is
 }
 
+var _ http.RoundTripper = &Transport{}
+
 func (rt *Transport) RoundTrip(rq *http.Request) (*http.Response, error) {
 	var rdr io.Reader = rq.Body
 	if rq.Body != nil {
