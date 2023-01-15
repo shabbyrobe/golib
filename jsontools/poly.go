@@ -31,14 +31,18 @@ func UnmarshalMap(m map[string]any, into any) (err error) {
 func MarshalPolymorphic[K ~string, V any](
 	v V,
 	kindKey string,
-	keyFn func(v V) K,
+	keyFn func(v any) (K, error),
 ) (raw []byte, err error) {
 	m, err := ToMap(v)
 	if err != nil {
 		return nil, err
 	}
 	if m != nil {
-		m[kindKey] = string(keyFn(v))
+		key, err := keyFn(v)
+		if err != nil {
+			return nil, err
+		}
+		m[kindKey] = string(key)
 	}
 	return json.Marshal(m)
 }
@@ -46,7 +50,7 @@ func MarshalPolymorphic[K ~string, V any](
 func MarshalIndentPolymorphic[K ~string](
 	v any,
 	kindKey string,
-	keyFn func(v any) K,
+	keyFn func(v any) (K, error),
 	indent string,
 ) (raw []byte, err error) {
 	m, err := ToMap(v)
@@ -54,7 +58,11 @@ func MarshalIndentPolymorphic[K ~string](
 		return nil, err
 	}
 	if m != nil {
-		m[kindKey] = string(keyFn(v))
+		key, err := keyFn(v)
+		if err != nil {
+			return nil, err
+		}
+		m[kindKey] = string(key)
 	}
 	return json.MarshalIndent(m, "", indent)
 }
@@ -68,6 +76,9 @@ func UnmarshalPolymorphic[K ~string, V any](
 	var tmp map[string]any
 	if err := json.Unmarshal(raw, &tmp); err != nil {
 		return err
+	}
+	if tmp == nil {
+		return nil
 	}
 
 	kindAny, ok := tmp[string(kindKey)]
