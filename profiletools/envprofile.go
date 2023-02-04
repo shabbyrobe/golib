@@ -16,17 +16,18 @@ import (
 // EnvProfile starts a profile based on environment variables.
 //
 // Expected env vars are prefixed with envPrefix. Env vars used:
-// - PROFILE: (cpu|block|mem|trace)
-// - PROFILE_PATH: save profiles to this path, instead of OS temp dir
-// - PROFILE_RATE: if using cpu, passed to runtime.SetCPUProfileRate(). if using "block",
-//   passed to runtime.SetBlockProfileRate()
-// - PROFILE_QUIET: if not empty, no messages are logged to stderr.
+//   - PROFILE: (cpu|block|mem|trace)
+//   - PROFILE_PATH: save profiles to this path, instead of OS temp dir
+//   - PROFILE_RATE: if using cpu, passed to runtime.SetCPUProfileRate(). if using "block",
+//     passed to runtime.SetBlockProfileRate()
+//   - PROFILE_QUIET: if not empty, no messages are logged to stderr.
 //
 // You MUST call Stop() on the returned value when done, even
 // if no profile was started:
 //
 //	defer EnvProfile("MYAPP_").Stop()
 //
+// --
 func EnvProfile(envPrefix string) EnvProfiler {
 	var (
 		profileEnv = envPrefix + "PROFILE"
@@ -72,6 +73,9 @@ func EnvProfile(envPrefix string) EnvProfiler {
 				runtime.SetBlockProfileRate(int(rate))
 			}
 		}
+
+	case "clock":
+		pkind = profile.ClockProfile
 
 	case "mem":
 		pkind = profile.MemProfile
