@@ -13,6 +13,16 @@ import (
 	"github.com/pkg/profile"
 )
 
+type internalOptions *[]func(*profile.Profile)
+
+type EnvProfileOption func(opts internalOptions)
+
+func NoShutdownHook() EnvProfileOption {
+	return func(opts internalOptions) {
+		*opts = append(*opts, profile.NoShutdownHook)
+	}
+}
+
 // EnvProfile starts a profile based on environment variables.
 //
 // Expected env vars are prefixed with envPrefix. Env vars used:
@@ -28,7 +38,7 @@ import (
 //	defer EnvProfile("MYAPP_").Stop()
 //
 // --
-func EnvProfile(envPrefix string) EnvProfiler {
+func EnvProfile(envPrefix string, opts ...EnvProfileOption) EnvProfiler {
 	var (
 		profileEnv = envPrefix + "PROFILE"
 		pathEnv    = envPrefix + "PROFILE_PATH"
@@ -53,6 +63,9 @@ func EnvProfile(envPrefix string) EnvProfiler {
 		if err != nil {
 			panic(fmt.Errorf("profiletools: profile rate could not be parsed: %v", err))
 		}
+	}
+	for _, opt := range opts {
+		opt(&options)
 	}
 
 	var applyRate = func() {}
