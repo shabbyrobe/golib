@@ -96,12 +96,12 @@ func (loader *Loader) Require(key string) (chain *Chain, v []string, ok bool, er
 }
 
 type Chainable[I any, O any] func(
-	loader *Loader,
+	chain *Chain,
 	in I,
 	lastOk bool,
 	lastErr error,
 ) (
-	chain *Loader,
+	next *Chain,
 	out O,
 	ok bool,
 	err error,
@@ -120,6 +120,23 @@ func Ptr[T any](chain *Chain, in T, lastOk bool, lastErr error) (out *T) {
 	}
 	v := in
 	return &v
+}
+
+func May[T any](chain *Chain, in T, lastOk bool, lastErr error) (out T, ok bool) {
+	if !lastOk || lastErr != nil {
+		return out, false
+	}
+	return in, true
+}
+
+func Default[T any](dflt T) Chainable[T, T] {
+	return func(chain *Chain, in T, lastOk bool, lastErr error) (next *Chain, out T, ok bool, err error) {
+		if !lastOk && lastErr == nil {
+			return chain, dflt, true, nil
+		} else {
+			return chain, in, lastOk, lastErr
+		}
+	}
 }
 
 func Text[T any](chain *Chain, in string, lastOk bool, lastErr error) (next *Chain, out T, ok bool, err error) {
@@ -157,6 +174,10 @@ func Texts[T any](chain *Chain, ins []string, lastOk bool, lastErr error) (next 
 		out[idx] = dest
 	}
 	return chain, out, true, nil
+}
+
+func AnyStr[T ~string](chain *Chain, in string, lastOk bool, lastErr error) (next *Chain, out T, ok bool, err error) {
+	return chain, T(in), lastOk, lastErr
 }
 
 func AnyInt[T ~int](chain *Chain, in string, lastOk bool, lastErr error) (next *Chain, out T, ok bool, err error) {

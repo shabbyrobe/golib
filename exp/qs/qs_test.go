@@ -76,6 +76,28 @@ func TestDecodeFirstInt(t *testing.T) {
 	})
 }
 
+func TestDecodeDefault(t *testing.T) {
+	t.Run("applied", func(t *testing.T) {
+		values := mustParseQuery(t, "")
+		loader := NewLoader(values)
+		n := Val(Default(2)(Int(loader.First("foo"))))
+		if n != 2 {
+			t.Fatal()
+		}
+		assertLoaderOK(t, loader)
+	})
+
+	t.Run("notapplied", func(t *testing.T) {
+		values := mustParseQuery(t, "foo=1")
+		loader := NewLoader(values)
+		n := Val(Default(2)(Int(loader.First("foo"))))
+		if n != 1 {
+			t.Fatal()
+		}
+		assertLoaderOK(t, loader)
+	})
+}
+
 func TestDecodeFirstTextUnmarshaler(t *testing.T) {
 	values := mustParseQuery(t, "foo=10.0.0.1")
 	loader := NewLoader(values)
