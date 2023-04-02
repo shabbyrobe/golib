@@ -1,3 +1,5 @@
+// qs is a simple, experimental single-file copypasta library for query string handling:
+// https://github.com/shabbyrobe/golib/blob/master/exp/qs
 package qs
 
 import (
