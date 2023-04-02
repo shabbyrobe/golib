@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"reflect"
 	"strconv"
 )
 
@@ -16,6 +17,18 @@ type Encoder interface {
 
 type Decoder interface {
 	DecodeQueryValues(url.Values) error
+}
+
+var decoderType = reflect.TypeOf((Decoder)(nil))
+
+func Decode(qs url.Values, into any) error {
+	rv := reflect.ValueOf(into)
+	re := rv.Elem()
+	if !re.Type().Implements(decoderType) {
+		panic(fmt.Errorf("type %T does not implement qs.Decoder", into))
+	}
+	dec := re.Interface().(Decoder)
+	return dec.DecodeQueryValues(qs)
 }
 
 type Chain struct {
