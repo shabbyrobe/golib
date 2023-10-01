@@ -7,6 +7,9 @@ import (
 
 // Alternative to sync/errgrp.ErrorGroup that cancels a context on the first
 // error, rather than waiting for all goroutines to finish before failing.
+//
+// NOTE: This is not even necessary as there is errgroup.WithContext, though
+// this may be slightly more ergonomic. Probably not worth it.
 type AbortGroup struct {
 	ctx     context.Context
 	errc    chan error
