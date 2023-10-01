@@ -38,3 +38,42 @@ func TestFmt(t *testing.T) {
 		})
 	}
 }
+
+func TestFmtTabular(t *testing.T) {
+	var (
+		good   = FgRGB(0, 255, 0)
+		bad    = FgRGB(255, 0, 0)
+		linked = Linked("http://invalid")
+	)
+
+	buildExpected := func(f1, f2, f3 string) string {
+		return "" +
+			"\x1b[38;2;0;255;0m" +
+			f1 +
+			"\x1b[0m" +
+			" " +
+			"\x1b[38;2;255;0;0m" +
+			f2 +
+			"\x1b[0m" +
+			" " +
+			"\x1b]8;;http://invalid\x1b\\" +
+			f3 +
+			"\x1b]8;;\x1b\\"
+	}
+
+	result := fmt.Sprintf("%-10s %-10s %-10s",
+		good.V("yes"),
+		bad.V("no"),
+		linked.V("click me"))
+
+	expected := buildExpected(
+		/* */ "yes       ",
+		/* */ "no        ",
+		/* */ "click me  ",
+		//    "0123456789"
+	)
+
+	if result != expected {
+		t.Fatal("expected", strconv.Quote(expected), "== actual", strconv.Quote(result))
+	}
+}

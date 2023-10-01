@@ -3,7 +3,7 @@
 Copy-pasta for terminal formatting, supporting `fmt.Sprintf`. Not built for
 speed or for minimising output, built for copy-pastability and simplicity.
 
-```
+```go
 // Somewhere global or shared, probably:
 var failed = termfmt.Fg(255, 0, 0, 96, termfmt.Red)
 var succeeded = termfmt.Fg(255, 0, 0, 96, termfmt.Red)
@@ -21,6 +21,23 @@ if borked {
         failed.V("failed"),
         count.V(cnt))
 }
+```
+
+It tends to do what you expect when you use field widths. This will show three
+fields padded to 10 characters, separated by a single space, without the format
+characters counting towards the widths:
+
+```go
+var (
+    good   = FgRGB(0, 255, 0)
+    bad    = FgRGB(255, 0, 0)
+    linked = Linked("http://example.com")
+)
+
+fmt.Printf("%-10s %-10s %-10s",
+    good.V("yes"),
+    bad.V("no"),
+    linked.V("click me"))
 ```
 
 ## Formatters:
