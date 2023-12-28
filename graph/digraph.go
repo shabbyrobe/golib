@@ -208,9 +208,7 @@ func (graph *Digraph[T]) Depths() (map[T]int, error) {
 	maxDepth := 0
 	var walk func(item T, depth int) bool
 	walk = func(item T, depth int) bool {
-		if visitStatus[item] == visited {
-			return false
-		} else if visitStatus[item] == visiting {
+		if visitStatus[item] == visiting {
 			return true
 		}
 		visitStatus[item] = visiting
@@ -357,5 +355,19 @@ func (graph *Digraph[T]) removeVertex(vertex *Vertex[T]) {
 	idx := slices.Index(graph.vertices, vertex)
 	if idx >= 0 {
 		graph.vertices = slices.Delete(graph.vertices, idx, idx+1)
+	}
+
+	for _, in := range vertex.in.order {
+		if in == vertex.ID {
+			continue
+		}
+		graph.vertexIndex[in].out.Remove(vertex.ID)
+	}
+
+	for _, out := range vertex.out.order {
+		if out == vertex.ID {
+			continue
+		}
+		graph.vertexIndex[out].in.Remove(vertex.ID)
 	}
 }

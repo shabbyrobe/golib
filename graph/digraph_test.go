@@ -70,6 +70,35 @@ func TestDigraphDepths(t *testing.T) {
 		}
 	})
 
+	t.Run("same-tree-different-depths", func(t *testing.T) {
+		g := NewDigraph[string]()
+
+		g.Connect("p1", "a")
+		g.Connect("p2", "p3")
+		g.Connect("p3", "a")
+
+		g.Connect("a", "b")
+		g.Connect("b", "c")
+		g.Connect("a", "d")
+
+		expected := map[string]int{
+			"p1": 2,
+			"p2": 1,
+			"p3": 2,
+			"a":  3,
+			"b":  4,
+			"c":  5,
+			"d":  5,
+		}
+		depths, err := g.Depths()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(depths, expected) {
+			t.Fatal(depths, expected)
+		}
+	})
+
 	t.Run("nodes", func(t *testing.T) {
 		g := NewDigraph[string]()
 		g.Connect("a", "b")
