@@ -1,11 +1,4 @@
-# HTML Unescape for byte slices
-
-Copy-paste of just enough of the `html.Unescape` function from the standard library
-to work on byte slices directly instead of strings.
-
-This should hopefully be unnecessary if the changes that land in 1.22 work
-as advertised: https://github.com/golang/go/issues/2205
-
+# Pull-parse a stream of bytes
 
 ## Expectation Management
 
