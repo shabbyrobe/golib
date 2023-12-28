@@ -1,3 +1,4 @@
+// Deprecated: 🚨 This is copypasta, you should not import it directly. 🚨
 module github.com/shabbyrobe/golib/profiletools
 
 go 1.13
