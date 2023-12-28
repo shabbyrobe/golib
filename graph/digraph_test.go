@@ -85,8 +85,29 @@ func TestDigraphDepths(t *testing.T) {
 			"b": 2,
 			"c": 2,
 			"d": 3,
-			"e": 2,
+			"e": 3,
 			"f": 4,
+		}
+		depths, err := g.Depths()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(depths, expected) {
+			t.Fatal(depths, expected)
+		}
+	})
+
+	t.Run("multiple-sources", func(t *testing.T) {
+		g := NewDigraph[string]()
+		g.Connect("a", "b")
+		g.Connect("c", "d")
+		g.Connect("b", "d")
+
+		expected := map[string]int{
+			"a": 1,
+			"b": 2,
+			"c": 2,
+			"d": 3,
 		}
 		depths, err := g.Depths()
 		if err != nil {

@@ -205,6 +205,7 @@ func (graph *Digraph[T]) Depths() (map[T]int, error) {
 	visitStatus := make(map[T]int, len(graph.vertices))
 	depths := make(map[T]int, len(graph.vertices))
 
+	maxDepth := 0
 	var walk func(item T, depth int) bool
 	walk = func(item T, depth int) bool {
 		if visitStatus[item] == visited {
@@ -213,20 +214,22 @@ func (graph *Digraph[T]) Depths() (map[T]int, error) {
 			return true
 		}
 		visitStatus[item] = visiting
-		depths[item] = depth
 
-		for _, dep := range graph.vertexIndex[item].out.order {
+		for _, dep := range graph.vertexIndex[item].in.order {
 			if walk(dep, depth+1) {
 				return true
 			}
 		}
+
+		depths[item] = max(depths[item], depth)
+		maxDepth = max(depth, maxDepth)
 
 		visitStatus[item] = visited
 		return false
 	}
 
 	for _, v := range graph.vertices {
-		if v.Indegree() != 0 {
+		if v.Outdegree() != 0 {
 			continue
 		}
 		if walk(v.ID, 1) {
@@ -236,6 +239,10 @@ func (graph *Digraph[T]) Depths() (map[T]int, error) {
 
 	if len(graph.vertices) != len(depths) {
 		return nil, fmt.Errorf("graph is not a DAG")
+	}
+
+	for id, depth := range depths {
+		depths[id] = maxDepth - depth + 1
 	}
 
 	return depths, nil
