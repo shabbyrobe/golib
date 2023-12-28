@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"sort"
@@ -197,6 +198,47 @@ func (graph *Digraph[T]) HasCycles() bool {
 	}
 
 	return false
+}
+
+// Compute depths of all vertices. If the graph is not a DAG, an error is returned.
+func (graph *Digraph[T]) Depths() (map[T]int, error) {
+	visitStatus := make(map[T]int, len(graph.vertices))
+	depths := make(map[T]int, len(graph.vertices))
+
+	var walk func(item T, depth int) bool
+	walk = func(item T, depth int) bool {
+		if visitStatus[item] == visited {
+			return false
+		} else if visitStatus[item] == visiting {
+			return true
+		}
+		visitStatus[item] = visiting
+		depths[item] = depth
+
+		for _, dep := range graph.vertexIndex[item].out.order {
+			if walk(dep, depth+1) {
+				return true
+			}
+		}
+
+		visitStatus[item] = visited
+		return false
+	}
+
+	for _, v := range graph.vertices {
+		if v.Indegree() != 0 {
+			continue
+		}
+		if walk(v.ID, 1) {
+			return nil, fmt.Errorf("graph is not a DAG")
+		}
+	}
+
+	if len(graph.vertices) != len(depths) {
+		return nil, fmt.Errorf("graph is not a DAG")
+	}
+
+	return depths, nil
 }
 
 // Creates a DAG from the Digraph and returns the edges cut, using the greedy

@@ -27,6 +27,77 @@ func TestDigraphStronglyConnected(t *testing.T) {
 	}
 }
 
+func TestDigraphDepths(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		g := NewDigraph[string]()
+		expected := map[string]int{}
+		depths, err := g.Depths()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(depths, expected) {
+			t.Fatal(depths, expected)
+		}
+	})
+
+	t.Run("cycle1", func(t *testing.T) {
+		g := NewDigraph[string]()
+		g.Connect("yep", "yep")
+		_, err := g.Depths()
+		if err == nil {
+			t.Fatal()
+		}
+	})
+
+	t.Run("cycle2", func(t *testing.T) {
+		g := NewDigraph[string]()
+		g.Connect("yep", "ahoy")
+		g.Connect("ahoy", "yep")
+		_, err := g.Depths()
+		if err == nil {
+			t.Fatal()
+		}
+	})
+
+	t.Run("cycle2-with-source", func(t *testing.T) {
+		g := NewDigraph[string]()
+		g.Connect("source", "yep")
+		g.Connect("yep", "ahoy")
+		g.Connect("ahoy", "yep")
+		_, err := g.Depths()
+		if err == nil {
+			t.Fatal()
+		}
+	})
+
+	t.Run("nodes", func(t *testing.T) {
+		g := NewDigraph[string]()
+		g.Connect("a", "b")
+		g.Connect("a", "c")
+		g.Connect("c", "d")
+		g.Connect("b", "d")
+		g.Connect("d", "f")
+		g.Connect("e", "f")
+		g.Connect("a", "e")
+
+		expected := map[string]int{
+			"a": 1,
+			"b": 2,
+			"c": 2,
+			"d": 3,
+			"e": 2,
+			"f": 4,
+		}
+		depths, err := g.Depths()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(depths, expected) {
+			t.Fatal(depths, expected)
+		}
+	})
+}
+
 func TestDigraphDAG(t *testing.T) {
 	g := NewDigraph[string]()
 	g.Connect("z", "a")
