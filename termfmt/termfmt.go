@@ -146,6 +146,7 @@ func (rgb RGBColor) Wrap(out string) string {
 	return fmt.Sprintf("\x1b[%d;2;%d;%d;%dm"+"%s"+"\x1b[0m", esc, rgb.R, rgb.G, rgb.B, out)
 }
 
+// https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797?permalink_comment_id=4619910#gistcomment-4619910
 type C256Color struct {
 	C  uint8
 	Bg bool
