@@ -32,7 +32,7 @@ func TestLineChunker(t *testing.T) {
 			func(s string) io.Reader { return iotest.DataErrReader(strings.NewReader(s)) },
 		} {
 			t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
-				lc := NewLineChunker(makeReader(tc.input))
+				lc := NewLineChunker(makeReader(tc.input), 0)
 				into := make([]byte, tc.sz)
 				var result []string
 				for {
@@ -64,7 +64,7 @@ func TestLineChunkerFailures(t *testing.T) {
 		{5, "food\nbar baz\n", []string{"food\n"}},
 	} {
 		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
-			lc := NewLineChunker(strings.NewReader(tc.input))
+			lc := NewLineChunker(strings.NewReader(tc.input), 0)
 			into := make([]byte, tc.sz)
 			failed := false
 			var result []string

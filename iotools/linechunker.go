@@ -11,10 +11,14 @@ type LineChunker struct {
 	kept []byte
 }
 
-func NewLineChunker(rdr io.Reader) *LineChunker {
+func NewLineChunker(rdr io.Reader, sz int) *LineChunker {
+	if sz < 0 {
+		sz = 4096
+	}
+
 	brdr, ok := rdr.(*bufio.Reader)
 	if !ok {
-		brdr = bufio.NewReader(rdr)
+		brdr = bufio.NewReaderSize(rdr, sz)
 	}
 
 	return &LineChunker{
