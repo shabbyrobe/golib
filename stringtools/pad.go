@@ -7,9 +7,7 @@ import (
 
 // RightPad is a startling and regrettable omission from the stdlib.
 // There really does not appear to be any way to accomplish the same thing with
-// fmt.Sprintf(), or any other damn package.  Every developer who has ever
-// contributed to golang has hereby forefeited the right to criticise
-// javascript for the left-pad.io fiasco.
+// fmt.Sprintf(), or any other damn package.
 func RightPad(s string, c byte, total int) string {
 	pad := total - len(s)
 	if pad <= 0 {

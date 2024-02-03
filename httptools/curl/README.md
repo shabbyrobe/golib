@@ -1,5 +1,4 @@
-Curl HTTP Transport for Go's http.Client
-========================================
+# Curl HTTP Transport for Go's http.Client
 
 Implements an http.RoundTripper for Go's http.Client that uses your local
 curl binary to execute the request.

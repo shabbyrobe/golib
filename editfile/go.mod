@@ -1,3 +1,4 @@
+// Deprecated: 🚨 This is under-tested copypasta, you should not import it directly. 🚨
 module github.com/shabbyrobe/golib/editfile
 
 go 1.13

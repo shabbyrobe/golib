@@ -1,4 +1,8 @@
-# Unsafe tools
+# Simple Go Assertions
+
+**NOTE 20231228: This is deprecated, I don't use it anymore. I just use plain
+ol' `t.Fatal` and friends, and github.com/google/go-cmp/cmp for anything fancy.**
+
 
 ## Expectation Management
 

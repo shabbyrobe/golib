@@ -2,6 +2,7 @@ package termfmt
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"unicode"
@@ -11,14 +12,17 @@ type Escape interface {
 	Wrap(out string) string
 }
 
-func With(escs ...Escape) Style                       { return (Style{}).With(escs...) }
-func Bold() Style                                     { return (Style{}).Bold() }
-func Italic() Style                                   { return (Style{}).Italic() }
-func Linked(link string) Style                        { return (Style{}).Linked(link) }
-func FgRGB(r, g, b uint8) Style                       { return (Style{}).FgRGB(r, g, b) }
-func BgRGB(r, g, b uint8) Style                       { return (Style{}).BgRGB(r, g, b) }
-func Fg(r, g, b uint8, c256 uint8, c16 C16Name) Style { return (Style{}).Fg(r, g, b, c256, c16) }
-func Bg(r, g, b uint8, c256 uint8, c16 C16Name) Style { return (Style{}).Bg(r, g, b, c256, c16) }
+func With(escs ...Escape) Style                          { return (Style{}).With(escs...) }
+func Bold() Style                                        { return (Style{}).Bold() }
+func Italic() Style                                      { return (Style{}).Italic() }
+func Strike() Style                                      { return (Style{}).Strike() }
+func Linked(link string) Style                           { return (Style{}).Linked(link) }
+func Fg(r, g, b uint8, c16 C16Name) Style                { return (Style{}).Fg(r, g, b, c16) }
+func Bg(r, g, b uint8, c16 C16Name) Style                { return (Style{}).Bg(r, g, b, c16) }
+func FgRGB(r, g, b uint8) Style                          { return (Style{}).FgRGB(r, g, b) }
+func BgRGB(r, g, b uint8) Style                          { return (Style{}).BgRGB(r, g, b) }
+func FgAll(r, g, b uint8, c256 uint8, c16 C16Name) Style { return (Style{}).FgAll(r, g, b, c256, c16) }
+func BgAll(r, g, b uint8, c256 uint8, c16 C16Name) Style { return (Style{}).BgAll(r, g, b, c256, c16) }
 
 type Style struct {
 	escapes          []Escape
@@ -33,25 +37,29 @@ func (c Style) With(escs ...Escape) Style {
 	return c
 }
 
-func (c Style) Bold() Style               { return c.With(BoldEscape{}) }
-func (c Style) Italic() Style             { return c.With(ItalicEscape{}) }
-func (c Style) Linked(link string) Style  { return c.With(Link{link}) }
-func (c Style) FgRGB(r, g, b uint8) Style { return c.With(RGBColor{r, g, b, false}) }
-func (c Style) BgRGB(r, g, b uint8) Style { return c.With(RGBColor{r, g, b, true}) }
-
 func (c Style) AllowUnprintable(yep bool) Style {
 	c.allowUnprintable = true
 	return c
 }
 
-func (c Style) Fg(r, g, b uint8, c256 uint8, c16 C16Name) Style {
+func (c Style) Bold() Style               { return c.With(BoldEscape{}) }
+func (c Style) Italic() Style             { return c.With(ItalicEscape{}) }
+func (c Style) Strike() Style             { return c.With(StrikeEscape{}) }
+func (c Style) Linked(link string) Style  { return c.With(Link{link}) }
+func (c Style) FgRGB(r, g, b uint8) Style { return c.With(RGBColor{r, g, b, false}) }
+func (c Style) BgRGB(r, g, b uint8) Style { return c.With(RGBColor{r, g, b, true}) }
+
+func (c Style) Fg(r, g, b uint8, c16 C16Name) Style { return c.FgAll(r, g, b, RGBTo256(r, g, b), c16) }
+func (c Style) Bg(r, g, b uint8, c16 C16Name) Style { return c.BgAll(r, g, b, RGBTo256(r, g, b), c16) }
+
+func (c Style) FgAll(r, g, b uint8, c256 uint8, c16 C16Name) Style {
 	return c.With((ColorCascade{}).
 		RGB(RGBColor{r, g, b, false}).
 		C256(C256Color{c256, false}).
 		C16(C16Color{c16, false}))
 }
 
-func (c Style) Bg(r, g, b uint8, c256 uint8, c16 C16Name) Style {
+func (c Style) BgAll(r, g, b uint8, c256 uint8, c16 C16Name) Style {
 	return c.With((ColorCascade{}).
 		Background().
 		RGB(RGBColor{r, g, b, true}).
@@ -73,6 +81,35 @@ func (c Style) Format(f fmt.State, verb rune) {
 		v = c.escapes[i].Wrap(v)
 	}
 	f.Write([]byte(v))
+}
+
+// Test this code with this snippet:
+//
+//	gap := 16
+//	for r := 0; r < 256; r += gap {
+//	    for g := 0; g < 256; g += gap {
+//	        for b := 0; b < 256; b += gap {
+//	            rc := uint8(min(r, 255))
+//	            gc := uint8(min(g, 255))
+//	            bc := uint8(min(b, 255))
+//	            fmt.Printf("%s%s ",
+//	                termfmt.With(termfmt.RGBColor{R: rc, G: gc, B: bc, Bg: true}).V("R"),
+//	                termfmt.With(termfmt.C256Color{C: termfmt.RGBTo256(rc, gc, bc), Bg: true}).V("2"),
+//	            )
+//	        }
+//	    }
+//	}
+//	return nil
+//
+// ---
+func RGBTo256(r, g, b uint8) uint8 {
+	if r == g && g == b {
+		return ((r - 8) / 10) + 232
+	}
+	r = uint8(math.Floor(float64(r) / 255.0 * 6.0))
+	g = uint8(math.Floor(float64(g) / 255.0 * 6.0))
+	b = uint8(math.Floor(float64(b) / 255.0 * 6.0))
+	return uint8(16 + (36 * r) + (6 * g) + b)
 }
 
 func buildValueFormat(f fmt.State, verb rune) string {
@@ -126,6 +163,10 @@ func (b BoldEscape) Wrap(v string) string { return fmt.Sprintf("\x1b[1m%s\x1b[0m
 type ItalicEscape struct{}
 
 func (b ItalicEscape) Wrap(v string) string { return fmt.Sprintf("\x1b[3m%s\x1b[0m", v) }
+
+type StrikeEscape struct{}
+
+func (b StrikeEscape) Wrap(v string) string { return fmt.Sprintf("\x1b[9m%s\x1b[0m", v) }
 
 // https://github.com/termstandard/colors
 type RGBColor struct {

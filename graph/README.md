@@ -1,4 +1,10 @@
-# Unsafe tools
+# Graph structure
+
+This is a naive implementation of some graph algorithms, intended to be used as
+copypasta. There's lots of fancy implementations that lean hard into inscrutable
+optimisations, but getting the "grug-brained" version can be a challenge.
+Sometimes that's all you need.
+
 
 ## Expectation Management
 

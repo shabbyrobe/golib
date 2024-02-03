@@ -1,71 +1,21 @@
 package unsafetools
 
 import (
-	"reflect"
 	"unsafe"
 )
-
-type StringHeader struct {
-	Data unsafe.Pointer
-	Len  int
-}
-
-type SliceHeader struct {
-	Data unsafe.Pointer
-	Len  int
-	Cap  int
-}
 
 // Reading:
 // https://groups.google.com/g/golang-nuts/c/Zsfk-VMd_fU/discussion
 // https://github.com/golang/go/issues/19367
 // https://github.com/golang/go/issues/25484
+// https://go-review.googlesource.com/c/go/+/231223/
+// https://github.com/golang/go/issues/53003#issuecomment-1140276077
+// https://github.com/golang/go/issues/2205
 
-// THIS IS EVIL CODE.
-// YOU HAVE BEEN WARNED.
 func String(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
+	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
-// Alternative:
-// func String(s string) (b []byte) {
-//     st := (*StringHeader)(unsafe.Pointer(&s))
-//     sl := (*SliceHeader)(unsafe.Pointer(&b))
-//     sl.Data = st.Data
-//     sl.Len = len(s)
-//     sl.Cap = len(s)
-//     return b
-// }
-
-// THIS IS EVIL CODE.
-// YOU HAVE BEEN WARNED.
 func Bytes(s string) (b []byte) {
-	st := (*StringHeader)(unsafe.Pointer(&s))
-	sl := (*SliceHeader)(unsafe.Pointer(&b))
-	sl.Data = st.Data
-	sl.Len = len(s)
-	return b
-}
-
-// Alternative:
-// func Bytes(str string) []byte {
-//     hdr := *(*reflect.StringHeader)(unsafe.Pointer(&str))
-//     return *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
-//         Data: hdr.Data,
-//         Len:  hdr.Len,
-//         Cap:  hdr.Len,
-//     }))
-// }
-
-func init() {
-	// Check to make sure string header is what reflect thinks it is.
-	// They should be the same except for the type of the Data field.
-	if unsafe.Sizeof(StringHeader{}) != unsafe.Sizeof(reflect.StringHeader{}) {
-		panic("string layout has changed")
-	}
-	x := StringHeader{}
-	y := reflect.StringHeader{}
-	x.Data = unsafe.Pointer(y.Data)
-	y.Data = uintptr(x.Data)
-	x.Len = y.Len
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }

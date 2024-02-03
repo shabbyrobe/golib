@@ -1,3 +1,5 @@
+// Deprecated: 🚨 This is an under-tested, incomplete experiment. You probably shouldn't
+// use it at all. 🚨
 module github.com/shabbyrobe/golib/encoding/fixvarnum
 
 go 1.13
