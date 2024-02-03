@@ -12,7 +12,7 @@ type LineChunker struct {
 }
 
 func NewLineChunker(rdr io.Reader, sz int) *LineChunker {
-	if sz < 0 {
+	if sz <= 0 {
 		sz = 4096
 	}
 
