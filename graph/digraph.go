@@ -1,11 +1,14 @@
 package graph
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
 	"sort"
 )
+
+var ErrCycleDetected = errors.New("graph: cycle detected")
 
 type ID interface {
 	comparable
@@ -46,7 +49,7 @@ func (graph *Digraph[T]) CloneDeep() *Digraph[T] {
 	for idx, vertex := range graph.vertices {
 		clonedVertex := vertex.CloneDeep()
 		cloned.vertices[idx] = &clonedVertex
-		cloned.vertexIndex[clonedVertex.ID] = &clonedVertex
+		cloned.vertexIndex[clonedVertex.V] = &clonedVertex
 	}
 	return cloned
 }
@@ -153,8 +156,8 @@ func (graph *Digraph[T]) Subgraph(ids []T) *Digraph[T] {
 func (graph *Digraph[T]) StronglyConnected() [][]T {
 	var scc = newSCCState(graph)
 	for _, v := range graph.vertices {
-		if _, ok := scc.vertexState[v.ID]; !ok {
-			scc.strongConnect(v.ID)
+		if _, ok := scc.vertexState[v.V]; !ok {
+			scc.strongConnect(v.V)
 		}
 	}
 	return scc.sccs
@@ -192,7 +195,7 @@ func (graph *Digraph[T]) HasCycles() bool {
 	}
 
 	for _, v := range graph.vertices {
-		if walk(v.ID) {
+		if walk(v.V) {
 			return true
 		}
 	}
@@ -230,7 +233,7 @@ func (graph *Digraph[T]) Depths() (map[T]int, error) {
 		if v.Outdegree() != 0 {
 			continue
 		}
-		if walk(v.ID, 1) {
+		if walk(v.V, 1) {
 			return nil, fmt.Errorf("graph is not a DAG")
 		}
 	}
@@ -262,8 +265,8 @@ func (graph *Digraph[T]) DAGEades() (dag *Digraph[T], cut []Edge[T]) {
 		for len(dag.vertices) > 0 {
 			for _, vertex := range dag.vertices {
 				if vertex.Outdegree() == 0 {
-					dag.Remove(vertex.ID)
-					s2 = append(s2, vertex.ID) // Should prepend, but we reverse later
+					dag.Remove(vertex.V)
+					s2 = append(s2, vertex.V) // Should prepend, but we reverse later
 					continue sinkLoop
 				}
 			}
@@ -274,8 +277,8 @@ func (graph *Digraph[T]) DAGEades() (dag *Digraph[T], cut []Edge[T]) {
 		for len(dag.vertices) > 0 {
 			for _, vertex := range dag.vertices {
 				if vertex.Indegree() == 0 {
-					dag.Remove(vertex.ID)
-					s1 = append(s1, vertex.ID)
+					dag.Remove(vertex.V)
+					s1 = append(s1, vertex.V)
 					continue sourceLoop
 				}
 			}
@@ -288,8 +291,8 @@ func (graph *Digraph[T]) DAGEades() (dag *Digraph[T], cut []Edge[T]) {
 				return (vi.Outdegree() - vi.Indegree()) > (vj.Outdegree() - vj.Indegree())
 			})
 			vertex := dag.vertices[0]
-			dag.Remove(vertex.ID)
-			s1 = append(s1, vertex.ID)
+			dag.Remove(vertex.V)
+			s1 = append(s1, vertex.V)
 		}
 	}
 
@@ -324,6 +327,41 @@ func (graph *Digraph[T]) DAGEades() (dag *Digraph[T], cut []Edge[T]) {
 	return dag, cut
 }
 
+func (graph *Digraph[T]) SortedTopological() ([]T, error) {
+	visitStatus := make(map[T]int, len(graph.vertices))
+
+	var order []T
+
+	var walk func(item T) error
+	walk = func(item T) error {
+		if visitStatus[item] == visited {
+			return nil
+		} else if visitStatus[item] == visiting {
+			return fmt.Errorf("graph: topological sort failed at item %v: %w", item, ErrCycleDetected)
+		}
+
+		visitStatus[item] = visiting
+		for _, dep := range graph.vertexIndex[item].out.order {
+			if err := walk(dep); err != nil {
+				return err
+			}
+		}
+		visitStatus[item] = visited
+		order = append(order, item)
+		return nil
+	}
+
+	for _, vertex := range graph.vertices {
+		if visitStatus[vertex.V] != visited {
+			if err := walk(vertex.V); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return order, nil
+}
+
 func (graph *Digraph[T]) ensureVertex(id T) *Vertex[T] {
 	v := graph.vertexIndex[id]
 	if v != nil {
@@ -331,7 +369,7 @@ func (graph *Digraph[T]) ensureVertex(id T) *Vertex[T] {
 	}
 
 	v = &Vertex[T]{
-		ID:  id,
+		V:   id,
 		in:  newInsertOrderedSet[T](),
 		out: newInsertOrderedSet[T](),
 	}
@@ -351,23 +389,23 @@ func (graph *Digraph[T]) removeEdge(edge Edge[T]) {
 
 // Low-level function, should only be called if you're mopping up edges yourself.
 func (graph *Digraph[T]) removeVertex(vertex *Vertex[T]) {
-	delete(graph.vertexIndex, vertex.ID)
+	delete(graph.vertexIndex, vertex.V)
 	idx := slices.Index(graph.vertices, vertex)
 	if idx >= 0 {
 		graph.vertices = slices.Delete(graph.vertices, idx, idx+1)
 	}
 
 	for _, in := range vertex.in.order {
-		if in == vertex.ID {
+		if in == vertex.V {
 			continue
 		}
-		graph.vertexIndex[in].out.Remove(vertex.ID)
+		graph.vertexIndex[in].out.Remove(vertex.V)
 	}
 
 	for _, out := range vertex.out.order {
-		if out == vertex.ID {
+		if out == vertex.V {
 			continue
 		}
-		graph.vertexIndex[out].in.Remove(vertex.ID)
+		graph.vertexIndex[out].in.Remove(vertex.V)
 	}
 }

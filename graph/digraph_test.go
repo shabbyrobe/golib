@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -144,6 +145,73 @@ func TestDigraphDepths(t *testing.T) {
 		}
 		if !reflect.DeepEqual(depths, expected) {
 			t.Fatal(depths, expected)
+		}
+	})
+}
+
+func TestDigraphSortedTopological(t *testing.T) {
+	t.Run("dag", func(t *testing.T) {
+		g := NewDigraph[string]()
+
+		g.Connect("z", "a")
+		g.Connect("a", "b")
+		g.Connect("a", "c")
+		g.Connect("a", "d")
+		g.Connect("c", "d")
+		g.Connect("c", "b")
+
+		sorted, err := g.SortedTopological()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expected := []string{"b", "d", "c", "a", "z"}
+		if !reflect.DeepEqual(sorted, expected) {
+			t.Fatalf("%+v != %+v", sorted, expected)
+		}
+	})
+
+	t.Run("one-node", func(t *testing.T) {
+		g := NewDigraph[string]()
+		g.Add("z")
+
+		sorted, err := g.SortedTopological()
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := []string{"z"}
+		if !reflect.DeepEqual(sorted, expected) {
+			t.Fatalf("%+v != %+v", sorted, expected)
+		}
+	})
+
+	t.Run("one-edge", func(t *testing.T) {
+		g := NewDigraph[string]()
+		g.Connect("a", "b")
+
+		sorted, err := g.SortedTopological()
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := []string{"b", "a"}
+		if !reflect.DeepEqual(sorted, expected) {
+			t.Fatalf("%+v != %+v", sorted, expected)
+		}
+	})
+
+	t.Run("cycle", func(t *testing.T) {
+		g := NewDigraph[string]()
+
+		g.Connect("a", "b")
+		g.Connect("a", "c")
+		g.Connect("a", "d")
+		g.Connect("c", "a")
+
+		_, err := g.SortedTopological()
+		if err == nil {
+			t.Fatal()
+		} else if !errors.Is(err, ErrCycleDetected) {
+			t.Fatal(err)
 		}
 	})
 }

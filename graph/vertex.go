@@ -1,7 +1,7 @@
 package graph
 
 type Vertex[T ID] struct {
-	ID T
+	V T
 
 	// Use an ordered set for these to keep execution order deterministic:
 	out *insertOrderedSet[T] // Outward connections (dependencies) from this vertex to others
@@ -20,7 +20,7 @@ func (v Vertex[T]) Empty() bool {
 
 func (v Vertex[T]) CloneDeep() Vertex[T] {
 	return Vertex[T]{
-		ID:  v.ID,
+		V:   v.V,
 		out: v.out.CloneDeep(),
 		in:  v.in.CloneDeep(),
 	}
