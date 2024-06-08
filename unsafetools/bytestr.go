@@ -13,9 +13,15 @@ import (
 // https://github.com/golang/go/issues/2205
 
 func String(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
 func Bytes(s string) (b []byte) {
+	if s == "" {
+		return nil
+	}
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
